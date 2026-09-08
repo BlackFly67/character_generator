@@ -1,0 +1,22 @@
+# -*- coding: utf-8 -*-
+"""
+UI компоненты приложения
+"""
+
+from .main_window import MainWindow
+from .sidebar import Sidebar
+from .preview import PreviewPanel
+from .dialogs import SystemFontPicker, StylePresetsDialog, SettingsDialog
+from .widgets import IntSliderRow, ColorPickerButton, DirectionSelector
+
+__all__ = [
+    'MainWindow',
+    'Sidebar',
+    'PreviewPanel',
+    'SystemFontPicker',
+    'StylePresetsDialog',
+    'SettingsDialog',
+    'IntSliderRow',
+    'ColorPickerButton',
+    'DirectionSelector',
+]

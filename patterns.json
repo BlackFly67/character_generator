@@ -1,0 +1,614 @@
+{
+    "Days (Russian Full)": {
+        "name": "Days (Russian Full)",
+        "description": "Полные названия дней недели на русском",
+        "lang": "ru",
+        "characters": "Воскресенье Понедельник Вторник Среда Четверг Пятница Суббота",
+        "categories": {
+            "Days": "Воскресенье Понедельник Вторник Среда Четверг Пятница Суббота"
+        }
+    },
+    "Days (Russian Short 2)": {
+        "name": "Days (Russian Short 2)",
+        "description": "2-буквенные сокращения дней на русском",
+        "lang": "ru",
+        "characters": "Вс Пн Вт Ср Чт Пт Сб",
+        "categories": {
+            "Days": "Вс Пн Вт Ср Чт Пт Сб"
+        }
+    },
+    "Days (Russian Short 3)": {
+        "name": "Days (Russian Short 3)",
+        "description": "3-буквенные сокращения дней на русском",
+        "lang": "ru",
+        "characters": "Вск Пнд Втр Срд Чтв Птн Сбт",
+        "categories": {
+            "Days": "Вск Пнд Втр Срд Чтв Птн Сбт"
+        }
+    },
+    "Days (English Full)": {
+        "name": "Days (English Full)",
+        "description": "Full names of the days in English",
+        "lang": "en",
+        "characters": "Sunday Monday Tuesday Wednesday Thursday Friday Saturday",
+        "categories": {
+            "Days": "Sunday Monday Tuesday Wednesday Thursday Friday Saturday"
+        }
+    },
+    "Days (English Short 3)": {
+        "name": "Days (English Short 3)",
+        "description": "3-letter abbreviations for days in English",
+        "lang": "en",
+        "characters": "Sun Mon Tue Wed Thu Fri Sat",
+        "categories": {
+            "Days": "Sun Mon Tue Wed Thu Fri Sat"
+        }
+    },
+	    "Days (English Short 2)": {
+        "name": "Days (English Short 2)",
+        "description": "2-letter abbreviations for days in English",
+        "lang": "en",
+        "characters": "Su Mo Tu We Th Fr Sa",
+        "categories": {
+            "Days": "Su Mo Tu We Th Fr Sa"
+        }
+    },
+    "Days (Spanish Full)": {
+        "name": "Days (Spanish Full)",
+        "description": "Nombres completos de los días en español",
+        "lang": "es",
+        "characters": "Domingo Lunes Martes Miércoles Jueves Viernes Sábado",
+        "categories": {
+            "Days": "Domingo Lunes Martes Miércoles Jueves Viernes Sábado"
+        }
+    },
+    "Days (Spanish Short 3)": {
+        "name": "Days (Spanish Short 3)",
+        "description": "Abreviaturas de 3 letras para los días en español",
+        "lang": "es",
+        "characters": "Dom Lun Mar Mié Jue Vie Sáb",
+        "categories": {
+            "Days": "Dom Lun Mar Mié Jue Vie Sáb"
+        }
+    },
+    "Days (French Full)": {
+        "name": "Days (French Full)",
+        "description": "Noms complets des jours en français",
+        "lang": "fr",
+        "characters": "Dimanche Lundi Mardi Mercredi Jeudi Vendredi Samedi",
+        "categories": {
+            "Days": "Dimanche Lundi Mardi Mercredi Jeudi Vendredi Samedi"
+        }
+    },
+    "Days (French Short 3)": {
+        "name": "Days (French Short 3)",
+        "description": "Abréviations de 3 lettres pour les jours en français",
+        "lang": "fr",
+        "characters": "Dim Lun Mar Mer Jeu Ven Sam",
+        "categories": {
+            "Days": "Dim Lun Mar Mer Jeu Ven Sam"
+        }
+    },
+    "Days (Ukrainian Full)": {
+        "name": "Days (Ukrainian Full)",
+        "description": "Повні назви днів тижня українською",
+        "lang": "ua",
+        "characters": "Неділя Понеділок Вівторок Середа Четвер П'ятниця Субота",
+        "categories": {
+            "Days": "Неділя Понеділок Вівторок Середа Четвер П'ятниця Субота"
+        }
+    },
+    "Days (Ukrainian Short 2)": {
+        "name": "Days (Ukrainian Short 2)",
+        "description": "2-літерні скорочення днів українською",
+        "lang": "ua",
+        "characters": "Нд Пн Вт Ср Чт Пт Сб",
+        "categories": {
+            "Days": "Нд Пн Вт Ср Чт Пт Сб"
+        }
+    },
+    "Days (Ukrainian Short 3)": {
+        "name": "Days (Ukrainian Short 3)",
+        "description": "3-літерні скорочення днів українською",
+        "lang": "ua",
+        "characters": "Нед Пон Вів Сер Чет П'ят Суб",
+        "categories": {
+            "Days": "Нед Пон Вів Сер Чет П'ят Суб"
+        }
+    },
+    "Days (Portuguese Full)": {
+        "name": "Days (Portuguese Full)",
+        "description": "Nomes completos dos dias em português",
+        "lang": "pt",
+        "characters": "Domingo Segunda-feira Terça-feira Quarta-feira Quinta-feira Sexta-feira Sábado",
+        "categories": {
+            "Days": "Domingo Segunda-feira Terça-feira Quarta-feira Quinta-feira Sexta-feira Sábado"
+        }
+    },
+    "Days (Portuguese Short 3)": {
+        "name": "Days (Portuguese Short 3)",
+        "description": "Abreviações de 3 letras para os dias em português",
+        "lang": "pt",
+        "characters": "Dom Seg Ter Qua Qui Sex Sáb",
+        "categories": {
+            "Days": "Dom Seg Ter Qua Qui Sex Sáb"
+        }
+    },
+    "Months (Russian Full)": {
+        "name": "Months (Russian Full)",
+        "description": "Полные названия месяцев на русском",
+        "lang": "ru",
+        "characters": "Январь Февраль Март Апрель Май Июнь Июль Август Сентябрь Октябрь Ноябрь Декабрь",
+        "categories": {
+            "Months": "Январь Февраль Март Апрель Май Июнь Июль Август Сентябрь Октябрь Ноябрь Декабрь"
+        }
+    },
+    "Months (Russian Genitive)": {
+        "name": "Months (Russian Genitive)",
+        "description": "Названия месяцев в родительном падеже",
+        "lang": "ru",
+        "characters": "Января Февраля Марта Апреля Мая Июня Июля Августа Сентября Октября Ноября Декабря",
+        "categories": {
+            "Months": "Января Февраля Марта Апреля Мая Июня Июля Августа Сентября Октября Ноября Декабря"
+        }
+    },
+    "Months (Russian Short 3)": {
+        "name": "Months (Russian Short 3)",
+        "description": "3-буквенные сокращения месяцев на русском",
+        "lang": "ru",
+        "characters": "Янв Фев Мар Апр Май Июн Июл Авг Сен Окт Ноя Дек",
+        "categories": {
+            "Months": "Янв Фев Мар Апр Май Июн Июл Авг Сен Окт Ноя Дек"
+        }
+    },
+    "Months (English Full)": {
+        "name": "Months (English Full)",
+        "description": "Full names of the months in English",
+        "lang": "en",
+        "characters": "January February March April May June July August September October November December",
+        "categories": {
+            "Months": "January February March April May June July August September October November December"
+        }
+    },
+    "Months (English Short 3)": {
+        "name": "Months (English Short 3)",
+        "description": "3-letter abbreviations for months in English",
+        "lang": "en",
+        "characters": "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec",
+        "categories": {
+            "Months": "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec"
+        }
+    },
+    "Months (Spanish Full)": {
+        "name": "Months (Spanish Full)",
+        "description": "Nombres completos de los meses en español",
+        "lang": "es",
+        "characters": "Enero Febrero Marzo Abril Mayo Junio Julio Agosto Septiembre Octubre Noviembre Diciembre",
+        "categories": {
+            "Months": "Enero Febrero Marzo Abril Mayo Junio Julio Agosto Septiembre Octubre Noviembre Diciembre"
+        }
+    },
+    "Months (Spanish Short 3)": {
+        "name": "Months (Spanish Short 3)",
+        "description": "Abreviaturas de 3 letras para los meses en español",
+        "lang": "es",
+        "characters": "Ene Feb Mar Abr May Jun Jul Ago Sep Oct Nov Dic",
+        "categories": {
+            "Months": "Ene Feb Mar Abr May Jun Jul Ago Sep Oct Nov Dic"
+        }
+    },
+    "Months (French Full)": {
+        "name": "Months (French Full)",
+        "description": "Noms complets des mois en français",
+        "lang": "fr",
+        "characters": "Janvier Février Mars Avril Mai Juin Juillet Août Septembre Octobre Novembre Décembre",
+        "categories": {
+            "Months": "Janvier Février Mars Avril Mai Juin Juillet Août Septembre Octobre Novembre Décembre"
+        }
+    },
+    "Months (French Short 3)": {
+        "name": "Months (French Short 3)",
+        "description": "Abréviations de 3 lettres pour les mois en français",
+        "lang": "fr",
+        "characters": "Jan Fév Mar Avr Mai Jun Jul Aoû Sep Oct Nov Déc",
+        "categories": {
+            "Months": "Jan Fév Mar Avr Mai Jun Jul Aoû Sep Oct Nov Déc"
+        }
+    },
+    "Months (Ukrainian Full)": {
+        "name": "Months (Ukrainian Full)",
+        "description": "Повні назви місяців українською",
+        "lang": "ua",
+        "characters": "Січень Лютий Березень Квітень Травень Червень Липень Серпень Вересень Жовтень Листопад Грудень",
+        "categories": {
+            "Months": "Січень Лютий Березень Квітень Травень Червень Липень Серпень Вересень Жовтень Листопад Грудень"
+        }
+    },
+    "Months (Ukrainian Genitive)": {
+        "name": "Months (Ukrainian Genitive)",
+        "description": "Назви місяців у родовому відмінку",
+        "lang": "ua",
+        "characters": "Січня Лютого Березня Квітня Травня Червня Липня Серпня Вересня Жовтня Листопада Грудня",
+        "categories": {
+            "Months": "Січня Лютого Березня Квітня Травня Червня Липня Серпня Вересня Жовтня Листопада Грудня"
+        }
+    },
+    "Months (Ukrainian Short 3)": {
+        "name": "Months (Ukrainian Short 3)",
+        "description": "3-літерні скорочення місяців українською",
+        "lang": "ua",
+        "characters": "Січ Лют Бер Кві Тра Чер Лип Сер Вер Жов Лис Гру",
+        "categories": {
+            "Months": "Січ Лют Бер Кві Тра Чер Лип Сер Вер Жов Лис Гру"
+        }
+    },
+    "Months (Portuguese Full)": {
+        "name": "Months (Portuguese Full)",
+        "description": "Nomes completos dos meses em português",
+        "lang": "pt",
+        "characters": "Janeiro Fevereiro Março Abril Maio Junho Julho Agosto Setembro Outubro Novembro Dezembro",
+        "categories": {
+            "Months": "Janeiro Fevereiro Março Abril Maio Junho Julho Agosto Setembro Outubro Novembro Dezembro"
+        }
+    },
+    "Months (Portuguese Short 3)": {
+        "name": "Months (Portuguese Short 3)",
+        "description": "Abreviações de 3 letras para os meses em português",
+        "lang": "pt",
+        "characters": "Jan Fev Mar Abr Mai Jun Jul Ago Set Out Nov Dez",
+        "categories": {
+            "Months": "Jan Fev Mar Abr Mai Jun Jul Ago Set Out Nov Dez"
+        }
+    },
+    "Beaufort Scale Russian": {
+        "name": "Beaufort Scale Russian",
+        "description": "Шкала Бофорта на русском языке с разделителем ``` для многословных названий",
+        "lang": "ru",
+        "characters": "Штиль```Тихий```Лёгкий```Слабый```Умеренный```Свежий```Сильный```Крепкий```Очень крепкий```Шторм```Сильный шторм```Жестокий шторм```Ураган",
+        "categories": {
+            "Beaufort Scale": "Штиль```Тихий```Лёгкий```Слабый```Умеренный```Свежий```Сильный```Крепкий```Очень крепкий```Шторм```Сильный шторм```Жестокий шторм```Ураган"
+        }
+    },
+    "Beaufort Scale English": {
+        "name": "Beaufort Scale English",
+        "description": "Beaufort wind force scale in English with ``` separator for multi-word terms",
+        "lang": "en",
+        "characters": "Calm```Light air```Light breeze```Gentle breeze```Moderate breeze```Fresh breeze```Strong breeze```Near gale```Gale```Strong gale```Storm```Violent storm```Hurricane",
+        "categories": {
+            "Beaufort Scale": "Calm```Light air```Light breeze```Gentle breeze```Moderate breeze```Fresh breeze```Strong breeze```Near gale```Gale```Strong gale```Storm```Violent storm```Hurricane"
+        }
+    },
+    "Beaufort Scale Spanish": {
+        "name": "Beaufort Scale Spanish",
+        "description": "Escala de viento Beaufort en español con separador ``` para términos de múltiples palabras",
+        "lang": "es",
+        "characters": "Calma```Ventolina```Flojito```Flojo```Bonancible```Fresquito```Fresco```Frescachón```Temporal```Temporal fuerte```Temporal duro```Temporal muy duro```Huracán",
+        "categories": {
+            "Beaufort Scale": "Calma```Ventolina```Flojito```Flojo```Bonancible```Fresquito```Fresco```Frescachón```Temporal```Temporal fuerte```Temporal duro```Temporal muy duro```Huracán"
+        }
+    },
+    "Beaufort Scale French": {
+        "name": "Beaufort Scale French",
+        "description": "Échelle de Beaufort en français avec séparateur ``` pour les termes composés",
+        "lang": "fr",
+        "characters": "Calme```Très légère brise```Légère brise```Petite brise```Jolie brise```Bonne brise```Vent frais```Grand frais```Coup de vent```Fort coup de vent```Tempête```Violente tempête```Ouragan",
+        "categories": {
+            "Beaufort Scale": "Calme```Très légère brise```Légère brise```Petite brise```Jolie brise```Bonne brise```Vent frais```Grand frais```Coup de vent```Fort coup de vent```Tempête```Violente tempête```Ouragan"
+        }
+    },
+    "Beaufort Scale Ukrainian": {
+        "name": "Beaufort Scale Ukrainian",
+        "description": "Шкала Бофорта українською мовою з роздільником ``` для багатослівних назв",
+        "lang": "ua",
+        "characters": "Штиль```Тихий```Легкий```Слабкий```Помірний```Свіжий```Сильний```Дуже сильний```Міцний```Шторм```Сильний шторм```Жорстокий шторм```Ураган",
+        "categories": {
+            "Beaufort Scale": "Штиль```Тихий```Легкий```Слабкий```Помірний```Свіжий```Сильний```Дуже сильний```Міцний```Шторм```Сильний шторм```Жорстокий шторм```Ураган"
+        }
+    },
+    "Beaufort Scale Portuguese": {
+        "name": "Beaufort Scale Portuguese",
+        "description": "Escala de Beaufort em português com separador ``` para termos de múltiplas palavras",
+        "lang": "pt",
+        "characters": "Calmaria```Aragem```Brisa leve```Brisa moderada```Brisa forte```Brisa fresca```Vento fresco```Vento forte```Ventania```Ventania forte```Tempestade```Tempestade violenta```Furacão",
+        "categories": {
+            "Beaufort Scale": "Calmaria```Aragem```Brisa leve```Brisa moderada```Brisa forte```Brisa fresca```Vento fresco```Vento forte```Ventania```Ventania forte```Tempestade```Tempestade violenta```Furacão"
+        }
+    },
+    "Weather (Russian)": {
+        "name": "Weather (Russian)",
+        "description": "Описание погоды на русском языке",
+        "lang": "ru",
+        "characters": "Солнечно```Облачно```Пасмурно```Гроза```Град```Мокрый снег```Ледяной дождь```Небольшой дождь```Дождь```Сильный дождь```Небольшой снег```Снег```Метель```Туман```Пыль```Песчаная буря```Смог```Н/Д",
+        "categories": {
+            "Weather": "Солнечно```Облачно```Пасмурно```Гроза```Град```Мокрый снег```Ледяной дождь```Небольшой дождь```Дождь```Сильный дождь```Небольшой снег```Снег```Метель```Туман```Пыль```Песчаная буря```Смог```Н/Д"
+        }
+    },
+    "Weather (English)": {
+        "name": "Weather (English)",
+        "description": "Weather descriptions in English",
+        "lang": "en",
+        "characters": "Sunny```Cloudy```Overcast```Thunderstorm```Hail```Sleet```Freezing rain```Light rain```Rain```Heavy rain```Light snow```Snow```Blizzard```Fog```Dust```Sandstorm```Smog```N/A",
+        "categories": {
+            "Weather": "Sunny```Cloudy```Overcast```Thunderstorm```Hail```Sleet```Freezing rain```Light rain```Rain```Heavy rain```Light snow```Snow```Blizzard```Fog```Dust```Sandstorm```Smog```N/A"
+        }
+    },
+    "Weather (Spanish)": {
+        "name": "Weather (Spanish)",
+        "description": "Descripciones del clima en español",
+        "lang": "es",
+        "characters": "Soleado```Nublado```Cubierto```Tormenta```Granizo```Aguanieve```Lluvia gélida```Lluvia ligera```Lluvia```Lluvia fuerte```Nieve ligera```Nieve```Ventisca```Niebla```Polvo```Tormenta de arena```Smog```N/D",
+        "categories": {
+            "Weather": "Soleado```Nublado```Cubierto```Tormenta```Granizo```Aguanieve```Lluvia gélida```Lluvia ligera```Lluvia```Lluvia fuerte```Nieve ligera```Nieve```Ventisca```Niebla```Polvo```Tormenta de arena```Smog```N/D"
+        }
+    },
+    "Weather (French)": {
+        "name": "Weather (French)",
+        "description": "Descriptions de la météo en français",
+        "lang": "fr",
+        "characters": "Ensoleillé```Nuageux```Couvert```Orage```Grêle```Pluie et neige mêlées```Pluie verglaçante```Pluie légère```Pluie```Pluie forte```Neige légère```Neige```Blizzard```Brouillard```Poussière```Tempête de sable```Smog```N/D",
+        "categories": {
+            "Weather": "Ensoleillé```Nuageux```Couvert```Orage```Grêle```Pluie et neige mêlées```Pluie verglaçante```Pluie légère```Pluie```Pluie forte```Neige légère```Neige```Blizzard```Brouillard```Poussière```Tempête de sable```Smog```N/D"
+        }
+    },
+    "Weather (Ukrainian)": {
+        "name": "Weather (Ukrainian)",
+        "description": "Опис погоди українською мовою",
+        "lang": "ua",
+        "characters": "Сонячно```Хмарно```Похмуро```Гроза```Град```Мокрий сніг```Крижаний дощ```Невеликий дощ```Дощ```Сильний дощ```Невеликий сніг```Сніг```Хуртовина```Туман```Пил```Піщана буря```Смог```Н/Д",
+        "categories": {
+            "Weather": "Сонячно```Хмарно```Похмуро```Гроза```Град```Мокрий сніг```Крижаний дощ```Невеликий дощ```Дощ```Сильний дощ```Невеликий сніг```Сніг```Хуртовина```Туман```Пил```Піщана буря```Смог```Н/Д"
+        }
+    },
+    "Weather (Portuguese)": {
+        "name": "Weather (Portuguese)",
+        "description": "Descrições do tempo em português",
+        "lang": "pt",
+        "characters": "Ensolarado```Nublado```Encoberto```Tempestade```Granizo```Chuva e neve```Chuva congelante```Chuva leve```Chuva```Chuva forte```Neve leve```Neve```Nevasca```Nevoeiro```Poeira```Tempestade de areia```Smog```N/D",
+        "categories": {
+            "Weather": "Ensolarado```Nublado```Encoberto```Tempestade```Granizo```Chuva e neve```Chuva congelante```Chuva leve```Chuva```Chuva forte```Neve leve```Neve```Nevasca```Nevoeiro```Poeira```Tempestade de areia```Smog```N/D"
+        }
+    },
+    "Directions (Russian Nouns)": {
+        "name": "Directions (Russian Nouns)",
+        "description": "Стороны света по часовой стрелке (существительные)",
+        "lang": "ru",
+        "characters": "Север```Северо-Восток```Восток```Юго-Восток```Юг```Юго-Запад```Запад```Северо-Запад",
+        "categories": {
+            "Directions": "Север```Северо-Восток```Восток```Юго-Восток```Юг```Юго-Запад```Запад```Северо-Запад"
+        }
+    },
+    "Directions (Russian Adjectives)": {
+        "name": "Directions (Russian Adjectives)",
+        "description": "Стороны света по часовой стрелке (прилагательные)",
+        "lang": "ru",
+        "characters": "Северный```Северо-Восточный```Восточный```Юго-Восточный```Южный```Юго-Западный```Западный```Северо-Западный",
+        "categories": {
+            "Directions": "Северный```Северо-Восточный```Восточный```Юго-Восточный```Южный```Юго-Западный```Западный```Северо-Западный"
+        }
+    },
+    "Directions (Russian Short)": {
+        "name": "Directions (Russian Short)",
+        "description": "Короткие обозначения сторон света по часовой стрелке",
+        "lang": "ru",
+        "characters": "С СВ В ЮВ Ю ЮЗ З СЗ",
+        "categories": {
+            "Directions": "С СВ В ЮВ Ю ЮЗ З СЗ"
+        }
+    },
+    "Directions (English Full)": {
+        "name": "Directions (English Full)",
+        "description": "Full names of cardinal directions clockwise",
+        "lang": "en",
+        "characters": "North```Northeast```East```Southeast```South```Southwest```West```Northwest",
+        "categories": {
+            "Directions": "North```Northeast```East```Southeast```South```Southwest```West```Northwest"
+        }
+    },
+    "Directions (English Short)": {
+        "name": "Directions (English Short)",
+        "description": "Short names of cardinal directions clockwise",
+        "lang": "en",
+        "characters": "N NE E SE S SW W NW",
+        "categories": {
+            "Directions": "N NE E SE S SW W NW"
+        }
+    },
+    "Directions (Ukrainian Nouns)": {
+        "name": "Directions (Ukrainian Nouns)",
+        "description": "Сторони світу за годинниковою стрілкою (іменники)",
+        "lang": "ua",
+        "characters": "Північ```Північний Схід```Схід```Південний Схід```Південь```Південний Захід```Захід```Північний Захід",
+        "categories": {
+            "Directions": "Північ```Північний Схід```Схід```Південний Схід```Південь```Південний Захід```Захід```Північний Захід"
+        }
+    },
+    "Directions (Ukrainian Adjectives)": {
+        "name": "Directions (Ukrainian Adjectives)",
+        "description": "Сторони світу за годинниковою стрілкою (прикметники)",
+        "lang": "ua",
+        "characters": "Північний```Північно-Східний```Східний```Південно-Східний```Південний```Південно-Західний```Західний```Північно-Західний",
+        "categories": {
+            "Directions": "Північний```Північно-Східний```Східний```Південно-Східний```Південний```Південно-Західний```Західний```Північно-Західний"
+        }
+    },
+    "Directions (Ukrainian Short)": {
+        "name": "Directions (Ukrainian Short)",
+        "description": "Короткі позначення сторін світу за годинниковою стрілкою",
+        "lang": "ua",
+        "characters": "Пн ПнСх Сх ПдСх Пд ПдЗх Зх ПнЗх",
+        "categories": {
+            "Directions": "Пн ПнСх Сх ПдСх Пд ПдЗх Зх ПнЗх"
+        }
+    },
+    "Directions (Spanish Full)": {
+        "name": "Directions (Spanish Full)",
+        "description": "Puntos cardinales en el sentido de las agujas del reloj",
+        "lang": "es",
+        "characters": "Norte```Noreste```Este```Sureste```Sur```Suroeste```Oeste```Noroeste",
+        "categories": {
+            "Directions": "Norte```Noreste```Este```Sureste```Sur```Suroeste```Oeste```Noroeste"
+        }
+    },
+    "Directions (Spanish Short)": {
+        "name": "Directions (Spanish Short)",
+        "description": "Abreviaturas en el sentido de las agujas del reloj",
+        "lang": "es",
+        "characters": "N NE E SE S SO O NO",
+        "categories": {
+            "Directions": "N NE E SE S SO O NO"
+        }
+    },
+    "Directions (French Full)": {
+        "name": "Directions (French Full)",
+        "description": "Points cardinaux dans le sens des aiguilles d'une montre",
+        "lang": "fr",
+        "characters": "Nord```Nord-Est```Est```Sud-Est```Sud```Sud-Ouest```Ouest```Nord-Ouest",
+        "categories": {
+            "Directions": "Nord```Nord-Est```Est```Sud-Est```Sud```Sud-Ouest```Ouest```Nord-Ouest"
+        }
+    },
+    "Directions (French Short)": {
+        "name": "Directions (French Short)",
+        "description": "Abréviations dans le sens des aiguilles d'une montre",
+        "lang": "fr",
+        "characters": "N NE E SE S SO O NO",
+        "categories": {
+            "Directions": "N NE E SE S SO O NO"
+        }
+    },
+    "Directions (Portuguese Full)": {
+        "name": "Directions (Portuguese Full)",
+        "description": "Pontos cardinais no sentido dos ponteiros do relógio",
+        "lang": "pt",
+        "characters": "Norte```Nordeste```Leste```Sudeste```Sul```Sudoeste```Oeste```Noroeste",
+        "categories": {
+            "Directions": "Norte```Nordeste```Leste```Sudeste```Sul```Sudoeste```Oeste```Noroeste"
+        }
+    },
+    "Directions (Portuguese Short)": {
+        "name": "Directions (Portuguese Short)",
+        "description": "Abreviações no sentido dos ponteiros do relógio",
+        "lang": "pt",
+        "characters": "N NE L SE S SO O NO",
+        "categories": {
+            "Directions": "N NE L SE S SO O NO"
+        }
+    },
+    "Moon Phases (Russian)": {
+        "name": "Moon Phases (Russian)",
+        "description": "Полные 8 фаз лунного цикла на русском",
+        "lang": "ru",
+        "characters": "Новолуние```Молодая луна```Первая четверть```Прибывающая луна```Полнолуние```Убывающая луна```Последняя четверть```Старая луна",
+        "categories": {
+            "Astronomy": "Новолуние```Молодая луна```Первая четверть```Прибывающая луна```Полнолуние```Убывающая луна```Последняя четверть```Старая луна"
+        }
+    },
+    "Moon Phases (English)": {
+        "name": "Moon Phases (English)",
+        "description": "Full 8 phases of the lunar cycle in English",
+        "lang": "en",
+        "characters": "New Moon```Waxing Crescent```First Quarter```Waxing Gibbous```Full Moon```Waning Gibbous```Third Quarter```Waning Crescent",
+        "categories": {
+            "Astronomy": "New Moon```Waxing Crescent```First Quarter```Waxing Gibbous```Full Moon```Waning Gibbous```Third Quarter```Waning Crescent"
+        }
+    },
+    "Moon Phases (Ukrainian)": {
+        "name": "Moon Phases (Ukrainian)",
+        "description": "Повні 8 фаз місячного циклу українською",
+        "lang": "ua",
+        "characters": "Новий місяць```Молодий місяць```Перша чверть```Прибуваючий місяць```Повня```Убуваючий місяць```Остання чверть```Старий місяць",
+        "categories": {
+            "Astronomy": "Новий місяць```Молодий місяць```Перша чверть```Прибуваючий місяць```Повня```Убуваючий місяць```Остання чверть```Старий місяць"
+        }
+    },
+    "Moon Phases (Spanish)": {
+        "name": "Moon Phases (Spanish)",
+        "description": "Las 8 fases completas del ciclo lunar en español",
+        "lang": "es",
+        "characters": "Luna nueva```Luna creciente```Cuarto creciente```Luna gibosa creciente```Luna llena```Luna gibosa menguante```Cuarto menguante```Luna menguante",
+        "categories": {
+            "Astronomy": "Luna nueva```Luna creciente```Cuarto creciente```Luna gibosa creciente```Luna llena```Luna gibosa menguante```Cuarto menguante```Luna menguante"
+        }
+    },
+    "Moon Phases (French)": {
+        "name": "Moon Phases (French)",
+        "description": "Les 8 phases complètes du cycle lunaire en français",
+        "lang": "fr",
+        "characters": "Nouvelle lune```Premier croissant```Premier quartier```Lune gibbeuse croissante```Pleine lune```Lune gibbeuse décroissante```Dernier quartier```Dernier croissant",
+        "categories": {
+            "Astronomy": "Nouvelle lune```Premier croissant```Premier quartier```Lune gibbeuse croissante```Pleine lune```Lune gibbeuse décroissante```Dernier quartier```Dernier croissant"
+        }
+    },
+    "Moon Phases (Portuguese)": {
+        "name": "Moon Phases (Portuguese)",
+        "description": "As 8 fases completas do ciclo lunar em português",
+        "lang": "pt",
+        "characters": "Lua nova```Lua crescente```Quarto crescente```Gibosa crescente```Lua cheia```Gibosa minguante```Quarto minguante```Lua minguante",
+        "categories": {
+            "Astronomy": "Lua nova```Lua crescente```Quarto crescente```Gibosa crescente```Lua cheia```Gibosa minguante```Quarto minguante```Lua minguante"
+        }
+    },
+    "Digits and Symbols": {
+        "name": "Digits and Symbols",
+        "description": "Цифры, знаки препинания, математика, валюты и знак градуса (°)",
+        "lang": "global",
+        "characters": "0 1 2 3 4 5 6 7 8 9 . , ! ? + - = * / % $ € @ & ° : ; ( ) [ ] < > # _",
+        "categories": {
+            "Technical": "0 1 2 3 4 5 6 7 8 9 . , ! ? + - = * / % $ € @ & ° : ; ( ) [ ] < > # _"
+        }
+    },
+	"Units (Russian)": {
+        "name": "Units (Russian)",
+        "description": "Сокращения единиц измерения на русском",
+        "lang": "ru",
+        "characters": "°C```°F```км/ч```м/с```миль/ч```мм рт. ст.```гПа```дюйм рт. ст.```мм```дюйм```км```миль```ккал```уд/мин```шагов",
+        "categories": {
+            "Units": "°C```°F```км/ч```м/с```миль/ч```мм рт. ст.```гПа```дюйм рт. ст.```мм```дюйм```км```миль```ккал```уд/мин```шагов"
+        }
+    },
+    "Units (English)": {
+        "name": "Units (English)",
+        "description": "Measurement unit abbreviations in English",
+        "lang": "en",
+        "characters": "°C```°F```km/h```m/s```mph```mmHg```hPa```inHg```mm```in```km```mi```kcal```bpm```steps",
+        "categories": {
+            "Units": "°C```°F```km/h```m/s```mph```mmHg```hPa```inHg```mm```in```km```mi```kcal```bpm```steps"
+        }
+    },
+    "Units (Spanish)": {
+        "name": "Units (Spanish)",
+        "description": "Abreviaturas de unidades de medida en español",
+        "lang": "es",
+        "characters": "°C```°F```km/h```m/s```mph```mmHg```hPa```inHg```mm```in```km```mi```kcal```ppm```pasos",
+        "categories": {
+            "Units": "°C```°F```km/h```m/s```mph```mmHg```hPa```inHg```mm```in```km```mi```kcal```ppm```pasos"
+        }
+    },
+    "Units (French)": {
+        "name": "Units (French)",
+        "description": "Abréviations des unités de mesure en français",
+        "lang": "fr",
+        "characters": "°C```°F```km/h```m/s```mph```mmHg```hPa```inHg```mm```po```km```mi```kcal```bpm```pas",
+        "categories": {
+            "Units": "°C```°F```km/h```m/s```mph```mmHg```hPa```inHg```mm```po```km```mi```kcal```bpm```pas"
+        }
+    },
+    "Units (Ukrainian)": {
+        "name": "Units (Ukrainian)",
+        "description": "Скорочення одиниць вимірювання українською",
+        "lang": "ua",
+        "characters": "°C```°F```км/год```м/с```миль/год```мм рт. ст.```гПа```дюйм рт. ст.```мм```дюйм```км```миль```ккал```уд/хв```кроків",
+        "categories": {
+            "Units": "°C```°F```км/год```м/с```миль/год```мм рт. ст.```гПа```дюйм рт. ст.```мм```дюйм```км```миль```ккал```уд/хв```кроків"
+        }
+    },
+    "Units (Portuguese)": {
+        "name": "Units (Portuguese)",
+        "description": "Abreviações de unidades de medida em português",
+        "lang": "pt",
+        "characters": "°C```°F```km/h```m/s```mph```mmHg```hPa```inHg```mm```pol```km```mi```kcal```bpm```passos",
+        "categories": {
+            "Units": "°C```°F```km/h```m/s```mph```mmHg```hPa```inHg```mm```pol```km```mi```kcal```bpm```passos"
+        }
+    }
+}
