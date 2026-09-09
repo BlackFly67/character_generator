@@ -17,6 +17,8 @@ from fonts import SYSTEM_FONTS
 from constants import *
 from ui.widgets import IntSliderRow, ColorPickerButton, DirectionSelector
 
+from effects.gradient import sample_gradient_color
+from utils import create_checkerboard_background
 # Направления для теней
 direction_symbols = ["↖", "↑", "↗", "←", "●", "→", "↙", "↓", "↘"]
 direction_values = [5, 1, 6, 3, 0, 4, 7, 2, 8]
@@ -217,6 +219,141 @@ class Sidebar(ctk.CTkScrollableFrame):
         dialog = StylePresetsDialog(self, self.settings, self.i18n)
         dialog.wait_window()
         self._on_change()
+        
+    def _redraw_gradient_stops(self):
+        """Перерисовывает ленту-превью градиента и точки."""
+        if not hasattr(self, 'gradient_stops_canvas') or self.gradient_stops_canvas is None:
+                return
+        
+        canvas = self.gradient_stops_canvas
+        canvas.delete("all")
+        w = max(canvas.winfo_width(), 10)
+        h = max(canvas.winfo_height(), 30)
+        ramp_h = max(1, int(h * 0.6))
+        
+        stops = self.settings.gradient_stops
+        if not stops:
+                stops = [{"pos": 0.0, "color": "#ff0000"}, {"pos": 1.0, "color": "#0000ff"}]
+        
+        sorted_stops = sorted(stops, key=lambda s: s["pos"])
+        ramp_w = max(w, 2)
+        ramp_h2 = max(ramp_h, 2)
+                
+        row = [sample_gradient_color(sorted_stops, x / max(1, ramp_w - 1)) for x in range(ramp_w)]
+        ramp_rgba = Image.new("RGBA", (ramp_w, ramp_h2))
+        ramp_rgba.putdata(row * ramp_h2)
+        checker = create_checkerboard_background(ramp_w, ramp_h2, cell_size=6)
+        ramp = Image.alpha_composite(checker, ramp_rgba).convert("RGB")
+        
+        self.gradient_stops_photo = ImageTk.PhotoImage(ramp)
+        canvas.create_image(0, 0, anchor="nw", image=self.gradient_stops_photo)
+        
+        # Рисуем точки
+        for i, stop in enumerate(stops):
+                x = int(stop["pos"] * w)
+                
+                # Парсим цвет прямо здесь
+                color_str = stop["color"]
+                if color_str == "transparent" or color_str is None:
+                        r, g, b, a = 0, 0, 0, 0
+                else:
+                        hex_color = color_str.lstrip('#')
+                        if len(hex_color) == 6:
+                                r = int(hex_color[0:2], 16)
+                                g = int(hex_color[2:4], 16)
+                                b = int(hex_color[4:6], 16)
+                                a = 255
+                        elif len(hex_color) == 8:
+                                r = int(hex_color[0:2], 16)
+                                g = int(hex_color[2:4], 16)
+                                b = int(hex_color[4:6], 16)
+                                a = int(hex_color[6:8], 16)
+                        else:
+                                r, g, b, a = 255, 255, 255, 255
+                
+                fill = "" if a == 0 else "#{:02x}{:02x}{:02x}".format(r, g, b)
+                canvas.create_polygon(
+                        x - 6, h, x + 6, h, x, ramp_h + 2,
+                        fill=fill, outline="#ffffff", width=2,
+                        dash=(None if a == 255 else (3, 2))
+                )
+    def _get_stop_at(self, x, w):
+        """Находит индекс точки градиента по координате."""
+        stops = self.settings.gradient_stops
+        if not stops:
+            return None
+        best_idx, best_dist = None, None
+        for i, stop in enumerate(stops):
+            dist = abs(stop["pos"] * w - x)
+            if best_dist is None or dist < best_dist:
+                best_idx, best_dist = i, dist
+        return best_idx if best_dist is not None and best_dist <= 10 else None
+    
+    def _on_gradient_stops_click(self, event):
+        w = max(self.gradient_stops_canvas.winfo_width(), 1)
+        idx = self._get_stop_at(event.x, w)
+        if idx is not None:
+            self._gradient_selected_idx = idx
+        else:
+            # Добавляем новую точку
+
+            t = max(0.0, min(1.0, event.x / w))
+            stops = self.settings.gradient_stops
+            if not stops:
+                stops = [{"pos": 0.0, "color": "#ff0000"}, {"pos": 1.0, "color": "#0000ff"}]
+            sorted_stops = sorted(stops, key=lambda s: s["pos"])
+            r, g, b, a = sample_gradient_color(sorted_stops, t)
+            color = "#{:02x}{:02x}{:02x}".format(r, g, b)
+            if a < 255:
+                color += "{:02x}".format(a)
+            stops.append({"pos": t, "color": color})
+            self._gradient_selected_idx = len(stops) - 1
+            self._on_change()
+            self._redraw_gradient_stops()
+
+    def _on_gradient_stops_drag(self, event):
+        if not hasattr(self, '_gradient_selected_idx') or self._gradient_selected_idx is None:
+            return
+        w = max(self.gradient_stops_canvas.winfo_width(), 1)
+        t = max(0.0, min(1.0, event.x / w))
+        stops = self.settings.gradient_stops
+        if 0 <= self._gradient_selected_idx < len(stops):
+            stops[self._gradient_selected_idx]["pos"] = t
+            self._redraw_gradient_stops()
+    
+    def _on_gradient_stops_release(self, event):
+        self._redraw_gradient_stops()
+        self._on_change()
+    
+    def _on_gradient_stops_double_click(self, event):
+        w = max(self.gradient_stops_canvas.winfo_width(), 1)
+        idx = self._get_stop_at(event.x, w)
+        if idx is None:
+            return
+            
+        stops = self.settings.gradient_stops
+        color = stops[idx]["color"]
+        
+        from ui.dialogs import ask_color
+        new_color = ask_color(self, color, self.i18n.tr("select_gradient_color"), self.i18n)
+        if new_color:
+            stops[idx]["color"] = new_color
+            self._on_change()
+            self._redraw_gradient_stops()
+    
+    def _on_gradient_stops_right_click(self, event):
+        if len(self.settings.gradient_stops) <= 2:
+            return
+        w = max(self.gradient_stops_canvas.winfo_width(), 1)
+        idx = self._get_stop_at(event.x, w)
+        if idx is None:
+            return
+        del self.settings.gradient_stops[idx]
+        self._gradient_selected_idx = None
+        self._on_change()
+        self._redraw_gradient_stops()        
+        
+        
     
     def _create_sidebar(self):
         """Создаёт весь sidebar."""
@@ -453,12 +590,20 @@ class Sidebar(ctk.CTkScrollableFrame):
         # --- Редактор точек градиента ---
         gradient_stops_label = ctk.CTkLabel(gradient_frame, text=self.i18n.tr("gradient_stops") + ":", font=("Arial", 11))
         gradient_stops_label.pack(anchor="w", padx=10, pady=(5, 0))
-        
+
         self.gradient_stops_canvas = tk.Canvas(
             gradient_frame, height=40, highlightthickness=1, 
             highlightbackground="#555555", bg="#2b2b2b"
         )
         self.gradient_stops_canvas.pack(fill="x", padx=10, pady=(2, 8))
+
+        # --- НАСТРОЙКА СОБЫТИЙ ДЛЯ РЕДАКТОРА ГРАДИЕНТА ---
+        self.gradient_stops_canvas.bind("<Button-1>", self._on_gradient_stops_click)
+        self.gradient_stops_canvas.bind("<B1-Motion>", self._on_gradient_stops_drag)
+        self.gradient_stops_canvas.bind("<ButtonRelease-1>", self._on_gradient_stops_release)
+        self.gradient_stops_canvas.bind("<Double-Button-1>", self._on_gradient_stops_double_click)
+        self.gradient_stops_canvas.bind("<Button-3>", self._on_gradient_stops_right_click)
+        self.gradient_stops_canvas.bind("<Configure>", lambda e: self._redraw_gradient_stops())
         
         # --- ПАТТЕРН ---
         pattern_section = ctk.CTkFrame(style_section, fg_color="transparent")
@@ -1175,19 +1320,19 @@ class Sidebar(ctk.CTkScrollableFrame):
         skew_section.pack(fill="x", padx=10, pady=5)
         
         skew_check = ctk.CTkCheckBox(
-            skew_section, 
-            text=self.i18n.tr("skew"), 
-            variable=self.skew_enabled_var,
-            command=self._toggle_skew,
-            checkbox_height=18, checkbox_width=18
+                skew_section, 
+                text=self.i18n.tr("skew"), 
+                variable=self.skew_enabled_var,
+                command=self._toggle_skew,
+                checkbox_height=18, checkbox_width=18
         )
         skew_check.pack(anchor="w", padx=10, pady=2)
         
         skew_frame = ctk.CTkFrame(skew_section, fg_color="transparent")
         if not self.settings.skew_enabled:
-            skew_frame.pack_forget()
+                skew_frame.pack_forget()
         else:
-            skew_frame.pack(fill="x", before=self.perspective_check)
+                skew_frame.pack(fill="x")
         self.skew_frame = skew_frame
         
         skew_x_flow = ctk.CTkFrame(skew_frame, fg_color="transparent")
@@ -1216,7 +1361,7 @@ class Sidebar(ctk.CTkScrollableFrame):
         self.skew_y_entry.insert(0, "0")
         self.skew_y_entry.pack(side="right", padx=(5, 0))
         self.skew_y_entry.bind("<KeyRelease>", self._on_skew_y_change)
-        
+
         self.skew_y_slider = ctk.CTkSlider(skew_y_flow, from_=-75, to=75, number_of_steps=150)
         self.skew_y_slider.pack(side="left", padx=5, fill="x", expand=True)
         self.skew_y_slider.set(0)
@@ -1225,20 +1370,23 @@ class Sidebar(ctk.CTkScrollableFrame):
         # ============================================================
         # 9. СЕКЦИЯ: ПЕРСПЕКТИВА
         # ============================================================
+        perspective_section = ctk.CTkFrame(self)  # <-- ИЗМЕНЕНО: СВОЯ СЕКЦИЯ
+        perspective_section.pack(fill="x", padx=10, pady=5)
+        
         perspective_check = ctk.CTkCheckBox(
-            skew_section, 
-            text=self.i18n.tr("perspective"), 
-            variable=self.perspective_enabled_var,
-            command=self._toggle_perspective,
-            checkbox_height=18, checkbox_width=18
+                perspective_section,  # <-- ИЗМЕНЕНО
+                text=self.i18n.tr("perspective"), 
+                variable=self.perspective_enabled_var,
+                command=self._toggle_perspective,
+                checkbox_height=18, checkbox_width=18
         )
         perspective_check.pack(anchor="w", padx=10, pady=2)
         
-        perspective_frame = ctk.CTkFrame(skew_section, fg_color="transparent")
+        perspective_frame = ctk.CTkFrame(perspective_section, fg_color="transparent")  # <-- ИЗМЕНЕНО
         if not self.settings.perspective_enabled:
-            perspective_frame.pack_forget()
+                perspective_frame.pack_forget()
         else:
-            perspective_frame.pack(fill="x")
+                perspective_frame.pack(fill="x")
         self.perspective_frame = perspective_frame
         
         perspective_x_flow = ctk.CTkFrame(perspective_frame, fg_color="transparent")
@@ -1750,9 +1898,9 @@ class Sidebar(ctk.CTkScrollableFrame):
     def _toggle_skew(self):
         self.settings.skew_enabled = self.skew_enabled_var.get()
         if self.settings.skew_enabled:
-            self.skew_frame.pack(fill="x", before=self.perspective_check)
+                self.skew_frame.pack(fill="x")
         else:
-            self.skew_frame.pack_forget()
+                self.skew_frame.pack_forget()
         self._on_change()
     
     def _toggle_perspective(self):

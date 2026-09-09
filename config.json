@@ -1,7 +1,7 @@
 {
-  "language": "en",
+  "language": "ru",
   "theme": "dark",
-  "text_color": "#d80b0b",
+  "text_color": "#fbff2b",
   "background_color": null,
   "transparent_background": true,
   "transparent_text": false,
@@ -11,12 +11,12 @@
   "shadow_distance": 5,
   "shadow_direction": 8,
   "shadow_blur": 2,
-  "font_size": 64,
+  "font_size": 164,
   "text_font_size": 64,
   "icon_font_size": null,
   "rotation_angle": 0,
   "text_alignment": "center",
-  "font_path": "arial.ttf",
+  "font_path": "C:/Windows/Fonts\\ARIALNB.TTF",
   "emboss_enabled": false,
   "emboss_depth": 3,
   "emboss_blur": 1,
@@ -39,7 +39,7 @@
   "text_opacity": 1.0,
   "text_scale_x": 1.0,
   "letter_spacing": 0,
-  "characters": "",
+  "characters": "ooo",
   "gradient_enabled": false,
   "gradient_stops": [
     {
@@ -49,13 +49,33 @@
     {
       "pos": 1.0,
       "color": "#0000ff"
+    },
+    {
+      "pos": 0.6341463414634146,
+      "color": "#4000be"
+    },
+    {
+      "pos": 0.7469512195121951,
+      "color": "#5400a8"
+    },
+    {
+      "pos": 0.4634146341463415,
+      "color": "#00ff13"
+    },
+    {
+      "pos": 0.8841463414634146,
+      "color": "#b50048"
+    },
+    {
+      "pos": 0.21951219512195122,
+      "color": "#b2004a"
     }
   ],
   "gradient_type": "linear",
-  "gradient_angle": 109,
+  "gradient_angle": 93,
   "pattern_enabled": false,
-  "pattern_image_path": null,
-  "pattern_scale": 100,
+  "pattern_image_path": "C:/watchfaces/Misc/stone-4-1.jpg",
+  "pattern_scale": 150,
   "pattern_offset_x": 0,
   "pattern_offset_y": 0,
   "pattern_angle": 0,
@@ -78,14 +98,14 @@
   "halftone_dot_scale": 96,
   "halftone_angle": 41,
   "glitch_enabled": false,
-  "glitch_rgb_shift": 4,
+  "glitch_rgb_shift": 3,
   "glitch_slice_intensity": 30,
-  "glitch_seed": 0,
-  "skew_enabled": false,
-  "skew_x": 0,
-  "skew_y": 0,
+  "glitch_seed": 964293,
+  "skew_enabled": true,
+  "skew_x": -1,
+  "skew_y": -1,
   "perspective_enabled": false,
-  "perspective_x": 31,
+  "perspective_x": 1,
   "perspective_y": 0,
   "reflection_enabled": false,
   "reflection_gap": 2,
