@@ -17,10 +17,10 @@ from fonts import SYSTEM_FONTS
 from constants import *
 from ui.widgets import IntSliderRow, ColorPickerButton, DirectionSelector
 
-# ===== ДОБАВЛЯЕМ НЕДОСТАЮЩИЕ КОНСТАНТЫ =====
+# Направления для теней
 direction_symbols = ["↖", "↑", "↗", "←", "●", "→", "↙", "↓", "↘"]
 direction_values = [5, 1, 6, 3, 0, 4, 7, 2, 8]
-# =============================================
+
 
 class Sidebar(ctk.CTkScrollableFrame):
     """Боковая панель с настройками."""
@@ -31,7 +31,7 @@ class Sidebar(ctk.CTkScrollableFrame):
         self.i18n = i18n
         self._on_change_callbacks = []
         
-        # --- ОБЪЯВЛЯЕМ ВСЕ ПЕРЕМЕННЫЕ ДО ИХ ИСПОЛЬЗОВАНИЯ ---
+        # --- ОБЪЯВЛЯЕМ ВСЕ ПЕРЕМЕННЫЕ ---
         
         # Шрифт
         self.font_size_entry = None
@@ -196,12 +196,19 @@ class Sidebar(ctk.CTkScrollableFrame):
     def add_change_callback(self, callback):
         self._on_change_callbacks.append(callback)
     
+    def _refresh_all_widgets(self):
+        """Обновляет все виджеты после сброса."""
+        for widget in self.winfo_children():
+            widget.destroy()
+        self._create_sidebar()
+    
     def _reset_settings(self):
         if messagebox.askyesno(
             self.i18n.tr("warning"), 
             self.i18n.tr("reset_warning") + "\n\n" + self.i18n.tr("reset_confirm")
         ):
             self.settings.reset()
+            self._refresh_all_widgets()
             self._on_change()
             messagebox.showinfo(self.i18n.tr("done"), self.i18n.tr("settings_reset"))
     
@@ -315,7 +322,7 @@ class Sidebar(ctk.CTkScrollableFrame):
             values=["left", "center", "right"], 
             variable=self.text_alignment, 
             width=90,
-            command=lambda x: self._on_change()
+            command=self._on_alignment_change  # ИСПРАВЛЕНО
         )
         alignment_menu.pack(side="left", padx=5)
         
@@ -1808,6 +1815,11 @@ class Sidebar(ctk.CTkScrollableFrame):
                 self.background_color_button.configure(fg_color="#ffffff")
         self._on_change()
     
+    # === НОВЫЙ ОБРАБОТЧИК ВЫРАВНИВАНИЯ ===
+    def _on_alignment_change(self, value):
+        self.settings.text_alignment = value
+        self._on_change()
+    
     # === ОБРАБОТЧИКИ ИЗМЕНЕНИЙ ===
     
     def _on_font_size_change(self, event):
@@ -1966,7 +1978,8 @@ class Sidebar(ctk.CTkScrollableFrame):
             self.settings.inner_shadow_distance = val
             self._on_change()
         except ValueError:
-            pass    
+            pass
+    
     def _on_inner_shadow_blur_change(self, event):
         try:
             val = int(self.inner_shadow_blur_entry.get())

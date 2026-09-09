@@ -3,22 +3,16 @@
 Панель предпросмотра - ПОЛНАЯ РАБОЧАЯ ВЕРСИЯ
 """
 
-
 import math
 import customtkinter as ctk
 from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageChops
 import numpy as np
-import tkinter as tk
-import os
-import json
-import sys
 
 from utils import (
     create_checkerboard_background, get_color_rgb, get_color_rgba,
-    get_shadow_offset, blend_layers, rotate_cleanly, parse_characters,
-    format_filename, make_safe_filename
+    get_shadow_offset, blend_layers, rotate_cleanly, parse_characters
 )
-from fonts import load_font_safe, SYSTEM_FONTS  # <-- ПРАВИЛЬНЫЙ ИМПОРТ
+from fonts import load_font_safe
 from constants import PREVIEW_TEXT, FONT_SIZE_MIN, FONT_SIZE_MAX
 from effects import *
 from render.arc import render_arc_text_mask
@@ -45,6 +39,7 @@ class PreviewPanel(ctk.CTkFrame):
         self._callbacks.append(callback)
     
     def _create_widgets(self):
+        """Создаёт виджеты панели."""
         header = ctk.CTkFrame(self, fg_color="transparent")
         header.pack(fill="x", padx=15, pady=(10, 5))
         
@@ -197,135 +192,91 @@ class PreviewPanel(ctk.CTkFrame):
             traceback.print_exc()
     
     def _render_preview(self):
-        """ОРИГИНАЛЬНАЯ update_preview из create_char_gui(571b).py"""
-        
-        # === ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ===
-        def safe_get_int(entry, default_val, requires_var=None):
-            try:
-                if entry is None:
-                    return default_val
-                val = entry.get().strip()
-                if not val:
-                    return default_val
-                if requires_var is not None and not requires_var.get():
-                    return 0
-                return int(val)
-            except (ValueError, AttributeError):
-                return default_val
+        """Рендерит превью с корректным чтением настроек из сайдбара."""
         
         # === ПОЛУЧАЕМ SIDEBAR ===
         sidebar = self._get_sidebar()
         if sidebar is None:
             return
         
-        # === ПОЛУЧАЕМ ВСЕ ПЕРЕМЕННЫЕ ИЗ SIDEBAR ===
-        shadow_distance_entry = getattr(sidebar, 'shadow_distance_row', None)
-        shadow_distance_entry = shadow_distance_entry.entry if shadow_distance_entry else None
-        shadow_blur_entry = getattr(sidebar, 'shadow_blur_row', None)
-        shadow_blur_entry = shadow_blur_entry.entry if shadow_blur_entry else None
+        # === ПОЛУЧАЕМ ВСЕ ПЕРЕМЕННЫЕ НАПРЯМУЮ ИЗ SIDEBAR ===
+        shadow_distance_entry = getattr(sidebar, 'shadow_distance_entry', None)
+        shadow_blur_entry = getattr(sidebar, 'shadow_blur_entry', None)
         shadow_var = getattr(sidebar, 'shadow_var', None)
-        shadow_direction_var = getattr(sidebar, 'shadow_dir_var', None)
-        shadow_blend_mode_var = getattr(sidebar, 'shadow_blend_var', None)
+        shadow_direction_var = getattr(sidebar, 'shadow_direction_var', None)
+        shadow_blend_mode_var = getattr(sidebar, 'shadow_blend_mode_var', None)
         
-        rotation_entry = getattr(sidebar, 'rotation_row', None)
-        rotation_entry = rotation_entry.entry if rotation_entry else None
+        rotation_entry = getattr(sidebar, 'rotation_entry', None)
         
-        skew_x_entry = getattr(sidebar, 'skew_x_row', None)
-        skew_x_entry = skew_x_entry.entry if skew_x_entry else None
-        skew_y_entry = getattr(sidebar, 'skew_y_row', None)
-        skew_y_entry = skew_y_entry.entry if skew_y_entry else None
-        skew_enabled_var = getattr(sidebar, 'skew_var', None)
+        skew_x_entry = getattr(sidebar, 'skew_x_entry', None)
+        skew_y_entry = getattr(sidebar, 'skew_y_entry', None)
+        skew_enabled_var = getattr(sidebar, 'skew_enabled_var', None)
         
-        perspective_x_entry = getattr(sidebar, 'perspective_x_row', None)
-        perspective_x_entry = perspective_x_entry.entry if perspective_x_entry else None
-        perspective_y_entry = getattr(sidebar, 'perspective_y_row', None)
-        perspective_y_entry = perspective_y_entry.entry if perspective_y_entry else None
-        perspective_enabled_var = getattr(sidebar, 'perspective_var', None)
+        perspective_x_entry = getattr(sidebar, 'perspective_x_entry', None)
+        perspective_y_entry = getattr(sidebar, 'perspective_y_entry', None)
+        perspective_enabled_var = getattr(sidebar, 'perspective_enabled_var', None)
         
-        emboss_depth_entry = getattr(sidebar, 'emboss_depth_row', None)
-        emboss_depth_entry = emboss_depth_entry.entry if emboss_depth_entry else None
-        emboss_blur_entry = getattr(sidebar, 'emboss_blur_row', None)
-        emboss_blur_entry = emboss_blur_entry.entry if emboss_blur_entry else None
-        emboss_enabled_var = getattr(sidebar, 'emboss_var', None)
+        emboss_depth_entry = getattr(sidebar, 'emboss_depth_entry', None)
+        emboss_blur_entry = getattr(sidebar, 'emboss_blur_entry', None)
+        emboss_enabled_var = getattr(sidebar, 'emboss_enabled_var', None)
         
-        outline_outer_width_entry = getattr(sidebar, 'outline_outer_width_row', None)
-        outline_outer_width_entry = outline_outer_width_entry.entry if outline_outer_width_entry else None
-        outline_outer_enabled_var = getattr(sidebar, 'outline_outer_var', None)
-        outline_inner_width_entry = getattr(sidebar, 'outline_inner_width_row', None)
-        outline_inner_width_entry = outline_inner_width_entry.entry if outline_inner_width_entry else None
-        outline_inner_enabled_var = getattr(sidebar, 'outline_inner_var', None)
+        outline_outer_width_entry = getattr(sidebar, 'outline_outer_width_entry', None)
+        outline_outer_enabled_var = getattr(sidebar, 'outline_outer_enabled_var', None)
+        outline_inner_width_entry = getattr(sidebar, 'outline_inner_width_entry', None)
+        outline_inner_enabled_var = getattr(sidebar, 'outline_inner_enabled_var', None)
         
-        glow_outer_radius_entry = getattr(sidebar, 'glow_outer_radius_row', None)
-        glow_outer_radius_entry = glow_outer_radius_entry.entry if glow_outer_radius_entry else None
-        glow_outer_intensity_entry = getattr(sidebar, 'glow_outer_intensity_row', None)
-        glow_outer_intensity_entry = glow_outer_intensity_entry.entry if glow_outer_intensity_entry else None
-        glow_outer_enabled_var = getattr(sidebar, 'glow_outer_var', None)
-        glow_inner_radius_entry = getattr(sidebar, 'glow_inner_radius_row', None)
-        glow_inner_radius_entry = glow_inner_radius_entry.entry if glow_inner_radius_entry else None
-        glow_inner_intensity_entry = getattr(sidebar, 'glow_inner_intensity_row', None)
-        glow_inner_intensity_entry = glow_inner_intensity_entry.entry if glow_inner_intensity_entry else None
-        glow_inner_enabled_var = getattr(sidebar, 'glow_inner_var', None)
-        glow_inner_blend_mode_var = getattr(sidebar, 'glow_inner_blend_var', None)
+        glow_outer_radius_entry = getattr(sidebar, 'glow_outer_radius_entry', None)
+        glow_outer_intensity_entry = getattr(sidebar, 'glow_outer_intensity_entry', None)
+        glow_outer_enabled_var = getattr(sidebar, 'glow_outer_enabled_var', None)
+        glow_inner_radius_entry = getattr(sidebar, 'glow_inner_radius_entry', None)
+        glow_inner_intensity_entry = getattr(sidebar, 'glow_inner_intensity_entry', None)
+        glow_inner_enabled_var = getattr(sidebar, 'glow_inner_enabled_var', None)
+        glow_inner_blend_mode_var = getattr(sidebar, 'glow_inner_blend_mode_var', None)
         
-        inner_shadow_distance_entry = getattr(sidebar, 'inner_shadow_distance_row', None)
-        inner_shadow_distance_entry = inner_shadow_distance_entry.entry if inner_shadow_distance_entry else None
-        inner_shadow_blur_entry = getattr(sidebar, 'inner_shadow_blur_row', None)
-        inner_shadow_blur_entry = inner_shadow_blur_entry.entry if inner_shadow_blur_entry else None
-        inner_shadow_enabled_var = getattr(sidebar, 'inner_shadow_var', None)
-        inner_shadow_direction_var = getattr(sidebar, 'inner_shadow_dir_var', None)
-        inner_shadow_blend_mode_var = getattr(sidebar, 'inner_shadow_blend_var', None)
+        inner_shadow_distance_entry = getattr(sidebar, 'inner_shadow_distance_entry', None)
+        inner_shadow_blur_entry = getattr(sidebar, 'inner_shadow_blur_entry', None)
+        inner_shadow_enabled_var = getattr(sidebar, 'inner_shadow_enabled_var', None)
+        inner_shadow_direction_var = getattr(sidebar, 'inner_shadow_direction_var', None)
+        inner_shadow_blend_mode_var = getattr(sidebar, 'inner_shadow_blend_mode_var', None)
         
-        arc_radius_entry = getattr(sidebar, 'arc_radius_row', None)
-        arc_radius_entry = arc_radius_entry.entry if arc_radius_entry else None
-        arc_text_enabled_var = getattr(sidebar, 'arc_var', None)
-        arc_start_angle_entry = getattr(sidebar, 'arc_angle_row', None)
-        arc_start_angle_entry = arc_start_angle_entry.entry if arc_start_angle_entry else None
+        arc_radius_entry = getattr(sidebar, 'arc_radius_entry', None)
+        arc_text_enabled_var = getattr(sidebar, 'arc_text_enabled_var', None)
+        arc_start_angle_entry = getattr(sidebar, 'arc_start_angle_entry', None)
         arc_clockwise_var = getattr(sidebar, 'arc_clockwise_var', None)
         arc_flip_var = getattr(sidebar, 'arc_flip_var', None)
         
-        reflection_gap_entry = getattr(sidebar, 'reflection_gap_row', None)
-        reflection_gap_entry = reflection_gap_entry.entry if reflection_gap_entry else None
-        reflection_opacity_entry = getattr(sidebar, 'reflection_opacity_row', None)
-        reflection_opacity_entry = reflection_opacity_entry.entry if reflection_opacity_entry else None
-        reflection_fade_entry = getattr(sidebar, 'reflection_fade_row', None)
-        reflection_fade_entry = reflection_fade_entry.entry if reflection_fade_entry else None
-        reflection_enabled_var = getattr(sidebar, 'reflection_var', None)
+        reflection_gap_entry = getattr(sidebar, 'reflection_gap_entry', None)
+        reflection_opacity_entry = getattr(sidebar, 'reflection_opacity_entry', None)
+        reflection_fade_entry = getattr(sidebar, 'reflection_fade_entry', None)
+        reflection_enabled_var = getattr(sidebar, 'reflection_enabled_var', None)
         
-        halftone_cell_size_entry = getattr(sidebar, 'halftone_cell_size_row', None)
-        halftone_cell_size_entry = halftone_cell_size_entry.entry if halftone_cell_size_entry else None
-        halftone_dot_scale_entry = getattr(sidebar, 'halftone_dot_scale_row', None)
-        halftone_dot_scale_entry = halftone_dot_scale_entry.entry if halftone_dot_scale_entry else None
-        halftone_angle_entry = getattr(sidebar, 'halftone_angle_row', None)
-        halftone_angle_entry = halftone_angle_entry.entry if halftone_angle_entry else None
-        halftone_enabled_var = getattr(sidebar, 'halftone_var', None)
+        halftone_cell_size_entry = getattr(sidebar, 'halftone_cell_size_entry', None)
+        halftone_dot_scale_entry = getattr(sidebar, 'halftone_dot_scale_entry', None)
+        halftone_angle_entry = getattr(sidebar, 'halftone_angle_entry', None)
+        halftone_enabled_var = getattr(sidebar, 'halftone_enabled_var', None)
         
-        glitch_rgb_shift_entry = getattr(sidebar, 'glitch_rgb_shift_row', None)
-        glitch_rgb_shift_entry = glitch_rgb_shift_entry.entry if glitch_rgb_shift_entry else None
-        glitch_slice_intensity_entry = getattr(sidebar, 'glitch_slice_intensity_row', None)
-        glitch_slice_intensity_entry = glitch_slice_intensity_entry.entry if glitch_slice_intensity_entry else None
+        glitch_rgb_shift_entry = getattr(sidebar, 'glitch_rgb_shift_entry', None)
+        glitch_slice_intensity_entry = getattr(sidebar, 'glitch_slice_intensity_entry', None)
         glitch_seed_entry = getattr(sidebar, 'glitch_seed_entry', None)
-        glitch_enabled_var = getattr(sidebar, 'glitch_var', None)
+        glitch_enabled_var = getattr(sidebar, 'glitch_enabled_var', None)
         
-        gradient_enabled_var = getattr(sidebar, 'gradient_var', None)
+        gradient_enabled_var = getattr(sidebar, 'gradient_enabled_var', None)
         gradient_type_var = getattr(sidebar, 'gradient_type_var', None)
-        gradient_angle_entry = getattr(sidebar, 'gradient_angle_row', None)
-        gradient_angle_entry = gradient_angle_entry.entry if gradient_angle_entry else None
+        gradient_angle_entry = getattr(sidebar, 'gradient_angle_entry', None)
         
-        pattern_enabled_var = getattr(sidebar, 'pattern_var', None)
-        pattern_angle_entry = getattr(sidebar, 'pattern_angle_row', None)
-        pattern_angle_entry = pattern_angle_entry.entry if pattern_angle_entry else None
-        pattern_blend_mode_var = getattr(sidebar, 'pattern_blend_var', None)
+        pattern_enabled_var = getattr(sidebar, 'pattern_enabled_var', None)
+        pattern_angle_entry = getattr(sidebar, 'pattern_angle_entry', None)
+        pattern_blend_mode_var = getattr(sidebar, 'pattern_blend_mode_var', None)
         
         characters_entry = getattr(self.main_window, 'characters_entry', None)
-        icon_mode_var = getattr(self.main_window, 'icon_mode_var', None)
-        transparent_background_var = getattr(sidebar, 'transparent_bg_var', None)
+        transparent_background_var = getattr(sidebar, 'transparent_background_var', None)
         transparent_text_var = getattr(sidebar, 'transparent_text_var', None)
-        cutout_mode_var = getattr(sidebar, 'cutout_var', None)
-        text_alignment = getattr(sidebar, 'alignment_var', None)
+        cutout_mode_var = getattr(sidebar, 'cutout_mode_var', None)
+        text_alignment = getattr(sidebar, 'text_alignment', None)
         canvas_width_enabled_var = getattr(self.main_window, 'canvas_width_enabled_var', None)
         canvas_width_entry = getattr(self.main_window, 'canvas_width_entry', None)
         
-        # === ПАРСИНГ ===
+        # === ПОЛУЧАЕМ ЗНАЧЕНИЯ ===
         f_size = self.settings.font_size
         if f_size <= 0:
             f_size = 64
@@ -402,7 +353,9 @@ class PreviewPanel(ctk.CTkFrame):
         text_align = self._safe_get_var(text_alignment, "center")
         canvas_width_enabled = self._safe_get_var(canvas_width_enabled_var, False)
         canvas_width_delta = self._safe_get_int(canvas_width_entry, 0)
-        icon_mode = self._safe_get_var(icon_mode_var, False)
+        
+        # === РЕЖИМ ИКОНОК — БЕРЁМ НАПРЯМУЮ ИЗ SETTINGS ===
+        icon_mode = self.settings.icon_mode
         
         # === ПОЛУЧАЕМ ТЕКСТ ===
         raw = characters_entry.get() if characters_entry else ""
