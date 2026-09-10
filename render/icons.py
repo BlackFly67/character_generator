@@ -400,4 +400,10 @@ def _calc_outer_effects_width(settings):
         width += settings.glow_outer_radius
     if settings.shadow_enabled:
         width += settings.shadow_blur
+    if settings.glitch_enabled:
+        # ИСПРАВЛЕНО (баг №1): см. аналогичную правку в render/text.py -
+        # glitch_rgb_shift раньше не учитывался в отступе вокруг
+        # иконки, из-за чего иконка у самого края холста могла
+        # обрезаться wrap-зоной канального сдвига глитча.
+        width += settings.glitch_rgb_shift
     return width

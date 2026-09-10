@@ -30,10 +30,26 @@ def apply_glitch_effect(image, rgb_shift=4, slice_intensity=30, seed=0):
         a_shifted_b = np.roll(a, -shift, axis=1)
         
         if shift > 0:
-            r_shifted[:, :shift] = 0
-            a_shifted_r[:, :shift] = 0
-            b_shifted[:, w - shift:] = 0
-            a_shifted_b[:, w - shift:] = 0
+            # ИСПРАВЛЕНО (баг №2): раньше здесь зона циклического
+            # "заворота" (np.roll) зануляла ТОЛЬКО цветовые каналы
+            # (r_shifted/b_shifted = 0), а итоговая альфа бралась как
+            # max(a, a_shifted_r, a_shifted_b). При прозрачном фоне
+            # исходная a в этой зоне была 0 и артефакт был не виден.
+            # При НЕПРОЗРАЧНОМ фоне исходная a = 255 везде, и max()
+            # всегда восстанавливал полную непрозрачность поверх
+            # занулённого (чёрного) цвета - отсюда видимые
+            # цветные (циан/жёлтая) полосы на сплошном фоне, а если
+            # символ стоял у самого края холста, тем же способом
+            # обрезался и реальный контент символа (баг №1).
+            # Вместо зануления подставляем в wrap-зону исходные
+            # (несдвинутые) пиксели канала и альфы - классический
+            # edge-clamp для фильтров канального сдвига. Он не
+            # протекает на фон ни при прозрачном, ни при непрозрачном
+            # фоне, и не съедает контент персонажа у края холста.
+            r_shifted[:, :shift] = r[:, :shift]
+            a_shifted_r[:, :shift] = a[:, :shift]
+            b_shifted[:, w - shift:] = b[:, w - shift:]
+            a_shifted_b[:, w - shift:] = a[:, w - shift:]
         
         a = np.maximum(np.maximum(a, a_shifted_r), a_shifted_b)
         r, b = r_shifted, b_shifted
@@ -53,11 +69,21 @@ def apply_glitch_effect(image, rgb_shift=4, slice_intensity=30, seed=0):
             if rng.random_sample() < (0.15 + 0.5 * intensity):
                 offset = rng.randint(-max_offset, max_offset + 1)
                 if offset != 0:
-                    band = np.roll(arr[y:y + band_h], offset, axis=1)
+                    original_band = arr[y:y + band_h].copy()
+                    band = np.roll(original_band, offset, axis=1)
+                    # ИСПРАВЛЕНО (баг №2): раньше wrap-зона полосы
+                    # зануляла ВСЕ 4 канала сразу (band[:, :offset] = 0
+                    # включая альфу), что на непрозрачном фоне
+                    # пробивало прозрачную дыру прямо в сплошном фоне.
+                    # Возвращаем в эту зону исходные (несдвинутые)
+                    # пиксели полосы (включая альфу) вместо зануления -
+                    # полоса всё так же визуально "рвётся"/сдвигается,
+                    # но её wrap-край не протекает на фон и не создаёт
+                    # дыр там, где их не должно быть.
                     if offset > 0:
-                        band[:, :offset] = 0
+                        band[:, :offset] = original_band[:, :offset]
                     else:
-                        band[:, offset:] = 0
+                        band[:, offset:] = original_band[:, offset:]
                     arr[y:y + band_h] = band
             y += band_h
     

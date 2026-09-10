@@ -393,6 +393,15 @@ class PreviewPanel(ctk.CTkFrame):
             outer_effects_width += glow_outer_radius
         if shadow_enabled:
             outer_effects_width += shadow_blur
+        if glitch_enabled:
+            # ИСПРАВЛЕНО (баг №1): аналогично _calc_outer_effects_width
+            # в render/text.py и render/icons.py - без учёта
+            # glitch_rgb здесь превью не резервировало отступ под
+            # циклический сдвиг R/B-каналов, из-за чего символ у края
+            # мог обрезаться в превью так же, как и при реальной
+            # генерации. Значение масштабируется чуть ниже вместе с
+            # остальными компонентами outer_effects_width.
+            outer_effects_width += glitch_rgb
         
         preview_icon_mask = None
         max_ascent, max_descent, max_width = 0, 0, 0

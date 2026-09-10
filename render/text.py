@@ -435,6 +435,17 @@ def _calc_outer_effects_width(settings):
         width += settings.glow_outer_radius
     if settings.shadow_enabled:
         width += settings.shadow_blur
+    if settings.glitch_enabled:
+        # ИСПРАВЛЕНО (баг №1): glitch_rgb_shift раньше не учитывался
+        # при расчёте отступа вокруг символа (в отличие от
+        # outline_outer_width/glow_outer_radius/shadow_blur). Глитч
+        # применяется к уже собранному финальному холсту и циклически
+        # сдвигает R/B-каналы на glitch_rgb_shift px; без запаса на
+        # эту величину символ, стоящий вплотную к краю холста, мог
+        # частично попадать в wrap-зону сдвига и обрезаться. Резервируем
+        # под сдвиг столько же места, сколько под остальные "внешние"
+        # эффекты.
+        width += settings.glitch_rgb_shift
     return width
 
 
