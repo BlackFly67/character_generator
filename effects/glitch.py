@@ -61,12 +61,33 @@ def apply_glitch_effect(image, rgb_shift=4, slice_intensity=30, seed=0):
     if intensity > 0:
         rng = np.random.RandomState(seed)
         max_offset = max(1, int(w * 0.15 * intensity))
-        y = 0
-        while y < h:
-            band_h = rng.randint(max(2, int(h * 0.02)), max(3, int(h * 0.12)) + 1)
+        # ИСПРАВЛЕНО (баг №3): раньше цикл шёл в АБСОЛЮТНЫХ пикселях
+        # (y += band_h, где band_h - целое число пикселей, зависящее
+        # от h). Превью пересчитывает эффект на холсте, размер
+        # которого меняется вместе с ползунком зума (disp_w/disp_h), и
+        # при том же seed, но другом h, цикл "while y < h" делал ДРУГОЕ
+        # число итераций - вся последовательность значений,
+        # вынимаемых из rng (позиция/высота полосы, решение
+        # рисовать/не рисовать, величина сдвига), сбивалась, и рисунок
+        # полос визуально "прыгал" при каждом движении ползунка зума,
+        # хотя пользователь не менял настройки глитча. Ведём прогресс
+        # цикла по ДОЛЕ высоты (0..1) - она одинакова для любого
+        # размера холста при одном seed, поэтому число и порядок
+        # обращений к rng больше не зависят от w/h. Конкретные
+        # пиксельные y/band_h/offset по-прежнему пересчитываются под
+        # текущий размер холста, так что сила эффекта продолжает
+        # корректно масштабироваться вместе с остальными эффектами
+        # превью - меняется только "разрешение" отрисовки, а не сам
+        # случайный узор.
+        min_band_frac, max_band_frac = 0.02, 0.12
+        y_frac = 0.0
+        while y_frac < 1.0:
+            band_h_frac = rng.uniform(min_band_frac, max_band_frac)
+            y = int(round(y_frac * h))
+            band_h = max(1, int(round(band_h_frac * h)))
             band_h = min(band_h, h - y)
             
-            if rng.random_sample() < (0.15 + 0.5 * intensity):
+            if band_h > 0 and rng.random_sample() < (0.15 + 0.5 * intensity):
                 offset = rng.randint(-max_offset, max_offset + 1)
                 if offset != 0:
                     original_band = arr[y:y + band_h].copy()
@@ -85,6 +106,6 @@ def apply_glitch_effect(image, rgb_shift=4, slice_intensity=30, seed=0):
                     else:
                         band[:, offset:] = original_band[:, offset:]
                     arr[y:y + band_h] = band
-            y += band_h
+            y_frac += band_h_frac
     
     return Image.fromarray(arr)

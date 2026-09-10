@@ -526,29 +526,51 @@ class PreviewPanel(ctk.CTkFrame):
         
         self.center_frame.configure(fg_color=bg_workspace_color)
         
+        # ИСПРАВЛЕНО: раньше "scale" одновременно отвечал и за
+        # "вписать в окно предпросмотра", и за пользовательский зум
+        # (scale = fit_factor * zoom_pct), и именно ЭТА объединённая
+        # величина передавалась во ВСЕ эффекты ниже (размер шрифта,
+        # радиусы размытия/свечения, шаг растра/halftone, сдвиг
+        # глитча и т.д.) - то есть каждое движение ползунка зума
+        # буквально ПЕРЕСЧИТЫВАЛО эффекты на другом пиксельном
+        # разрешении, а не просто иначе их отображало. Для эффектов
+        # с нелинейным/недетерминированным поведением на разных
+        # разрешениях (halftone, глитч, да и обычный гауссов блюр)
+        # результат при другом зуме получался не просто другого
+        # размера, а визуально ДРУГИМ. Разделяем: "scale" теперь -
+        # это только "вписать в окно" (фиксирован для текущего
+        # размера символа/иконки, не зависит от зума) и используется
+        # для реального рендера всех эффектов; "display_scale"
+        # добавляет пользовательский зум ТОЛЬКО поверх уже готового
+        # (полностью отрендеренного) изображения, как обычное
+        # масштабирование картинки в просмотрщике.
         scale = min(1.0, (frame_width - 90) / real_w, (frame_height - 90) / real_h)
+        scale = max(0.01, scale)
         zoom_pct = self.zoom / 100.0
-        scale = max(0.01, scale * zoom_pct)
+        display_scale = max(0.01, scale * zoom_pct)
         
-        disp_w, disp_h = int(real_w * scale), int(real_h * scale)
+        # Размер буфера для РЕНДЕРА эффектов - не зависит от зума
+        base_w, base_h = max(1, int(real_w * scale)), max(1, int(real_h * scale))
+        # Размер для ПОКАЗА на экране - зависит от зума
+        disp_w, disp_h = max(1, int(real_w * display_scale)), max(1, int(real_h * display_scale))
         canvas_w, canvas_h = disp_w + 90, disp_h + 90
         
         final_canvas = Image.new("RGBA", (canvas_w, canvas_h), bg_workspace_color)
         canvas_draw = ImageDraw.Draw(final_canvas)
         box_x1, box_y1 = 45, 45
         
-        # Фон
+        # Фон (рендерится на БАЗОВОМ разрешении, зум применяется позже)
         if transparent_bg:
-            block_img = create_checkerboard_background(disp_w, disp_h, 6)
+            block_img = create_checkerboard_background(base_w, base_h, 6)
         else:
             bg_col = self.settings.background_color or (240, 240, 240, 255)
             if isinstance(bg_col, str) and bg_col.startswith('#'):
                 bg_col = tuple(int(bg_col.lstrip('#')[i:i+2], 16) for i in (0, 2, 4)) + (255,)
             elif isinstance(bg_col, str):
                 bg_col = (255, 255, 255, 255) if bg_col == "white" else (0, 0, 0, 255)
-            block_img = Image.new("RGBA", (disp_w, disp_h), bg_col)
+            block_img = Image.new("RGBA", (base_w, base_h), bg_col)
         
-        content_rgba = Image.new("RGBA", (disp_w, disp_h), (0, 0, 0, 0)) if transparent_bg else None
+        content_rgba = Image.new("RGBA", (base_w, base_h), (0, 0, 0, 0)) if transparent_bg else None
         checkerboard_bg = block_img if transparent_bg else None
         
         # === МАСШТАБИРОВАНИЕ ПАРАМЕТРОВ ===
@@ -769,7 +791,7 @@ class PreviewPanel(ctk.CTkFrame):
             sh_dx, sh_dy = get_shadow_offset(shadow_dir, scaled_shadow_dist)
             shadow_paste_x = paste_x + sh_dx
             shadow_paste_y = paste_y + sh_dy
-            layer_shadow = Image.new("RGBA", (disp_w, disp_h), transp_shadow_bg)
+            layer_shadow = Image.new("RGBA", (base_w, base_h), transp_shadow_bg)
             layer_shadow.paste(shadow_layer, (shadow_paste_x, shadow_paste_y))
         
         if layer_shadow:
@@ -781,7 +803,7 @@ class PreviewPanel(ctk.CTkFrame):
                 content_rgba = blend_layers(content_rgba, layer_shadow, effective_shadow_blend)
         
         # --- Вставка текста ---
-        layer_text = Image.new("RGBA", (disp_w, disp_h), (0, 0, 0, 0))
+        layer_text = Image.new("RGBA", (base_w, base_h), (0, 0, 0, 0))
         layer_text.paste(char_layer_text, (paste_x, paste_y))
         block_img = Image.alpha_composite(block_img.convert("RGBA"), layer_text)
         if content_rgba is not None:
@@ -793,7 +815,7 @@ class PreviewPanel(ctk.CTkFrame):
             if text_rot != 0:
                 mask = mask.rotate(-text_rot, resample=Image.BICUBIC, expand=True)
             mask = mask.point(lambda p: 255 if p > 128 else 0)
-            full_mask = Image.new("L", (disp_w, disp_h), 0)
+            full_mask = Image.new("L", (base_w, base_h), 0)
             mask_paste_x = int((offset_x * scale) + (int(rot_base_w * scale) - mask.width) / 2)
             mask_paste_y = int((offset_y * scale) + (int(rot_base_h * scale) - mask.height) / 2)
             full_mask.paste(mask, (mask_paste_x, mask_paste_y))
@@ -838,6 +860,20 @@ class PreviewPanel(ctk.CTkFrame):
             else:
                 block_img = apply_glitch_effect(block_img, scaled_glitch_rgb_shift,
                                                 glitch_slice, seed=glitch_seed_final)
+        
+        # --- Масштабирование под зум ---
+        # ИСПРАВЛЕНО: все эффекты выше отрендерены на "базовом"
+        # разрешении (base_w x base_h), не зависящем от зума. Здесь
+        # зум применяется ЕДИНСТВЕННЫЙ раз - как обычный ресайз уже
+        # полностью готового изображения (со всеми применёнными
+        # эффектами), а не как пересчёт эффектов на другом разрешении.
+        # NEAREST при увеличении - чтобы при зуме "внутрь" были видны
+        # реальные пиксели результата (полезно для растровых
+        # шрифтов/иконок), LANCZOS при уменьшении - для более гладкой
+        # картинки.
+        if (block_img.width, block_img.height) != (disp_w, disp_h):
+            resample = Image.Resampling.NEAREST if display_scale > scale else Image.Resampling.LANCZOS
+            block_img = block_img.resize((disp_w, disp_h), resample)
         
         # --- Вставка в финальный канвас ---
         final_canvas.paste(block_img, (box_x1, box_y1))
