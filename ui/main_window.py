@@ -38,10 +38,11 @@ class MainWindow:
             from i18n import I18n
             self.i18n = I18n(settings.language)
 
-        # Переменные состояния
+        # Переменные состояния.
+        # FIX: text_font_size/icon_font_size больше не хранятся локально —
+        # они живут в settings, а settings.font_size (property) сам резолвит
+        # нужное поле по settings.icon_mode. Ручная синхронизация не нужна.
         self.preview_index = 0
-        self.text_font_size = settings.text_font_size
-        self.icon_font_size = settings.icon_font_size
         self.loaded_icon_paths = list(settings.icon_paths)
 
         # Настройка окна
@@ -316,7 +317,6 @@ class MainWindow:
     def _apply_settings(self):
         ctk.set_appearance_mode(self.settings.theme)
 
-        self.settings.icon_mode = self.settings.icon_mode
         self._set_input_mode(self.settings.icon_mode, apply=True)
 
         self.characters_entry.delete(0, "end")
@@ -348,50 +348,39 @@ class MainWindow:
 
     def _set_input_mode(self, is_icon_mode, apply=False):
         """
-        FIX: раньше здесь читались self.preview.font_size_entry и
-        self.preview.font_size_slider — этих виджетов в PreviewPanel нет,
-        они живут в Sidebar. Из-за hasattr() исключения не было, но и
-        значение никогда не читалось/не обновлялось — переключение режима
-        фактически игнорировало размер. Теперь работаем с
-        self.sidebar.font_size_entry / self.sidebar.font_size_slider.
+        Переключает режим ввода (текст ↔ иконки).
+
+        FIX: settings.font_size теперь property — читает/пишет
+        text_font_size или icon_font_size в зависимости от
+        settings.icon_mode. Ручная синхронизация локальных копий
+        (self.text_font_size/self.icon_font_size) больше не нужна и
+        удалена, чтобы не было двух источников истины.
         """
-        if not apply:
-            # Запоминаем текущий размер для ПРЕДЫДУЩЕГО режима
-            current_size = self.settings.font_size
-            try:
-                if hasattr(self.sidebar, 'font_size_entry'):
-                    raw = self.sidebar.font_size_entry.get().strip()
-                    if raw:
-                        current_size = int(raw)
-            except (ValueError, AttributeError):
-                pass
-
-            if self.settings.icon_mode:
-                self.icon_font_size = current_size
-            else:
-                self.text_font_size = current_size
-
+        # 1. Переключаем режим — это ПЕРВОЕ, что нужно сделать.
+        #    Дальше settings.font_size уже пишет в нужное поле.
         self.settings.icon_mode = is_icon_mode
 
         if is_icon_mode:
             self.text_input_frame.pack_forget()
             self.icon_input_frame.pack(fill="x")
 
-            size_val = self.icon_font_size
-            if size_val is None:
-                size_val = self._default_icon_font_size()
-            if size_val is None:
-                size_val = 64
-            self.icon_font_size = size_val
-            self.settings.font_size = size_val
+            # Если для иконок размера ещё нет (первый вход и иконки уже
+            # загружены) — подберём дефолт по нативной иконке.
+            # Если иконок нет — оставим None, property вернёт
+            # text_font_size как fallback, чтобы UI не показывал 0.
+            if self.settings.icon_font_size is None:
+                default = self._default_icon_font_size()
+                if default is not None:
+                    self.settings.icon_font_size = default
         else:
             self.icon_input_frame.pack_forget()
             self.text_input_frame.pack(fill="x")
 
-            size_val = self.text_font_size if self.text_font_size is not None else 64
-            self.settings.font_size = size_val
+            # На случай, если text_font_size почему-то пуст
+            if self.settings.text_font_size is None:
+                self.settings.text_font_size = 64
 
-        # Обновляем виджеты размера в сайдбаре
+        # 2. Обновляем UI размера в сайдбаре (entry + slider)
         if hasattr(self.sidebar, 'font_size_entry'):
             self.sidebar.font_size_entry.delete(0, "end")
             self.sidebar.font_size_entry.insert(0, str(self.settings.font_size))
@@ -460,9 +449,8 @@ class MainWindow:
         if was_empty and self.settings.icon_mode:
             dim = self._default_icon_font_size()
             if dim:
-                self.icon_font_size = dim
+                # settings.font_size в режиме иконок пишет в icon_font_size
                 self.settings.font_size = dim
-                # FIX: размер живёт в сайдбаре, не в preview
                 if hasattr(self.sidebar, 'font_size_entry'):
                     self.sidebar.font_size_entry.delete(0, "end")
                     self.sidebar.font_size_entry.insert(0, str(dim))
@@ -757,8 +745,6 @@ class MainWindow:
                                     self.i18n.tr("warning_no_valid"))
                 return
 
-        # FIX: размер читаем из settings (его синхронизирует sidebar),
-        # а не из self.preview.font_size_entry, которого больше нет.
         font_size = self.settings.font_size
         if font_size <= 0:
             messagebox.showerror(self.i18n.tr("error"), "Font size must be a positive number.")

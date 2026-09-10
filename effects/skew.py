@@ -1,27 +1,54 @@
 # -*- coding: utf-8 -*-
 """
-Скос (аффинное искажение)
+Скос (Skew) — аффинное искажение, ОТДЕЛЬНОЕ от поворота.
 """
 
 import math
 from PIL import Image
 
+from utils import get_color_rgb
+from effects.core import (
+    EffectBase, EffectContext, ParamSpec,
+    CTRL_CHECKBOX, CTRL_INT,
+)
+
+
+class Skew(EffectBase):
+    id = "skew"
+    label_key = "skew"
+    stage = "geometry"
+    params = [
+        ParamSpec("enabled", "skew",   CTRL_CHECKBOX, False),
+        ParamSpec("x",       "skew_x", CTRL_INT,      0, -75, 75),
+        ParamSpec("y",       "skew_y", CTRL_INT,      0, -75, 75),
+    ]
+
+    def apply(self, ctx: EffectContext):
+        if not self._enabled(ctx):
+            return ctx.image
+        sx = int(self._get(ctx, "x", 0))
+        sy = int(self._get(ctx, "y", 0))
+        if sx == 0 and sy == 0:
+            return ctx.image
+        rgb = get_color_rgb(ctx.settings.text_color)
+        return apply_skew_effect(ctx.image, sx, sy, rgb)
+
+
+# ============================================================
+#  Старая функция
+# ============================================================
 
 def apply_skew_effect(image, skew_x=0, skew_y=0, fill_color_rgb=(0, 0, 0)):
-    """
-    Применяет эффект скоса (аффинное искажение).
-    """
+    """Копия из прежней версии — без изменений."""
     if image.mode != "RGBA":
         image = image.convert("RGBA")
-    
+
     def shear_axis(img, angle_deg, horizontal):
         angle_deg = max(-85.0, min(85.0, angle_deg))
         if angle_deg == 0:
             return img
-        
         m = math.tan(math.radians(angle_deg))
         iw, ih = img.size
-        
         if horizontal:
             extra = int(math.ceil(abs(m) * (ih - 1))) if ih > 1 else 0
             new_w = iw + extra
@@ -34,22 +61,16 @@ def apply_skew_effect(image, skew_x=0, skew_y=0, fill_color_rgb=(0, 0, 0)):
             offset = extra if m < 0 else 0
             data = (1, 0, 0, -m, 1, -offset)
             new_size = (iw, new_h)
-        
         r, g, b, a = img.split()
-        r = r.transform(new_size, Image.AFFINE, data, resample=Image.BICUBIC, 
-                       fillcolor=fill_color_rgb[0])
-        g = g.transform(new_size, Image.AFFINE, data, resample=Image.BICUBIC, 
-                       fillcolor=fill_color_rgb[1])
-        b = b.transform(new_size, Image.AFFINE, data, resample=Image.BICUBIC, 
-                       fillcolor=fill_color_rgb[2])
+        r = r.transform(new_size, Image.AFFINE, data, resample=Image.BICUBIC, fillcolor=fill_color_rgb[0])
+        g = g.transform(new_size, Image.AFFINE, data, resample=Image.BICUBIC, fillcolor=fill_color_rgb[1])
+        b = b.transform(new_size, Image.AFFINE, data, resample=Image.BICUBIC, fillcolor=fill_color_rgb[2])
         a = a.transform(new_size, Image.AFFINE, data, resample=Image.BICUBIC, fillcolor=0)
-        
         return Image.merge("RGBA", (r, g, b, a))
-    
+
     out = image
     if skew_x != 0:
         out = shear_axis(out, skew_x, horizontal=True)
     if skew_y != 0:
         out = shear_axis(out, skew_y, horizontal=False)
-    
     return out

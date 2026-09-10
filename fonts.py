@@ -5,6 +5,7 @@
 
 import os
 import glob
+import functools
 from PIL import ImageFont
 
 
@@ -106,6 +107,33 @@ def load_font_safe(font_path, font_size):
             return ImageFont.load_default()
     except Exception:
         return ImageFont.load_default()
+
+
+# ============================================================
+#  Кэш загруженных шрифтов
+# ============================================================
+
+@functools.lru_cache(maxsize=64)
+def load_font_safe_cached(font_path, font_size):
+    """
+    Кэшированная версия load_font_safe. Один и тот же (path, size)
+    не перепарсивается с диска повторно. Возвращаемый ImageFont не
+    мутируется вызывающим кодом — кэширование безопасно.
+
+    Применяется в render/composer.py — там load_font_safe вызывается
+    многократно за один рендер (метрики всех символов батча, метрики
+    конкретного символа, арка), и без кэша это превращается в десятки
+    парсингов одного и того же TTF с диска.
+
+    Args:
+        font_path: путь к TTF/OTF-файлу или None (тогда подбирается
+            системный шрифт — см. load_font_safe).
+        font_size: размер в пикселях, int.
+
+    Оба аргумента должны быть хешируемыми — это условие lru_cache.
+    font_path: str | None, font_size: int — оба хешируемы.
+    """
+    return load_font_safe(font_path, font_size)
 
 
 # Системные шрифты (кэшируются при импорте)

@@ -2,9 +2,10 @@
 """
 Панель предпросмотра.
 - Единый compose_full из render.composer.
-- Общий холст для батча текста/дуги (при листании ◀/▶ превью не прыгает).
+- Общий холст для батча текста/дуги.
 - У иконок — свой холст на каждую.
 - Зум, скролл колесом, панорама зажатой ЛКМ.
+- Debounce рендера (40 мс).
 - Строка ширины холста под окном превью.
 """
 
@@ -19,6 +20,38 @@ from utils import parse_characters, create_checkerboard_background
 from render.composer import (
     CharSpec, compose_full, compute_batch_geometry,
 )
+
+
+# Явный список полей settings, влияющих на изображение превью.
+SIGNATURE_KEYS = [
+    "font_path", "font_size", "text_color", "text_opacity", "text_scale_x",
+    "letter_spacing", "text_alignment", "transparent_text",
+    "transparent_background", "background_color", "cutout_mode",
+    "canvas_width_enabled", "canvas_width_delta",
+    "gradient_enabled", "gradient_stops", "gradient_type", "gradient_angle",
+    "pattern_enabled", "pattern_image_path", "pattern_scale",
+    "pattern_offset_x", "pattern_offset_y", "pattern_angle", "pattern_blend_mode",
+    "outline_outer_enabled", "outline_outer_color", "outline_outer_width",
+    "outline_inner_enabled", "outline_inner_color", "outline_inner_width",
+    "glow_outer_enabled", "glow_outer_color", "glow_outer_radius", "glow_outer_intensity",
+    "glow_inner_enabled", "glow_inner_color", "glow_inner_radius", "glow_inner_intensity",
+    "glow_inner_blend_mode",
+    "shadow_enabled", "shadow_color", "shadow_distance", "shadow_direction",
+    "shadow_blur", "shadow_blend_mode",
+    "inner_shadow_enabled", "inner_shadow_color", "inner_shadow_distance",
+    "inner_shadow_direction", "inner_shadow_blur", "inner_shadow_blend_mode",
+    "emboss_enabled", "emboss_depth", "emboss_blur",
+    "emboss_highlight", "emboss_shadow",
+    "rotation_angle",
+    "skew_enabled", "skew_x", "skew_y",
+    "perspective_enabled", "perspective_x", "perspective_y",
+    "arc_text_enabled", "arc_radius", "arc_start_angle",
+    "arc_clockwise", "arc_flip",
+    "halftone_enabled", "halftone_cell_size", "halftone_dot_scale", "halftone_angle",
+    "reflection_enabled", "reflection_gap", "reflection_opacity", "reflection_fade",
+    "glitch_enabled", "glitch_rgb_shift", "glitch_slice_intensity", "glitch_seed",
+    "icon_mode",
+]
 
 
 class PreviewPanel(ctk.CTkFrame):
@@ -42,6 +75,9 @@ class PreviewPanel(ctk.CTkFrame):
         self._canvas_img_id = None
         self._drag_start = None
         self._display_size = (0, 0)
+
+        # Debounce рендера
+        self._render_job = None
 
         self._create_widgets()
 
@@ -179,7 +215,7 @@ class PreviewPanel(ctk.CTkFrame):
             side="left", fill="x", expand=True
         )
 
-        self.bind("<Configure>", lambda e: self._draw_zoomed())
+        self.bind("<Configure>", lambda e: self.update())
 
     # ============================================================
     #  Обработчики ширины холста
@@ -294,10 +330,32 @@ class PreviewPanel(ctk.CTkFrame):
             pass
 
     # ============================================================
-    #  Перерисовка
+    #  Перерисовка (с debounce)
     # ============================================================
 
     def update(self):
+        """
+        Debounce: откладываем пересчёт на 40 мс. При быстрых вызовах
+        (движение окна, набор текста, перетаскивание слайдера) делается
+        только один финальный рендер вместо десятков промежуточных.
+        """
+        if self._render_job is not None:
+            try:
+                self.after_cancel(self._render_job)
+            except Exception:
+                pass
+        self._render_job = self.after(40, self._render_preview_now)
+
+    def _render_preview_now(self):
+        """Отрабатывает отложенный рендер."""
+        self._render_job = None
+
+        try:
+            if not self.winfo_exists():
+                return
+        except Exception:
+            return
+
         try:
             self._render_preview()
         except Exception as e:
@@ -306,7 +364,6 @@ class PreviewPanel(ctk.CTkFrame):
             traceback.print_exc()
 
     def _get_all_specs(self):
-        """Возвращает полный список CharSpec батча (для batch geometry)."""
         icon_paths = getattr(self.main_window, 'loaded_icon_paths', [])
         if self.settings.icon_mode and icon_paths:
             return [CharSpec(icon_path=p, index=i)
@@ -320,22 +377,15 @@ class PreviewPanel(ctk.CTkFrame):
         return [CharSpec(text=ch, index=i) for i, ch in enumerate(chars)]
 
     def _signature(self, spec, all_specs):
-        """Сигнатура кэша: настройки + ВЕСЬ батч (общий холст зависит от всех)."""
-        d = {}
-        for k, v in vars(self.settings).items():
-            if k.startswith("_") or callable(v):
-                continue
-            try:
-                json.dumps(v, default=str)
-                d[k] = v
-            except (TypeError, ValueError):
-                d[k] = str(v)
+        d = {k: getattr(self.settings, k, None) for k in SIGNATURE_KEYS}
         d["_spec_text"] = spec.text
         d["_spec_icon"] = spec.icon_path
         d["_spec_index"] = spec.index
         d["_batch_size"] = len(all_specs)
-        d["_batch_keys"] = [s.text if s.text is not None else s.icon_path
-                            for s in all_specs]
+        d["_batch_keys"] = [
+            s.text if s.text is not None else s.icon_path
+            for s in all_specs
+        ]
         s = json.dumps(d, sort_keys=True, default=str)
         return hashlib.md5(s.encode("utf-8")).hexdigest()
 
@@ -349,10 +399,8 @@ class PreviewPanel(ctk.CTkFrame):
         sig = self._signature(spec, all_specs)
         if sig != self._cached_signature or self._cached_full_image is None:
             if self.settings.icon_mode:
-                # У иконок — свой холст на каждую (geom локальный).
                 self._cached_full_image = compose_full(spec, self.settings)
             else:
-                # Текст / дуга — ОБЩИЙ холст по всем символам батча.
                 batch_geom = compute_batch_geometry(all_specs, self.settings)
                 self._cached_full_image = compose_full(
                     spec, self.settings, geom=batch_geom

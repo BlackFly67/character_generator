@@ -16,6 +16,12 @@
 - compose_full применяет text_alignment при вставке маски в ОБЩИЙ слот
   (scaled_content_w), поэтому left/center/right работают относительно
   всего холста, а не относительно ширины отдельного символа.
+
+Система эффектов:
+- Glow (inner / outer) уже вынесен в effects/base.py + effects/registry.py,
+  применяется через _run_stage("inner") и _run_stage("outer").
+- Остальные эффекты пока жёстко зашиты в compose_full и будут мигрированы
+  по одному.
 """
 
 import math
@@ -29,8 +35,7 @@ from utils import (
     get_color_rgb, get_shadow_offset, blend_layers,
     rotate_cleanly, create_checkerboard_background,
 )
-from fonts import load_font_safe
-from effects.glow import apply_outer_glow, apply_inner_glow
+from fonts import load_font_safe_cached as load_font_safe
 from effects.outline import apply_outer_outline, apply_inner_outline
 from effects.emboss import apply_emboss
 from effects.gradient import apply_gradient_fill
@@ -40,6 +45,10 @@ from effects.halftone import apply_halftone
 from effects.glitch import apply_glitch_effect
 from effects.skew import apply_skew_effect
 from effects.perspective import apply_perspective_effect
+
+# --- Система эффектов (этап 1: реестр + core + glow) ---
+from effects.core import EffectContext
+from effects.registry import get_by_stage
 
 
 # ============================================================
@@ -242,6 +251,39 @@ def _transp_bg(settings):
     return (0, 0, 0, 0) if settings.transparent_text else _text_rgb(settings) + (0,)
 
 
+def _run_stage(char_layer, base_mask, settings, stage,
+                fill_mask=None, outer_mask=None):
+    """
+    Применяет все эффекты одной стадии из реестра в порядке PIPELINE.
+
+    Возвращает кортеж (image, base_mask, fill_mask, outer_mask).
+
+    Некоторые эффекты могут возвращать dict вместо Image — например,
+    если им нужно вернуть и image, и обновлённый mask. Контракт:
+    возвращать либо Image, либо dict с ключами
+    "image", "mask", "fill_mask", "outer_mask".
+    """
+    for cls in get_by_stage(stage):
+        eff = cls()
+        ctx = EffectContext(
+            settings=settings,
+            image=char_layer,
+            mask=base_mask,
+            fill_mask=fill_mask,
+            outer_mask=outer_mask,
+            will_warp=_will_warp(settings),
+        )
+        result = eff.apply(ctx)
+        if isinstance(result, dict):
+            char_layer = result.get("image", char_layer)
+            base_mask = result.get("mask", base_mask)
+            fill_mask = result.get("fill_mask", fill_mask)
+            outer_mask = result.get("outer_mask", outer_mask)
+        else:
+            char_layer = result
+    return char_layer, base_mask, fill_mask, outer_mask
+
+
 # ============================================================
 #  Метрики
 # ============================================================
@@ -436,10 +478,6 @@ def build_content_mask(spec, metrics, settings):
         d = ImageDraw.Draw(mask)
 
         if letters is not None:
-            # Побуквенно с разряжением — прижато к левому краю маски.
-            # Первая буква рисуется по x = -letters[0][2] (компенсация её
-            # левого bearing), дальше курсор сдвигается на ширину буквы
-            # плюс межбуквенный зазор.
             cur = -letters[0][2]
             for ch, cw, _ in letters:
                 d.text((cur, metrics["max_ascent"]), ch,
@@ -509,9 +547,7 @@ def compose_full(spec: CharSpec, settings,
     render_icons, где у каждой иконки свой холст).
 
     Символ центрируется по X в общем слоте scaled_content_w (с учётом
-    text_alignment) и прижимается к общей базовой линии max_ascent —
-    так узкая «.» и широкая «М» стоят на одной базовой линии и
-    выровнены одинаково в одном и том же холсте.
+    text_alignment) и прижимается к общей базовой линии max_ascent.
     """
     # 1. Метрики конкретного символа
     if spec.icon_path is not None:
@@ -585,18 +621,17 @@ def compose_full(spec: CharSpec, settings,
                     settings.pattern_angle, settings.pattern_blend_mode,
                 )
 
-    # 7. Внутренние эффекты
+    # 7. Внутренние эффекты (жёстко зашитые)
     if settings.outline_inner_enabled and settings.outline_inner_width > 0:
         char_layer = apply_inner_outline(char_layer, base_mask,
                                           settings.outline_inner_color,
                                           settings.outline_inner_width)
 
-    if settings.glow_inner_enabled:
-        char_layer = apply_inner_glow(char_layer, base_mask,
-                                       settings.glow_inner_color,
-                                       settings.glow_inner_radius,
-                                       settings.glow_inner_intensity,
-                                       settings.glow_inner_blend_mode)
+    # --- Стадия "inner" из реестра (пока только glow_inner) ---
+    char_layer, base_mask, fill_mask, outer_mask = _run_stage(
+        char_layer, base_mask, settings, "inner",
+        fill_mask=fill_mask, outer_mask=None,
+    )
 
     if settings.inner_shadow_enabled:
         char_layer = apply_inner_shadow(char_layer, base_mask,
@@ -611,7 +646,7 @@ def compose_full(spec: CharSpec, settings,
                                    settings.emboss_depth, settings.emboss_blur,
                                    settings.emboss_highlight, settings.emboss_shadow)
 
-    # 8. Внешние эффекты
+    # 8. Внешние эффекты (жёстко зашитые)
     outer_mask = base_mask
     outline_drawn = False
     if settings.outline_outer_enabled and settings.outline_outer_width > 0:
@@ -621,11 +656,11 @@ def compose_full(spec: CharSpec, settings,
         )
         outline_drawn = True
 
-    if settings.glow_outer_enabled and (not settings.transparent_text or outline_drawn):
-        char_layer = apply_outer_glow(char_layer, outer_mask,
-                                       settings.glow_outer_color,
-                                       settings.glow_outer_radius,
-                                       settings.glow_outer_intensity)
+    # --- Стадия "outer" из реестра (пока только glow_outer) ---
+    char_layer, base_mask, fill_mask, outer_mask = _run_stage(
+        char_layer, base_mask, settings, "outer",
+        fill_mask=fill_mask, outer_mask=outer_mask,
+    )
 
     # 9. Прозрачность
     if settings.text_opacity < 1.0:
