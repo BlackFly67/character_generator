@@ -5,13 +5,11 @@
 Здесь только общие типы для построения классов-эффектов:
 - EffectBase — базовый класс эффекта
 - EffectContext — контекст, передаваемый в apply()
-- ParamSpec — описание параметра для UI (используется сайдбаром
-  на этапе 3, когда он будет строить секции автоматически)
+- ParamSpec — описание параметра для UI
 - CTRL_* — типы контролов
 
 Этот файл НЕ содержит функций-эффектов и НЕ содержит хелперов
-(blend_layers, rotate_cleanly и т.п. — они в effects/base.py,
-чтобы не смешивать инфраструктуру эффектов и утилиты изображений).
+(blend_layers, rotate_cleanly и т.п. — они в effects/base.py).
 """
 
 from dataclasses import dataclass, field
@@ -20,7 +18,7 @@ from PIL import Image
 
 
 # ------------------------------------------------------------
-# Типы контролов (используются сайдбаром, см. этап 3)
+# Типы контролов (используются сайдбаром)
 # ------------------------------------------------------------
 CTRL_CHECKBOX = "checkbox"
 CTRL_INT      = "int"
@@ -29,6 +27,8 @@ CTRL_COLOR    = "color"
 CTRL_BLEND    = "blend"
 CTRL_OPTION   = "option"
 CTRL_DIR      = "dir"
+CTRL_STOPS    = "stops"     # редактор цветовых точек (задел на gradient)
+CTRL_FILE     = "file"      # выбор файла (задел на pattern)
 
 
 @dataclass

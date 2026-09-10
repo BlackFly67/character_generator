@@ -120,7 +120,7 @@ class Sidebar(ctk.CTkScrollableFrame):
         self.settings_label = None
         self.style_presets_button = None
 
-        # Секции авто-эффектов (чтобы можно было при желании их обновлять)
+        # Секции авто-эффектов
         self.effect_sections = {}
 
         # --- СОЗДАЁМ ИНТЕРФЕЙС ---
@@ -477,7 +477,10 @@ class Sidebar(ctk.CTkScrollableFrame):
         cutout_check.pack(anchor="w", padx=10, pady=2)
 
         # --- ГРАДИЕНТ (ручной: редактор точек) ---
-        gradient_section = ctk.CTkFrame(style_section, fg_color="transparent")
+        # FIX: приведено к auto-стилю — корневой CTkFrame без fg_color,
+        # чекбокс с padx=10. Так эта секция визуально совпадает с
+        # auto-секциями (Outline Inner, Glow Outer и т.п.).
+        gradient_section = ctk.CTkFrame(style_section)
         gradient_section.pack(fill="x", padx=10, pady=5)
 
         gradient_check = ctk.CTkCheckBox(
@@ -486,7 +489,7 @@ class Sidebar(ctk.CTkScrollableFrame):
             command=self._toggle_gradient,
             checkbox_height=18, checkbox_width=18,
         )
-        gradient_check.pack(anchor="w", pady=2)
+        gradient_check.pack(anchor="w", padx=10, pady=2)
 
         gradient_frame = ctk.CTkFrame(gradient_section, fg_color="transparent")
         if not self.settings.gradient_enabled:
@@ -542,7 +545,9 @@ class Sidebar(ctk.CTkScrollableFrame):
         self.gradient_stops_canvas.bind("<Configure>", lambda e: self._redraw_gradient_stops())
 
         # --- ПАТТЕРН (ручной: выбор файла) ---
-        pattern_section = ctk.CTkFrame(style_section, fg_color="transparent")
+        # FIX: приведено к auto-стилю — корневой CTkFrame без fg_color,
+        # чекбокс с padx=10.
+        pattern_section = ctk.CTkFrame(style_section)
         pattern_section.pack(fill="x", padx=10, pady=5)
 
         pattern_check = ctk.CTkCheckBox(
@@ -551,7 +556,7 @@ class Sidebar(ctk.CTkScrollableFrame):
             command=self._toggle_pattern,
             checkbox_height=18, checkbox_width=18,
         )
-        pattern_check.pack(anchor="w", pady=2)
+        pattern_check.pack(anchor="w", padx=10, pady=2)
 
         pattern_frame = ctk.CTkFrame(pattern_section, fg_color="transparent")
         if not self.settings.pattern_enabled:
@@ -642,17 +647,6 @@ class Sidebar(ctk.CTkScrollableFrame):
 
         # ============================================================
         # 4. ЭФФЕКТЫ ИЗ PIPELINE (АВТО-ГЕНЕРАЦИЯ)
-        #
-        # Всё, что идёт от OutlineInner до Glitch включительно и
-        # зарегистрировано в PIPELINE, строится автоматически
-        # из ParamSpec — см. ui/auto_sidebar.py.
-        #
-        # Очерёдность внутри auto — как в PIPELINE (fill → inner →
-        # outer → geometry → post). ColorFill / GradientFill /
-        # PatternFill / HalftoneMask там есть, но Gradient и Pattern
-        # исключены как MANUAL_EFFECT_IDS (у них уже есть ручные
-        # секции выше), а ColorFill / HalftoneMask имеют свой
-        # auto-UI (Halftone — да, ColorFill — нет параметров).
         # ============================================================
         self.effect_sections = build_effect_sections(
             style_section, self, self.settings, self.i18n
