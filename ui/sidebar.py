@@ -306,11 +306,16 @@ class Sidebar(ctk.CTkScrollableFrame):
             self._gradient_selected_idx = idx
         else:
             # Добавляем новую точку
-
             t = max(0.0, min(1.0, event.x / w))
+            # FIX: если settings.gradient_stops пуст, кладём новый список
+            # ОБРАТНО в settings, иначе append ниже работал бы с локальной
+            # копией и точка терялась бы.
+            if not self.settings.gradient_stops:
+                self.settings.gradient_stops = [
+                    {"pos": 0.0, "color": "#ff0000"},
+                    {"pos": 1.0, "color": "#0000ff"},
+                ]
             stops = self.settings.gradient_stops
-            if not stops:
-                stops = [{"pos": 0.0, "color": "#ff0000"}, {"pos": 1.0, "color": "#0000ff"}]
             sorted_stops = sorted(stops, key=lambda s: s["pos"])
             r, g, b, a = sample_gradient_color(sorted_stops, t)
             color = "#{:02x}{:02x}{:02x}".format(r, g, b)
@@ -324,9 +329,12 @@ class Sidebar(ctk.CTkScrollableFrame):
     def _on_gradient_stops_drag(self, event):
         if not hasattr(self, '_gradient_selected_idx') or self._gradient_selected_idx is None:
             return
+        # FIX: страховка от пустого settings.gradient_stops.
+        stops = self.settings.gradient_stops
+        if not stops:
+            return
         w = max(self.gradient_stops_canvas.winfo_width(), 1)
         t = max(0.0, min(1.0, event.x / w))
-        stops = self.settings.gradient_stops
         if 0 <= self._gradient_selected_idx < len(stops):
             stops[self._gradient_selected_idx]["pos"] = t
             self._redraw_gradient_stops()
@@ -340,28 +348,31 @@ class Sidebar(ctk.CTkScrollableFrame):
         idx = self._get_stop_at(event.x, w)
         if idx is None:
             return
-            
         stops = self.settings.gradient_stops
+        # FIX: страховка — не должно происходить при пустом списке, но пусть будет.
+        if not stops or idx >= len(stops):
+            return
         color = stops[idx]["color"]
-        
         from ui.dialogs import ask_color
         new_color = ask_color(self, color, self.i18n.tr("select_gradient_color"), self.i18n)
         if new_color:
             stops[idx]["color"] = new_color
             self._on_change()
             self._redraw_gradient_stops()
-    
+
+
     def _on_gradient_stops_right_click(self, event):
-        if len(self.settings.gradient_stops) <= 2:
+        stops = self.settings.gradient_stops
+        if not stops or len(stops) <= 2:
             return
         w = max(self.gradient_stops_canvas.winfo_width(), 1)
         idx = self._get_stop_at(event.x, w)
         if idx is None:
             return
-        del self.settings.gradient_stops[idx]
+        del stops[idx]
         self._gradient_selected_idx = None
         self._on_change()
-        self._redraw_gradient_stops()        
+        self._redraw_gradient_stops() 
         
         
     
