@@ -66,7 +66,7 @@ class Sidebar(ctk.CTkScrollableFrame):
         self.pattern_offset_y_entry = None
         self.pattern_angle_entry = None
         self.pattern_angle_slider = None
-        self.pattern_blend_mode_var = ctk.StringVar(value="normal")
+        self.pattern_blend_mode_var = ctk.StringVar(value=self.settings.pattern_blend_mode)
         
         # Обводка внешняя
         self.outline_outer_enabled_var = ctk.BooleanVar(value=self.settings.outline_outer_enabled)
@@ -95,7 +95,7 @@ class Sidebar(ctk.CTkScrollableFrame):
         self.glow_inner_radius_slider = None
         self.glow_inner_intensity_entry = None
         self.glow_inner_intensity_slider = None
-        self.glow_inner_blend_mode_var = ctk.StringVar(value="normal")
+        self.glow_inner_blend_mode_var = ctk.StringVar(value=self.settings.glow_inner_blend_mode)
         
         # Тиснение
         self.emboss_enabled_var = ctk.BooleanVar(value=self.settings.emboss_enabled)
@@ -111,16 +111,16 @@ class Sidebar(ctk.CTkScrollableFrame):
         self.inner_shadow_color_button = None
         self.inner_shadow_distance_entry = None
         self.inner_shadow_blur_entry = None
-        self.inner_shadow_blend_mode_var = ctk.StringVar(value="normal")
-        self.inner_shadow_direction_var = ctk.IntVar(value=8)
+        self.inner_shadow_blend_mode_var = ctk.StringVar(value=self.settings.inner_shadow_blend_mode)
+        self.inner_shadow_direction_var = ctk.IntVar(value=self.settings.inner_shadow_direction)
         
         # Тень внешняя
         self.shadow_var = ctk.BooleanVar(value=self.settings.shadow_enabled)
         self.shadow_color_button = None
         self.shadow_distance_entry = None
         self.shadow_blur_entry = None
-        self.shadow_blend_mode_var = ctk.StringVar(value="normal")
-        self.shadow_direction_var = ctk.IntVar(value=8)
+        self.shadow_blend_mode_var = ctk.StringVar(value=self.settings.shadow_blend_mode)
+        self.shadow_direction_var = ctk.IntVar(value=self.settings.shadow_direction)
         
         # Отражение
         self.reflection_enabled_var = ctk.BooleanVar(value=self.settings.reflection_enabled)
@@ -155,8 +155,8 @@ class Sidebar(ctk.CTkScrollableFrame):
         self.arc_radius_slider = None
         self.arc_start_angle_entry = None
         self.arc_start_angle_slider = None
-        self.arc_clockwise_var = ctk.BooleanVar(value=True)
-        self.arc_flip_var = ctk.BooleanVar(value=False)
+        self.arc_clockwise_var = ctk.BooleanVar(value=self.settings.arc_clockwise)
+        self.arc_flip_var = ctk.BooleanVar(value=self.settings.arc_flip)
         
         # Halftone
         self.halftone_enabled_var = ctk.BooleanVar(value=self.settings.halftone_enabled)
@@ -191,6 +191,14 @@ class Sidebar(ctk.CTkScrollableFrame):
         self._create_sidebar()
     
     def _on_change(self):
+        # ВАЖНО: сохраняем settings в JSON при каждом изменении.
+        # (Раньше save() вызывался только на кнопку Generate,
+        # но при закрытии окна settings всё равно сохраняется
+        # в main_window._on_close; save() здесь нужен, чтобы
+        # слайдеры/чекбоксы не терялись при аварийном закрытии.
+        # Если вы хотите сохранять ТОЛЬКО по кнопке Generate -
+        # уберите self.settings.save() из этой функции и оставьте
+        # его в main_window._on_generate и _on_close.)
         self.settings.save()
         for callback in self._on_change_callbacks:
             callback()
@@ -218,20 +226,7 @@ class Sidebar(ctk.CTkScrollableFrame):
         from ui.dialogs import StylePresetsDialog
         dialog = StylePresetsDialog(self, self.settings, self.i18n)
         dialog.wait_window()
-        # ИСПРАВЛЕНО (ошибка №4): StylePresetsDialog._load_preset() (в
-        # ui/dialogs.py) при загрузке/импорте пресета перезаписывает
-        # значения непосредственно в self.settings и уже сам вызывает
-        # settings.save(). Но виджеты сайдбара (чекбоксы, слайдеры,
-        # entry, кнопки цвета) хранят состояние отдельно и не были
-        # синхронизированы - раньше здесь вызывался только
-        # self._on_change(), который лишь пересохраняет settings и
-        # обновляет превью, но не перечитывает значения обратно в
-        # виджеты. В результате превью (читающее значения из виджетов
-        # сайдбара) не менялось после загрузки пресета, пока
-        # пользователь не трогал хоть один слайдер вручную, хотя
-        # реальная генерация уже использовала новые settings.
-        # Пересобираем виджеты сайдбара из актуальных settings, как
-        # это уже делается в _reset_settings().
+        # Пересобираем виджеты сайдбара из актуальных settings.
         self._refresh_all_widgets()
         self._on_change()
         
@@ -474,7 +469,7 @@ class Sidebar(ctk.CTkScrollableFrame):
             values=["left", "center", "right"], 
             variable=self.text_alignment, 
             width=90,
-            command=self._on_alignment_change  # ИСПРАВЛЕНО
+            command=self._on_alignment_change
         )
         alignment_menu.pack(side="left", padx=5)
         
@@ -486,13 +481,14 @@ class Sidebar(ctk.CTkScrollableFrame):
         scale_label.pack(side="left")
         
         self.scale_entry = ctk.CTkEntry(scale_section, width=40)
-        self.scale_entry.insert(0, "0")
+        scale_init = int(round((self.settings.text_scale_x - 1.0) * 100))
+        self.scale_entry.insert(0, str(scale_init))
         self.scale_entry.pack(side="right", padx=(5, 0))
         self.scale_entry.bind("<KeyRelease>", self._on_scale_change)
         
         self.scale_slider = ctk.CTkSlider(scale_section, from_=-50, to=50, number_of_steps=100)
         self.scale_slider.pack(side="left", padx=5, fill="x", expand=True)
-        self.scale_slider.set(0)
+        self.scale_slider.set(scale_init)
         self.scale_slider.configure(command=self._on_scale_slider)
         
         # Разряжение
@@ -503,13 +499,13 @@ class Sidebar(ctk.CTkScrollableFrame):
         spacing_label.pack(side="left")
         
         self.spacing_entry = ctk.CTkEntry(spacing_section, width=40)
-        self.spacing_entry.insert(0, "0")
+        self.spacing_entry.insert(0, str(self.settings.letter_spacing))
         self.spacing_entry.pack(side="right", padx=(5, 0))
         self.spacing_entry.bind("<KeyRelease>", self._on_spacing_change)
         
         self.spacing_slider = ctk.CTkSlider(spacing_section, from_=-20, to=20, number_of_steps=40)
         self.spacing_slider.pack(side="left", padx=5, fill="x", expand=True)
-        self.spacing_slider.set(0)
+        self.spacing_slider.set(self.settings.letter_spacing)
         self.spacing_slider.configure(command=self._on_spacing_slider)
         
         # ============================================================
@@ -581,7 +577,7 @@ class Sidebar(ctk.CTkScrollableFrame):
             values=GRADIENT_TYPES,
             variable=self.gradient_type_var,
             width=110,
-            command=lambda x: self._on_change()
+            command=self._on_gradient_type_change
         )
         gradient_type_combo.pack(side="left", padx=5)
         
@@ -593,13 +589,13 @@ class Sidebar(ctk.CTkScrollableFrame):
         gradient_angle_label.pack(side="left")
         
         self.gradient_angle_entry = ctk.CTkEntry(gradient_angle_flow, width=40)
-        self.gradient_angle_entry.insert(0, "0")
+        self.gradient_angle_entry.insert(0, str(self.settings.gradient_angle))
         self.gradient_angle_entry.pack(side="right", padx=(5, 0))
         self.gradient_angle_entry.bind("<KeyRelease>", self._on_gradient_angle_change)
         
         self.gradient_angle_slider = ctk.CTkSlider(gradient_angle_flow, from_=0, to=360, number_of_steps=360)
         self.gradient_angle_slider.pack(side="left", padx=5, fill="x", expand=True)
-        self.gradient_angle_slider.set(0)
+        self.gradient_angle_slider.set(self.settings.gradient_angle)
         self.gradient_angle_slider.configure(command=self._on_gradient_angle_slider)
         
         # --- Редактор точек градиента ---
@@ -612,7 +608,6 @@ class Sidebar(ctk.CTkScrollableFrame):
         )
         self.gradient_stops_canvas.pack(fill="x", padx=10, pady=(2, 8))
 
-        # --- НАСТРОЙКА СОБЫТИЙ ДЛЯ РЕДАКТОРА ГРАДИЕНТА ---
         self.gradient_stops_canvas.bind("<Button-1>", self._on_gradient_stops_click)
         self.gradient_stops_canvas.bind("<B1-Motion>", self._on_gradient_stops_drag)
         self.gradient_stops_canvas.bind("<ButtonRelease-1>", self._on_gradient_stops_release)
@@ -643,7 +638,10 @@ class Sidebar(ctk.CTkScrollableFrame):
         pattern_texture_row = ctk.CTkFrame(pattern_frame, fg_color="transparent")
         pattern_texture_row.pack(fill="x", padx=10, pady=2)
         
-        self.pattern_texture_label = ctk.CTkLabel(pattern_texture_row, text=self.i18n.tr("no_texture"), font=("Arial", 10))
+        pattern_texture_text = self.i18n.tr("no_texture")
+        if self.settings.pattern_image_path:
+            pattern_texture_text = os.path.basename(self.settings.pattern_image_path)
+        self.pattern_texture_label = ctk.CTkLabel(pattern_texture_row, text=pattern_texture_text, font=("Arial", 10))
         self.pattern_texture_label.pack(side="left")
         
         pattern_texture_button = ctk.CTkButton(
@@ -661,13 +659,13 @@ class Sidebar(ctk.CTkScrollableFrame):
         pattern_scale_label.pack(side="left")
         
         self.pattern_scale_entry = ctk.CTkEntry(pattern_scale_flow, width=45)
-        self.pattern_scale_entry.insert(0, "100")
+        self.pattern_scale_entry.insert(0, str(self.settings.pattern_scale))
         self.pattern_scale_entry.pack(side="right", padx=(5, 0))
         self.pattern_scale_entry.bind("<KeyRelease>", self._on_pattern_scale_change)
         
         self.pattern_scale_slider = ctk.CTkSlider(pattern_scale_flow, from_=5, to=500, number_of_steps=495)
         self.pattern_scale_slider.pack(side="left", padx=5, fill="x", expand=True)
-        self.pattern_scale_slider.set(100)
+        self.pattern_scale_slider.set(self.settings.pattern_scale)
         self.pattern_scale_slider.configure(command=self._on_pattern_scale_slider)
         
         pattern_offset_flow = ctk.CTkFrame(pattern_frame, fg_color="transparent")
@@ -677,7 +675,7 @@ class Sidebar(ctk.CTkScrollableFrame):
         pattern_offset_x_label.pack(side="left")
         
         self.pattern_offset_x_entry = ctk.CTkEntry(pattern_offset_flow, width=40)
-        self.pattern_offset_x_entry.insert(0, "0")
+        self.pattern_offset_x_entry.insert(0, str(self.settings.pattern_offset_x))
         self.pattern_offset_x_entry.pack(side="left", padx=5)
         self.pattern_offset_x_entry.bind("<KeyRelease>", self._on_pattern_offset_x_change)
         
@@ -685,7 +683,7 @@ class Sidebar(ctk.CTkScrollableFrame):
         pattern_offset_y_label.pack(side="left", padx=(10, 5))
         
         self.pattern_offset_y_entry = ctk.CTkEntry(pattern_offset_flow, width=40)
-        self.pattern_offset_y_entry.insert(0, "0")
+        self.pattern_offset_y_entry.insert(0, str(self.settings.pattern_offset_y))
         self.pattern_offset_y_entry.pack(side="left")
         self.pattern_offset_y_entry.bind("<KeyRelease>", self._on_pattern_offset_y_change)
         
@@ -696,13 +694,13 @@ class Sidebar(ctk.CTkScrollableFrame):
         pattern_angle_label.pack(side="left")
         
         self.pattern_angle_entry = ctk.CTkEntry(pattern_angle_flow, width=40)
-        self.pattern_angle_entry.insert(0, "0")
+        self.pattern_angle_entry.insert(0, str(self.settings.pattern_angle))
         self.pattern_angle_entry.pack(side="right", padx=(5, 0))
         self.pattern_angle_entry.bind("<KeyRelease>", self._on_pattern_angle_change)
         
         self.pattern_angle_slider = ctk.CTkSlider(pattern_angle_flow, from_=0, to=360, number_of_steps=360)
         self.pattern_angle_slider.pack(side="left", padx=5, fill="x", expand=True)
-        self.pattern_angle_slider.set(0)
+        self.pattern_angle_slider.set(self.settings.pattern_angle)
         self.pattern_angle_slider.configure(command=self._on_pattern_angle_slider)
         
         pattern_blend_flow = ctk.CTkFrame(pattern_frame, fg_color="transparent")
@@ -716,7 +714,7 @@ class Sidebar(ctk.CTkScrollableFrame):
             values=BLEND_MODES,
             variable=self.pattern_blend_mode_var, 
             width=100,
-            command=lambda x: self._on_change()
+            command=self._on_pattern_blend_change
         )
         pattern_blend_combo.pack(side="left", padx=5)
         
@@ -758,11 +756,11 @@ class Sidebar(ctk.CTkScrollableFrame):
             outline_outer_row2, from_=0, to=20, number_of_steps=20
         )
         self.outline_outer_width_slider.pack(side="left", padx=2, fill="x", expand=True)
-        self.outline_outer_width_slider.set(2)
+        self.outline_outer_width_slider.set(self.settings.outline_outer_width)
         self.outline_outer_width_slider.configure(command=self._on_outline_outer_width_slider)
         
         self.outline_outer_width_entry = ctk.CTkEntry(outline_outer_row2, width=30)
-        self.outline_outer_width_entry.insert(0, "2")
+        self.outline_outer_width_entry.insert(0, str(self.settings.outline_outer_width))
         self.outline_outer_width_entry.pack(side="left", padx=2)
         self.outline_outer_width_entry.bind("<KeyRelease>", self._on_outline_outer_width_change)
         ctk.CTkLabel(outline_outer_row2, text="px", font=("Arial", 10)).pack(side="left")
@@ -805,11 +803,11 @@ class Sidebar(ctk.CTkScrollableFrame):
             outline_inner_row2, from_=0, to=20, number_of_steps=20
         )
         self.outline_inner_width_slider.pack(side="left", padx=2, fill="x", expand=True)
-        self.outline_inner_width_slider.set(1)
+        self.outline_inner_width_slider.set(self.settings.outline_inner_width)
         self.outline_inner_width_slider.configure(command=self._on_outline_inner_width_slider)
         
         self.outline_inner_width_entry = ctk.CTkEntry(outline_inner_row2, width=30)
-        self.outline_inner_width_entry.insert(0, "1")
+        self.outline_inner_width_entry.insert(0, str(self.settings.outline_inner_width))
         self.outline_inner_width_entry.pack(side="left", padx=2)
         self.outline_inner_width_entry.bind("<KeyRelease>", self._on_outline_inner_width_change)
         ctk.CTkLabel(outline_inner_row2, text="px", font=("Arial", 10)).pack(side="left")
@@ -855,11 +853,11 @@ class Sidebar(ctk.CTkScrollableFrame):
             glow_outer_row2, from_=1, to=30, number_of_steps=29
         )
         self.glow_outer_radius_slider.pack(side="left", padx=2, fill="x", expand=True)
-        self.glow_outer_radius_slider.set(5)
+        self.glow_outer_radius_slider.set(self.settings.glow_outer_radius)
         self.glow_outer_radius_slider.configure(command=self._on_glow_outer_radius_slider)
         
         self.glow_outer_radius_entry = ctk.CTkEntry(glow_outer_row2, width=35)
-        self.glow_outer_radius_entry.insert(0, "5")
+        self.glow_outer_radius_entry.insert(0, str(self.settings.glow_outer_radius))
         self.glow_outer_radius_entry.pack(side="right", padx=2)
         self.glow_outer_radius_entry.bind("<KeyRelease>", self._on_glow_outer_radius_change)
         
@@ -873,11 +871,11 @@ class Sidebar(ctk.CTkScrollableFrame):
             glow_outer_row3, from_=1, to=20, number_of_steps=19
         )
         self.glow_outer_intensity_slider.pack(side="left", padx=2, fill="x", expand=True)
-        self.glow_outer_intensity_slider.set(10)
+        self.glow_outer_intensity_slider.set(self.settings.glow_outer_intensity)
         self.glow_outer_intensity_slider.configure(command=self._on_glow_outer_intensity_slider)
         
         self.glow_outer_intensity_entry = ctk.CTkEntry(glow_outer_row3, width=35)
-        self.glow_outer_intensity_entry.insert(0, "10")
+        self.glow_outer_intensity_entry.insert(0, str(self.settings.glow_outer_intensity))
         self.glow_outer_intensity_entry.pack(side="right", padx=2)
         self.glow_outer_intensity_entry.bind("<KeyRelease>", self._on_glow_outer_intensity_change)
         
@@ -922,11 +920,11 @@ class Sidebar(ctk.CTkScrollableFrame):
             glow_inner_row2, from_=1, to=30, number_of_steps=29
         )
         self.glow_inner_radius_slider.pack(side="left", padx=2, fill="x", expand=True)
-        self.glow_inner_radius_slider.set(3)
+        self.glow_inner_radius_slider.set(self.settings.glow_inner_radius)
         self.glow_inner_radius_slider.configure(command=self._on_glow_inner_radius_slider)
         
         self.glow_inner_radius_entry = ctk.CTkEntry(glow_inner_row2, width=35)
-        self.glow_inner_radius_entry.insert(0, "3")
+        self.glow_inner_radius_entry.insert(0, str(self.settings.glow_inner_radius))
         self.glow_inner_radius_entry.pack(side="right", padx=2)
         self.glow_inner_radius_entry.bind("<KeyRelease>", self._on_glow_inner_radius_change)
         
@@ -940,11 +938,11 @@ class Sidebar(ctk.CTkScrollableFrame):
             glow_inner_row3, from_=1, to=20, number_of_steps=19
         )
         self.glow_inner_intensity_slider.pack(side="left", padx=2, fill="x", expand=True)
-        self.glow_inner_intensity_slider.set(10)
+        self.glow_inner_intensity_slider.set(self.settings.glow_inner_intensity)
         self.glow_inner_intensity_slider.configure(command=self._on_glow_inner_intensity_slider)
         
         self.glow_inner_intensity_entry = ctk.CTkEntry(glow_inner_row3, width=35)
-        self.glow_inner_intensity_entry.insert(0, "10")
+        self.glow_inner_intensity_entry.insert(0, str(self.settings.glow_inner_intensity))
         self.glow_inner_intensity_entry.pack(side="right", padx=2)
         self.glow_inner_intensity_entry.bind("<KeyRelease>", self._on_glow_inner_intensity_change)
         
@@ -959,7 +957,7 @@ class Sidebar(ctk.CTkScrollableFrame):
             values=BLEND_MODES,
             variable=self.glow_inner_blend_mode_var, 
             width=100,
-            command=lambda x: self._on_change()
+            command=self._on_glow_inner_blend_change
         )
         glow_inner_blend_combo.pack(side="right", padx=2, fill="x", expand=True)
         
@@ -990,13 +988,13 @@ class Sidebar(ctk.CTkScrollableFrame):
         emboss_depth_label.pack(side="left")
         
         self.emboss_depth_entry = ctk.CTkEntry(emboss_depth_flow, width=40)
-        self.emboss_depth_entry.insert(0, "3")
+        self.emboss_depth_entry.insert(0, str(self.settings.emboss_depth))
         self.emboss_depth_entry.pack(side="right", padx=5)
         self.emboss_depth_entry.bind("<KeyRelease>", self._on_emboss_depth_change)
         
         self.emboss_depth_slider = ctk.CTkSlider(emboss_depth_flow, from_=1, to=20, number_of_steps=19)
         self.emboss_depth_slider.pack(side="left", padx=5, fill="x", expand=True)
-        self.emboss_depth_slider.set(3)
+        self.emboss_depth_slider.set(self.settings.emboss_depth)
         self.emboss_depth_slider.configure(command=self._on_emboss_depth_slider)
         
         emboss_blur_flow = ctk.CTkFrame(emboss_frame, fg_color="transparent")
@@ -1006,13 +1004,13 @@ class Sidebar(ctk.CTkScrollableFrame):
         emboss_blur_label.pack(side="left")
         
         self.emboss_blur_entry = ctk.CTkEntry(emboss_blur_flow, width=40)
-        self.emboss_blur_entry.insert(0, "1")
+        self.emboss_blur_entry.insert(0, str(self.settings.emboss_blur))
         self.emboss_blur_entry.pack(side="right", padx=5)
         self.emboss_blur_entry.bind("<KeyRelease>", self._on_emboss_blur_change)
         
         self.emboss_blur_slider = ctk.CTkSlider(emboss_blur_flow, from_=0, to=10, number_of_steps=10)
         self.emboss_blur_slider.pack(side="left", padx=5, fill="x", expand=True)
-        self.emboss_blur_slider.set(1)
+        self.emboss_blur_slider.set(self.settings.emboss_blur)
         self.emboss_blur_slider.configure(command=self._on_emboss_blur_slider)
         
         emboss_color_flow = ctk.CTkFrame(emboss_frame, fg_color="transparent")
@@ -1083,7 +1081,7 @@ class Sidebar(ctk.CTkScrollableFrame):
         inner_shadow_distance_label.pack(side="left")
         
         self.inner_shadow_distance_entry = ctk.CTkEntry(inner_shadow_prop_flow, width=40)
-        self.inner_shadow_distance_entry.insert(0, "4")
+        self.inner_shadow_distance_entry.insert(0, str(self.settings.inner_shadow_distance))
         self.inner_shadow_distance_entry.pack(side="left", padx=5)
         self.inner_shadow_distance_entry.bind("<KeyRelease>", self._on_inner_shadow_distance_change)
         
@@ -1091,7 +1089,7 @@ class Sidebar(ctk.CTkScrollableFrame):
         inner_shadow_blur_label.pack(side="left", padx=(10, 5))
         
         self.inner_shadow_blur_entry = ctk.CTkEntry(inner_shadow_prop_flow, width=40)
-        self.inner_shadow_blur_entry.insert(0, "3")
+        self.inner_shadow_blur_entry.insert(0, str(self.settings.inner_shadow_blur))
         self.inner_shadow_blur_entry.pack(side="left")
         self.inner_shadow_blur_entry.bind("<KeyRelease>", self._on_inner_shadow_blur_change)
         
@@ -1106,7 +1104,7 @@ class Sidebar(ctk.CTkScrollableFrame):
             values=BLEND_MODES,
             variable=self.inner_shadow_blend_mode_var, 
             width=100,
-            command=lambda x: self._on_change()
+            command=self._on_inner_shadow_blend_change
         )
         inner_shadow_blend_combo.pack(side="left", padx=5)
         
@@ -1172,7 +1170,7 @@ class Sidebar(ctk.CTkScrollableFrame):
         shadow_distance_label.pack(side="left")
         
         self.shadow_distance_entry = ctk.CTkEntry(shadow_prop_flow, width=40)
-        self.shadow_distance_entry.insert(0, "5")
+        self.shadow_distance_entry.insert(0, str(self.settings.shadow_distance))
         self.shadow_distance_entry.pack(side="left", padx=5)
         self.shadow_distance_entry.bind("<KeyRelease>", self._on_shadow_distance_change)
         
@@ -1180,7 +1178,7 @@ class Sidebar(ctk.CTkScrollableFrame):
         shadow_blur_label.pack(side="left", padx=(10, 5))
         
         self.shadow_blur_entry = ctk.CTkEntry(shadow_prop_flow, width=40)
-        self.shadow_blur_entry.insert(0, "2")
+        self.shadow_blur_entry.insert(0, str(self.settings.shadow_blur))
         self.shadow_blur_entry.pack(side="left")
         self.shadow_blur_entry.bind("<KeyRelease>", self._on_shadow_blur_change)
         
@@ -1195,7 +1193,7 @@ class Sidebar(ctk.CTkScrollableFrame):
             values=BLEND_MODES,
             variable=self.shadow_blend_mode_var, 
             width=100,
-            command=lambda x: self._on_change()
+            command=self._on_shadow_blend_change
         )
         shadow_blend_combo.pack(side="left", padx=5)
         
@@ -1254,7 +1252,7 @@ class Sidebar(ctk.CTkScrollableFrame):
         reflection_gap_label.pack(side="left")
         
         self.reflection_gap_entry = ctk.CTkEntry(reflection_gap_flow, width=40)
-        self.reflection_gap_entry.insert(0, "2")
+        self.reflection_gap_entry.insert(0, str(self.settings.reflection_gap))
         self.reflection_gap_entry.pack(side="right", padx=(5, 0))
         self.reflection_gap_entry.bind("<KeyRelease>", self._on_reflection_gap_change)
         
@@ -1263,7 +1261,7 @@ class Sidebar(ctk.CTkScrollableFrame):
             command=self._on_reflection_gap_slider
         )
         self.reflection_gap_slider.pack(side="left", padx=5, fill="x", expand=True)
-        self.reflection_gap_slider.set(2)
+        self.reflection_gap_slider.set(self.settings.reflection_gap)
         
         reflection_opacity_flow = ctk.CTkFrame(reflection_frame, fg_color="transparent")
         reflection_opacity_flow.pack(fill="x", padx=10, pady=2)
@@ -1272,7 +1270,7 @@ class Sidebar(ctk.CTkScrollableFrame):
         reflection_opacity_label.pack(side="left")
         
         self.reflection_opacity_entry = ctk.CTkEntry(reflection_opacity_flow, width=40)
-        self.reflection_opacity_entry.insert(0, "50")
+        self.reflection_opacity_entry.insert(0, str(self.settings.reflection_opacity))
         self.reflection_opacity_entry.pack(side="right", padx=(5, 0))
         self.reflection_opacity_entry.bind("<KeyRelease>", self._on_reflection_opacity_change)
         
@@ -1281,7 +1279,7 @@ class Sidebar(ctk.CTkScrollableFrame):
             command=self._on_reflection_opacity_slider
         )
         self.reflection_opacity_slider.pack(side="left", padx=5, fill="x", expand=True)
-        self.reflection_opacity_slider.set(50)
+        self.reflection_opacity_slider.set(self.settings.reflection_opacity)
         
         reflection_fade_flow = ctk.CTkFrame(reflection_frame, fg_color="transparent")
         reflection_fade_flow.pack(fill="x", padx=10, pady=(2, 8))
@@ -1290,7 +1288,7 @@ class Sidebar(ctk.CTkScrollableFrame):
         reflection_fade_label.pack(side="left")
         
         self.reflection_fade_entry = ctk.CTkEntry(reflection_fade_flow, width=40)
-        self.reflection_fade_entry.insert(0, "100")
+        self.reflection_fade_entry.insert(0, str(self.settings.reflection_fade))
         self.reflection_fade_entry.pack(side="right", padx=(5, 0))
         self.reflection_fade_entry.bind("<KeyRelease>", self._on_reflection_fade_change)
         
@@ -1299,7 +1297,7 @@ class Sidebar(ctk.CTkScrollableFrame):
             command=self._on_reflection_fade_slider
         )
         self.reflection_fade_slider.pack(side="left", padx=5, fill="x", expand=True)
-        self.reflection_fade_slider.set(100)
+        self.reflection_fade_slider.set(self.settings.reflection_fade)
         
         # ============================================================
         # 7. СЕКЦИЯ: ПОВОРОТ
@@ -1314,7 +1312,7 @@ class Sidebar(ctk.CTkScrollableFrame):
         rotation_label.pack(side="left", padx=10, pady=5)
         
         self.rotation_entry = ctk.CTkEntry(rotation_entry_frame, width=40)
-        self.rotation_entry.insert(0, "0")
+        self.rotation_entry.insert(0, str(self.settings.rotation_angle))
         self.rotation_entry.pack(side="right", padx=10, pady=5)
         self.rotation_entry.bind("<KeyRelease>", self._on_rotation_change)
         
@@ -1326,7 +1324,7 @@ class Sidebar(ctk.CTkScrollableFrame):
             command=self._on_rotation_slider
         )
         self.rotation_slider.pack(fill="x", padx=10, pady=5)
-        self.rotation_slider.set(0)
+        self.rotation_slider.set(self.settings.rotation_angle)
         
         # ============================================================
         # 8. СЕКЦИЯ: СКОС (SKEW)
@@ -1357,13 +1355,13 @@ class Sidebar(ctk.CTkScrollableFrame):
         skew_x_label.pack(side="left")
         
         self.skew_x_entry = ctk.CTkEntry(skew_x_flow, width=40)
-        self.skew_x_entry.insert(0, "0")
+        self.skew_x_entry.insert(0, str(self.settings.skew_x))
         self.skew_x_entry.pack(side="right", padx=(5, 0))
         self.skew_x_entry.bind("<KeyRelease>", self._on_skew_x_change)
         
         self.skew_x_slider = ctk.CTkSlider(skew_x_flow, from_=-75, to=75, number_of_steps=150)
         self.skew_x_slider.pack(side="left", padx=5, fill="x", expand=True)
-        self.skew_x_slider.set(0)
+        self.skew_x_slider.set(self.settings.skew_x)
         self.skew_x_slider.configure(command=self._on_skew_x_slider)
         
         skew_y_flow = ctk.CTkFrame(skew_frame, fg_color="transparent")
@@ -1373,23 +1371,23 @@ class Sidebar(ctk.CTkScrollableFrame):
         skew_y_label.pack(side="left")
         
         self.skew_y_entry = ctk.CTkEntry(skew_y_flow, width=40)
-        self.skew_y_entry.insert(0, "0")
+        self.skew_y_entry.insert(0, str(self.settings.skew_y))
         self.skew_y_entry.pack(side="right", padx=(5, 0))
         self.skew_y_entry.bind("<KeyRelease>", self._on_skew_y_change)
 
         self.skew_y_slider = ctk.CTkSlider(skew_y_flow, from_=-75, to=75, number_of_steps=150)
         self.skew_y_slider.pack(side="left", padx=5, fill="x", expand=True)
-        self.skew_y_slider.set(0)
+        self.skew_y_slider.set(self.settings.skew_y)
         self.skew_y_slider.configure(command=self._on_skew_y_slider)
         
         # ============================================================
         # 9. СЕКЦИЯ: ПЕРСПЕКТИВА
         # ============================================================
-        perspective_section = ctk.CTkFrame(self)  # <-- ИЗМЕНЕНО: СВОЯ СЕКЦИЯ
+        perspective_section = ctk.CTkFrame(self)
         perspective_section.pack(fill="x", padx=10, pady=5)
         
         perspective_check = ctk.CTkCheckBox(
-                perspective_section,  # <-- ИЗМЕНЕНО
+                perspective_section,
                 text=self.i18n.tr("perspective"), 
                 variable=self.perspective_enabled_var,
                 command=self._toggle_perspective,
@@ -1397,7 +1395,7 @@ class Sidebar(ctk.CTkScrollableFrame):
         )
         perspective_check.pack(anchor="w", padx=10, pady=2)
         
-        perspective_frame = ctk.CTkFrame(perspective_section, fg_color="transparent")  # <-- ИЗМЕНЕНО
+        perspective_frame = ctk.CTkFrame(perspective_section, fg_color="transparent")
         if not self.settings.perspective_enabled:
                 perspective_frame.pack_forget()
         else:
@@ -1411,13 +1409,13 @@ class Sidebar(ctk.CTkScrollableFrame):
         perspective_x_label.pack(side="left")
         
         self.perspective_x_entry = ctk.CTkEntry(perspective_x_flow, width=40)
-        self.perspective_x_entry.insert(0, "0")
+        self.perspective_x_entry.insert(0, str(self.settings.perspective_x))
         self.perspective_x_entry.pack(side="right", padx=(5, 0))
         self.perspective_x_entry.bind("<KeyRelease>", self._on_perspective_x_change)
         
         self.perspective_x_slider = ctk.CTkSlider(perspective_x_flow, from_=-50, to=50, number_of_steps=100)
         self.perspective_x_slider.pack(side="left", padx=5, fill="x", expand=True)
-        self.perspective_x_slider.set(0)
+        self.perspective_x_slider.set(self.settings.perspective_x)
         self.perspective_x_slider.configure(command=self._on_perspective_x_slider)
         
         perspective_y_flow = ctk.CTkFrame(perspective_frame, fg_color="transparent")
@@ -1427,13 +1425,13 @@ class Sidebar(ctk.CTkScrollableFrame):
         perspective_y_label.pack(side="left")
         
         self.perspective_y_entry = ctk.CTkEntry(perspective_y_flow, width=40)
-        self.perspective_y_entry.insert(0, "0")
+        self.perspective_y_entry.insert(0, str(self.settings.perspective_y))
         self.perspective_y_entry.pack(side="right", padx=(5, 0))
         self.perspective_y_entry.bind("<KeyRelease>", self._on_perspective_y_change)
         
         self.perspective_y_slider = ctk.CTkSlider(perspective_y_flow, from_=-50, to=50, number_of_steps=100)
         self.perspective_y_slider.pack(side="left", padx=5, fill="x", expand=True)
-        self.perspective_y_slider.set(0)
+        self.perspective_y_slider.set(self.settings.perspective_y)
         self.perspective_y_slider.configure(command=self._on_perspective_y_slider)
         
         # ============================================================
@@ -1465,13 +1463,13 @@ class Sidebar(ctk.CTkScrollableFrame):
         arc_radius_label.pack(side="left")
         
         self.arc_radius_entry = ctk.CTkEntry(arc_radius_flow, width=50)
-        self.arc_radius_entry.insert(0, "150")
+        self.arc_radius_entry.insert(0, str(self.settings.arc_radius))
         self.arc_radius_entry.pack(side="right", padx=(5, 0))
         self.arc_radius_entry.bind("<KeyRelease>", self._on_arc_radius_change)
         
         self.arc_radius_slider = ctk.CTkSlider(arc_radius_flow, from_=1, to=2000, number_of_steps=1990)
         self.arc_radius_slider.pack(side="left", padx=5, fill="x", expand=True)
-        self.arc_radius_slider.set(150)
+        self.arc_radius_slider.set(self.settings.arc_radius)
         self.arc_radius_slider.configure(command=self._on_arc_radius_slider)
         
         arc_angle_flow = ctk.CTkFrame(arc_frame, fg_color="transparent")
@@ -1481,13 +1479,13 @@ class Sidebar(ctk.CTkScrollableFrame):
         arc_start_angle_label.pack(side="left")
         
         self.arc_start_angle_entry = ctk.CTkEntry(arc_angle_flow, width=50)
-        self.arc_start_angle_entry.insert(0, "0")
+        self.arc_start_angle_entry.insert(0, str(self.settings.arc_start_angle))
         self.arc_start_angle_entry.pack(side="right", padx=(5, 0))
         self.arc_start_angle_entry.bind("<KeyRelease>", self._on_arc_angle_change)
         
         self.arc_start_angle_slider = ctk.CTkSlider(arc_angle_flow, from_=0, to=360, number_of_steps=360)
         self.arc_start_angle_slider.pack(side="left", padx=5, fill="x", expand=True)
-        self.arc_start_angle_slider.set(0)
+        self.arc_start_angle_slider.set(self.settings.arc_start_angle)
         self.arc_start_angle_slider.configure(command=self._on_arc_angle_slider)
         
         arc_options_flow = ctk.CTkFrame(arc_frame, fg_color="transparent")
@@ -1497,7 +1495,7 @@ class Sidebar(ctk.CTkScrollableFrame):
             arc_options_flow, 
             text=self.i18n.tr("arc_clockwise"), 
             variable=self.arc_clockwise_var, 
-            command=self._on_change,
+            command=self._on_arc_clockwise_change,
             checkbox_height=18, checkbox_width=18
         )
         arc_clockwise_check.pack(side="left", padx=(0, 15))
@@ -1506,7 +1504,7 @@ class Sidebar(ctk.CTkScrollableFrame):
             arc_options_flow, 
             text=self.i18n.tr("arc_flip"), 
             variable=self.arc_flip_var, 
-            command=self._on_change,
+            command=self._on_arc_flip_change,
             checkbox_height=18, checkbox_width=18
         )
         arc_flip_check.pack(side="left")
@@ -1540,13 +1538,13 @@ class Sidebar(ctk.CTkScrollableFrame):
         halftone_cell_size_label.pack(side="left")
         
         self.halftone_cell_size_entry = ctk.CTkEntry(halftone_cell_size_flow, width=40)
-        self.halftone_cell_size_entry.insert(0, "10")
+        self.halftone_cell_size_entry.insert(0, str(self.settings.halftone_cell_size))
         self.halftone_cell_size_entry.pack(side="right", padx=(5, 0))
         self.halftone_cell_size_entry.bind("<KeyRelease>", self._on_halftone_cell_size_change)
         
         self.halftone_cell_size_slider = ctk.CTkSlider(halftone_cell_size_flow, from_=2, to=100, number_of_steps=98)
         self.halftone_cell_size_slider.pack(side="left", padx=5, fill="x", expand=True)
-        self.halftone_cell_size_slider.set(10)
+        self.halftone_cell_size_slider.set(self.settings.halftone_cell_size)
         self.halftone_cell_size_slider.configure(command=self._on_halftone_cell_size_slider)
         
         halftone_dot_scale_flow = ctk.CTkFrame(halftone_frame, fg_color="transparent")
@@ -1556,13 +1554,13 @@ class Sidebar(ctk.CTkScrollableFrame):
         halftone_dot_scale_label.pack(side="left")
         
         self.halftone_dot_scale_entry = ctk.CTkEntry(halftone_dot_scale_flow, width=40)
-        self.halftone_dot_scale_entry.insert(0, "100")
+        self.halftone_dot_scale_entry.insert(0, str(self.settings.halftone_dot_scale))
         self.halftone_dot_scale_entry.pack(side="right", padx=(5, 0))
         self.halftone_dot_scale_entry.bind("<KeyRelease>", self._on_halftone_dot_scale_change)
         
         self.halftone_dot_scale_slider = ctk.CTkSlider(halftone_dot_scale_flow, from_=10, to=300, number_of_steps=290)
         self.halftone_dot_scale_slider.pack(side="left", padx=5, fill="x", expand=True)
-        self.halftone_dot_scale_slider.set(100)
+        self.halftone_dot_scale_slider.set(self.settings.halftone_dot_scale)
         self.halftone_dot_scale_slider.configure(command=self._on_halftone_dot_scale_slider)
         
         halftone_angle_flow = ctk.CTkFrame(halftone_frame, fg_color="transparent")
@@ -1572,13 +1570,13 @@ class Sidebar(ctk.CTkScrollableFrame):
         halftone_angle_label.pack(side="left")
         
         self.halftone_angle_entry = ctk.CTkEntry(halftone_angle_flow, width=40)
-        self.halftone_angle_entry.insert(0, "0")
+        self.halftone_angle_entry.insert(0, str(self.settings.halftone_angle))
         self.halftone_angle_entry.pack(side="right", padx=(5, 0))
         self.halftone_angle_entry.bind("<KeyRelease>", self._on_halftone_angle_change)
         
         self.halftone_angle_slider = ctk.CTkSlider(halftone_angle_flow, from_=0, to=360, number_of_steps=360)
         self.halftone_angle_slider.pack(side="left", padx=5, fill="x", expand=True)
-        self.halftone_angle_slider.set(0)
+        self.halftone_angle_slider.set(self.settings.halftone_angle)
         self.halftone_angle_slider.configure(command=self._on_halftone_angle_slider)
         
         # ============================================================
@@ -1610,13 +1608,13 @@ class Sidebar(ctk.CTkScrollableFrame):
         glitch_rgb_shift_label.pack(side="left")
         
         self.glitch_rgb_shift_entry = ctk.CTkEntry(glitch_rgb_shift_flow, width=40)
-        self.glitch_rgb_shift_entry.insert(0, "4")
+        self.glitch_rgb_shift_entry.insert(0, str(self.settings.glitch_rgb_shift))
         self.glitch_rgb_shift_entry.pack(side="right", padx=(5, 0))
         self.glitch_rgb_shift_entry.bind("<KeyRelease>", self._on_glitch_rgb_shift_change)
         
         self.glitch_rgb_shift_slider = ctk.CTkSlider(glitch_rgb_shift_flow, from_=0, to=30, number_of_steps=30)
         self.glitch_rgb_shift_slider.pack(side="left", padx=5, fill="x", expand=True)
-        self.glitch_rgb_shift_slider.set(4)
+        self.glitch_rgb_shift_slider.set(self.settings.glitch_rgb_shift)
         self.glitch_rgb_shift_slider.configure(command=self._on_glitch_rgb_shift_slider)
         
         glitch_slice_intensity_flow = ctk.CTkFrame(glitch_frame, fg_color="transparent")
@@ -1626,13 +1624,13 @@ class Sidebar(ctk.CTkScrollableFrame):
         glitch_slice_intensity_label.pack(side="left")
         
         self.glitch_slice_intensity_entry = ctk.CTkEntry(glitch_slice_intensity_flow, width=40)
-        self.glitch_slice_intensity_entry.insert(0, "30")
+        self.glitch_slice_intensity_entry.insert(0, str(self.settings.glitch_slice_intensity))
         self.glitch_slice_intensity_entry.pack(side="right", padx=(5, 0))
         self.glitch_slice_intensity_entry.bind("<KeyRelease>", self._on_glitch_slice_intensity_change)
         
         self.glitch_slice_intensity_slider = ctk.CTkSlider(glitch_slice_intensity_flow, from_=0, to=100, number_of_steps=100)
         self.glitch_slice_intensity_slider.pack(side="left", padx=5, fill="x", expand=True)
-        self.glitch_slice_intensity_slider.set(30)
+        self.glitch_slice_intensity_slider.set(self.settings.glitch_slice_intensity)
         self.glitch_slice_intensity_slider.configure(command=self._on_glitch_slice_intensity_slider)
         
         glitch_seed_flow = ctk.CTkFrame(glitch_frame, fg_color="transparent")
@@ -1642,7 +1640,7 @@ class Sidebar(ctk.CTkScrollableFrame):
         glitch_seed_label.pack(side="left")
         
         self.glitch_seed_entry = ctk.CTkEntry(glitch_seed_flow, width=70)
-        self.glitch_seed_entry.insert(0, "0")
+        self.glitch_seed_entry.insert(0, str(self.settings.glitch_seed))
         self.glitch_seed_entry.pack(side="left", padx=5)
         self.glitch_seed_entry.bind("<KeyRelease>", self._on_glitch_seed_change)
         
@@ -1665,7 +1663,7 @@ class Sidebar(ctk.CTkScrollableFrame):
         opacity_label.pack(side="left", padx=10, pady=5)
         
         self.opacity_entry = ctk.CTkEntry(opacity_entry_frame, width=50)
-        self.opacity_entry.insert(0, "100")
+        self.opacity_entry.insert(0, str(int(round(self.settings.text_opacity * 100))))
         self.opacity_entry.pack(side="right", padx=10, pady=5)
         self.opacity_entry.bind("<KeyRelease>", self._on_opacity_change)
         
@@ -1674,7 +1672,7 @@ class Sidebar(ctk.CTkScrollableFrame):
         
         self.opacity_slider = ctk.CTkSlider(opacity_slider_frame, from_=0, to=100, number_of_steps=100)
         self.opacity_slider.pack(fill="x", padx=10, pady=5)
-        self.opacity_slider.set(100)
+        self.opacity_slider.set(int(round(self.settings.text_opacity * 100)))
         self.opacity_slider.configure(command=self._on_opacity_slider)
         
         # ============================================================
@@ -1696,6 +1694,8 @@ class Sidebar(ctk.CTkScrollableFrame):
         )
         self.background_color_button.pack(side="right", padx=5)
         self.background_color_button.configure(fg_color=self.settings.background_color or "#ffffff")
+        if self.settings.transparent_background:
+            self.background_color_button.configure(state="disabled")
         
         transparent_background_check = ctk.CTkCheckBox(
             background_section, 
@@ -1705,6 +1705,38 @@ class Sidebar(ctk.CTkScrollableFrame):
             checkbox_height=18, checkbox_width=18
         )
         transparent_background_check.pack(anchor="w", padx=10, pady=2)
+    
+    # ============================================================
+    # ОБРАБОТЧИКИ СМЕШИВАНИЯ И ДУГИ
+    # ============================================================
+    
+    def _on_pattern_blend_change(self, value):
+        self.settings.pattern_blend_mode = value
+        self._on_change()
+    
+    def _on_shadow_blend_change(self, value):
+        self.settings.shadow_blend_mode = value
+        self._on_change()
+    
+    def _on_glow_inner_blend_change(self, value):
+        self.settings.glow_inner_blend_mode = value
+        self._on_change()
+    
+    def _on_inner_shadow_blend_change(self, value):
+        self.settings.inner_shadow_blend_mode = value
+        self._on_change()
+    
+    def _on_arc_clockwise_change(self):
+        self.settings.arc_clockwise = self.arc_clockwise_var.get()
+        self._on_change()
+    
+    def _on_arc_flip_change(self):
+        self.settings.arc_flip = self.arc_flip_var.get()
+        self._on_change()
+    
+    def _on_gradient_type_change(self, value):
+        self.settings.gradient_type = value
+        self._on_change()
     
     # ============================================================
     # ВСЕ МЕТОДЫ-ОБРАБОТЧИКИ
@@ -1969,16 +2001,22 @@ class Sidebar(ctk.CTkScrollableFrame):
     def _toggle_transparent_background(self):
         self.settings.transparent_background = self.transparent_background_var.get()
         if self.settings.transparent_background:
+            # Запоминаем текущий цвет, чтобы вернуть при выключении
+            if self.settings.background_color is not None:
+                self.settings.saved_background_color = self.settings.background_color
             self.settings.background_color = None
             self.background_color_button.configure(state="disabled")
         else:
             self.background_color_button.configure(state="normal")
-            if self.settings.background_color is None:
-                self.settings.background_color = "#ffffff"
-                self.background_color_button.configure(fg_color="#ffffff")
+            # Восстанавливаем сохранённый цвет
+            saved = getattr(self.settings, "saved_background_color", None)
+            if not saved:
+                saved = "#ffffff"
+            self.settings.background_color = saved
+            self.background_color_button.configure(fg_color=saved)
         self._on_change()
     
-    # === НОВЫЙ ОБРАБОТЧИК ВЫРАВНИВАНИЯ ===
+    # === ОБРАБОТЧИК ВЫРАВНИВАНИЯ ===
     def _on_alignment_change(self, value):
         self.settings.text_alignment = value
         self._on_change()
