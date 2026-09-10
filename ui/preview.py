@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Панель предпросмотра - ПОЛНАЯ РАБОЧАЯ ВЕРСИЯ
+Панель предпросмотра - ПОЛНАЯ РАБОЧАЯ ВЕРСИЯ С КЭШИРОВАНИЕМ ЗУМА
 """
 
 import math
@@ -32,6 +32,12 @@ class PreviewPanel(ctk.CTkFrame):
         self._callbacks = []
         self.preview_letters_cache = {}
         self.gradient_stops_photo = None
+        
+        # --- КЭШ ДЛЯ ОПТИМИЗАЦИИ ЗУМА ---
+        self._cached_base_image = None
+        self._cached_real_w = 0
+        self._cached_real_h = 0
+        self._cached_scale = 1.0
         
         self._create_widgets()
     
@@ -119,7 +125,7 @@ class PreviewPanel(ctk.CTkFrame):
         self.zoom = int(value)
         self.zoom_entry.delete(0, "end")
         self.zoom_entry.insert(0, str(self.zoom))
-        self.update()
+        self._update_zoom_only()
     
     def _on_zoom_entry(self, event):
         try:
@@ -127,9 +133,16 @@ class PreviewPanel(ctk.CTkFrame):
             val = max(0, min(1000, val))
             self.zoom = val
             self.zoom_slider.set(val)
-            self.update()
+            self._update_zoom_only()
         except ValueError:
             pass
+            
+    def _update_zoom_only(self):
+        """Быстрое обновление экрана при зуме без полного пересчёта эффектов."""
+        if self._cached_base_image is None:
+            self.update()
+            return
+        self._draw_zoom_canvas()
     
     def _on_font_size_change(self, event):
         try:
@@ -190,7 +203,70 @@ class PreviewPanel(ctk.CTkFrame):
             print(f"Preview error: {e}")
             import traceback
             traceback.print_exc()
-    
+
+    def _draw_zoom_canvas(self):
+        if self._cached_base_image is None:
+            return
+
+        self.center_frame.update_idletasks()
+        is_dark = ctk.get_appearance_mode() == "Dark"
+        bg_workspace_color = "#1a1a1a" if is_dark else "#e5e5e5"
+        blueprint_line_color = "#555555" if is_dark else "#888888"
+        blueprint_text_color = "#aaaaaa" if is_dark else "#444444"
+        
+        self.center_frame.configure(fg_color=bg_workspace_color)
+
+        real_w = self._cached_real_w
+        real_h = self._cached_real_h
+        
+        # ИСПРАВЛЕННЫЙ КОЭФФИЦИЕНТ ЗУМА: 100% теперь равно реальному масштабу 1:1
+        zoom_pct = self.zoom / 100.0
+        display_scale = max(0.01, zoom_pct)
+        
+        disp_w, disp_h = max(1, int(real_w * display_scale)), max(1, int(real_h * display_scale))
+        canvas_w, canvas_h = disp_w + 90, disp_h + 90
+        
+        final_canvas = Image.new("RGBA", (canvas_w, canvas_h), bg_workspace_color)
+        canvas_draw = ImageDraw.Draw(final_canvas)
+        box_x1, box_y1 = 45, 45
+        
+        block_img = self._cached_base_image.copy()
+
+        # ИСПРАВЛЕННОЕ КАЧЕСТВО: всегда используем LANCZOS вместо NEAREST
+        if (block_img.width, block_img.height) != (disp_w, disp_h):
+            block_img = block_img.resize((disp_w, disp_h), Image.Resampling.LANCZOS)
+        
+        # Вставка в финальный канвас
+        final_canvas.paste(block_img, (box_x1, box_y1))
+        box_x2, box_y2 = box_x1 + disp_w, box_y1 + disp_h
+        
+        # --- Рамка ---
+        canvas_draw.rectangle([box_x1, box_y1, box_x2, box_y2], outline=blueprint_line_color, width=1)
+        canvas_draw.line([box_x1, 25, box_x2, 25], fill=blueprint_line_color, width=1)
+        canvas_draw.line([box_x1, 20, box_x1, 30], fill=blueprint_line_color, width=1)
+        canvas_draw.line([box_x2, 20, box_x2, 30], fill=blueprint_line_color, width=1)
+        canvas_draw.line([25, box_y1, 25, box_y2], fill=blueprint_line_color, width=1)
+        canvas_draw.line([20, box_y1, 30, box_y1], fill=blueprint_line_color, width=1)
+        canvas_draw.line([20, box_y2, 30, box_y2], fill=blueprint_line_color, width=1)
+        
+        # --- Размеры ---
+        try:
+            sys_font = ImageFont.truetype("arial.ttf", 11)
+        except Exception:
+            sys_font = ImageFont.load_default()
+        
+        w_bbox = canvas_draw.textbbox((0, 0), f"{real_w} px", font=sys_font)
+        canvas_draw.text(((box_x1 + box_x2 - (w_bbox[2] - w_bbox[0]))/2, 10),
+                        f"{real_w} px", fill=blueprint_text_color, font=sys_font)
+        h_bbox = canvas_draw.textbbox((0, 0), f"{real_h} px", font=sys_font)
+        canvas_draw.text((2, (box_y1 + box_y2 - (h_bbox[3] - h_bbox[1]))/2),
+                        f"{real_h} px", fill=blueprint_text_color, font=sys_font)
+        
+        # --- Отображение ---
+        ctk_image = ctk.CTkImage(light_image=final_canvas, dark_image=final_canvas, size=(canvas_w, canvas_h))
+        self.image_label.configure(image=ctk_image, text="")
+        self.image_label.image = ctk_image
+
     def _render_preview(self):
         """Рендерит превью с корректным чтением настроек из сайдбара."""
         
@@ -394,13 +470,6 @@ class PreviewPanel(ctk.CTkFrame):
         if shadow_enabled:
             outer_effects_width += shadow_blur
         if glitch_enabled:
-            # ИСПРАВЛЕНО (баг №1): аналогично _calc_outer_effects_width
-            # в render/text.py и render/icons.py - без учёта
-            # glitch_rgb здесь превью не резервировало отступ под
-            # циклический сдвиг R/B-каналов, из-за чего символ у края
-            # мог обрезаться в превью так же, как и при реальной
-            # генерации. Значение масштабируется чуть ниже вместе с
-            # остальными компонентами outer_effects_width.
             outer_effects_width += glitch_rgb
         
         preview_icon_mask = None
@@ -519,47 +588,13 @@ class PreviewPanel(ctk.CTkFrame):
         frame_width = max(500, self.center_frame.winfo_width() - 20)
         frame_height = max(200, self.center_frame.winfo_height() - 40)
         
-        is_dark = ctk.get_appearance_mode() == "Dark"
-        bg_workspace_color = "#1a1a1a" if is_dark else "#e5e5e5"
-        blueprint_line_color = "#555555" if is_dark else "#888888"
-        blueprint_text_color = "#aaaaaa" if is_dark else "#444444"
-        
-        self.center_frame.configure(fg_color=bg_workspace_color)
-        
-        # ИСПРАВЛЕНО: раньше "scale" одновременно отвечал и за
-        # "вписать в окно предпросмотра", и за пользовательский зум
-        # (scale = fit_factor * zoom_pct), и именно ЭТА объединённая
-        # величина передавалась во ВСЕ эффекты ниже (размер шрифта,
-        # радиусы размытия/свечения, шаг растра/halftone, сдвиг
-        # глитча и т.д.) - то есть каждое движение ползунка зума
-        # буквально ПЕРЕСЧИТЫВАЛО эффекты на другом пиксельном
-        # разрешении, а не просто иначе их отображало. Для эффектов
-        # с нелинейным/недетерминированным поведением на разных
-        # разрешениях (halftone, глитч, да и обычный гауссов блюр)
-        # результат при другом зуме получался не просто другого
-        # размера, а визуально ДРУГИМ. Разделяем: "scale" теперь -
-        # это только "вписать в окно" (фиксирован для текущего
-        # размера символа/иконки, не зависит от зума) и используется
-        # для реального рендера всех эффектов; "display_scale"
-        # добавляет пользовательский зум ТОЛЬКО поверх уже готового
-        # (полностью отрендеренного) изображения, как обычное
-        # масштабирование картинки в просмотрщике.
         scale = min(1.0, (frame_width - 90) / real_w, (frame_height - 90) / real_h)
         scale = max(0.01, scale)
-        zoom_pct = self.zoom / 100.0
-        display_scale = max(0.01, scale * zoom_pct)
         
-        # Размер буфера для РЕНДЕРА эффектов - не зависит от зума
+        # Размер буфера для РЕНДЕРА эффектов
         base_w, base_h = max(1, int(real_w * scale)), max(1, int(real_h * scale))
-        # Размер для ПОКАЗА на экране - зависит от зума
-        disp_w, disp_h = max(1, int(real_w * display_scale)), max(1, int(real_h * display_scale))
-        canvas_w, canvas_h = disp_w + 90, disp_h + 90
         
-        final_canvas = Image.new("RGBA", (canvas_w, canvas_h), bg_workspace_color)
-        canvas_draw = ImageDraw.Draw(final_canvas)
-        box_x1, box_y1 = 45, 45
-        
-        # Фон (рендерится на БАЗОВОМ разрешении, зум применяется позже)
+        # Фон (рендерится на БАЗОВОМ разрешении)
         if transparent_bg:
             block_img = create_checkerboard_background(base_w, base_h, 6)
         else:
@@ -861,47 +896,11 @@ class PreviewPanel(ctk.CTkFrame):
                 block_img = apply_glitch_effect(block_img, scaled_glitch_rgb_shift,
                                                 glitch_slice, seed=glitch_seed_final)
         
-        # --- Масштабирование под зум ---
-        # ИСПРАВЛЕНО: все эффекты выше отрендерены на "базовом"
-        # разрешении (base_w x base_h), не зависящем от зума. Здесь
-        # зум применяется ЕДИНСТВЕННЫЙ раз - как обычный ресайз уже
-        # полностью готового изображения (со всеми применёнными
-        # эффектами), а не как пересчёт эффектов на другом разрешении.
-        # NEAREST при увеличении - чтобы при зуме "внутрь" были видны
-        # реальные пиксели результата (полезно для растровых
-        # шрифтов/иконок), LANCZOS при уменьшении - для более гладкой
-        # картинки.
-        if (block_img.width, block_img.height) != (disp_w, disp_h):
-            resample = Image.Resampling.NEAREST if display_scale > scale else Image.Resampling.LANCZOS
-            block_img = block_img.resize((disp_w, disp_h), resample)
+        # === СОХРАНЯЕМ СГЕНЕРИРОВАННУЮ КАРТИНКУ В КЭШ ПЕРЕД ОТРИСОВКОЙ ЗУМА ===
+        self._cached_base_image = block_img
+        self._cached_real_w = real_w
+        self._cached_real_h = real_h
+        self._cached_scale = scale
         
-        # --- Вставка в финальный канвас ---
-        final_canvas.paste(block_img, (box_x1, box_y1))
-        box_x2, box_y2 = box_x1 + disp_w, box_y1 + disp_h
-        
-        # --- Рамка ---
-        canvas_draw.rectangle([box_x1, box_y1, box_x2, box_y2], outline=blueprint_line_color, width=1)
-        canvas_draw.line([box_x1, 25, box_x2, 25], fill=blueprint_line_color, width=1)
-        canvas_draw.line([box_x1, 20, box_x1, 30], fill=blueprint_line_color, width=1)
-        canvas_draw.line([box_x2, 20, box_x2, 30], fill=blueprint_line_color, width=1)
-        canvas_draw.line([25, box_y1, 25, box_y2], fill=blueprint_line_color, width=1)
-        canvas_draw.line([20, box_y1, 30, box_y1], fill=blueprint_line_color, width=1)
-        canvas_draw.line([20, box_y2, 30, box_y2], fill=blueprint_line_color, width=1)
-        
-        # --- Размеры ---
-        try:
-            sys_font = ImageFont.truetype("arial.ttf", 11)
-        except:
-            sys_font = ImageFont.load_default()
-        
-        w_bbox = canvas_draw.textbbox((0, 0), f"{real_w} px", font=sys_font)
-        canvas_draw.text(((box_x1 + box_x2 - (w_bbox[2] - w_bbox[0]))/2, 10),
-                        f"{real_w} px", fill=blueprint_text_color, font=sys_font)
-        h_bbox = canvas_draw.textbbox((0, 0), f"{real_h} px", font=sys_font)
-        canvas_draw.text((2, (box_y1 + box_y2 - (h_bbox[3] - h_bbox[1]))/2),
-                        f"{real_h} px", fill=blueprint_text_color, font=sys_font)
-        
-        # --- Отображение ---
-        ctk_image = ctk.CTkImage(light_image=final_canvas, dark_image=final_canvas, size=(canvas_w, canvas_h))
-        self.image_label.configure(image=ctk_image, text="")
-        self.image_label.image = ctk_image
+        # === ВЫВОДИМ КАРТИНКУ С УЧЁТОМ ЗУМА И РАМОК ===
+        self._draw_zoom_canvas()
