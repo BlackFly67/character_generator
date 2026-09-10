@@ -1,17 +1,24 @@
 # -*- coding: utf-8 -*-
 """
-Панель предпросмотра. Использует единый compose_full из render.composer.
-Значения читаются напрямую из self.settings (сайдбар их синхронизирует).
+Панель предпросмотра.
+- Единый compose_full из render.composer.
+- Общий холст для батча текста/дуги (при листании ◀/▶ превью не прыгает).
+- У иконок — свой холст на каждую.
+- Зум, скролл колесом, панорама зажатой ЛКМ.
+- Строка ширины холста под окном превью.
 """
 
 import hashlib
 import json
+import tkinter as tk
 import customtkinter as ctk
 from PIL import Image, ImageDraw, ImageFont
 
-from constants import PREVIEW_TEXT, FONT_SIZE_MIN, FONT_SIZE_MAX
+from constants import PREVIEW_TEXT
 from utils import parse_characters, create_checkerboard_background
-from render.composer import CharSpec, compose_full
+from render.composer import (
+    CharSpec, compose_full, compute_batch_geometry,
+)
 
 
 class PreviewPanel(ctk.CTkFrame):
@@ -20,6 +27,7 @@ class PreviewPanel(ctk.CTkFrame):
         self.settings = settings
         self.i18n = i18n
         self.main_window = main_window
+
         self.zoom = 100
         self.current_index = 0
         self._callbacks = []
@@ -29,12 +37,23 @@ class PreviewPanel(ctk.CTkFrame):
         self._cached_signature = None
         self._cached_is_transparent_bg = False
 
+        # Для canvas-вьюпорта
+        self._display_photo = None
+        self._canvas_img_id = None
+        self._drag_start = None
+        self._display_size = (0, 0)
+
         self._create_widgets()
 
     def add_callback(self, callback):
         self._callbacks.append(callback)
 
+    # ============================================================
+    #  Виджеты
+    # ============================================================
+
     def _create_widgets(self):
+        # --- Строка 1: Preview + навигация + зум ---
         header = ctk.CTkFrame(self, fg_color="transparent")
         header.pack(fill="x", padx=15, pady=(10, 5))
 
@@ -78,18 +97,119 @@ class PreviewPanel(ctk.CTkFrame):
         ctk.CTkLabel(zoom_frame, text="%",
                      font=("Arial", 11)).pack(side="left")
 
+        # --- Область превью (canvas + скроллбары) ---
         self.center_frame = ctk.CTkFrame(
             self,
             fg_color="#1a1a1a" if ctk.get_appearance_mode() == "Dark" else "#e5e5e5",
         )
-        self.center_frame.pack(fill="both", expand=True, padx=15, pady=(0, 15))
+        self.center_frame.pack(fill="both", expand=True, padx=15, pady=(0, 5))
+        self.center_frame.pack_propagate(False)
 
-        self.image_label = ctk.CTkLabel(self.center_frame, text="")
-        self.image_label.pack(expand=True)
+        self.center_frame.grid_rowconfigure(0, weight=1)
+        self.center_frame.grid_columnconfigure(0, weight=1)
+
+        is_dark = ctk.get_appearance_mode() == "Dark"
+        canvas_bg = "#1a1a1a" if is_dark else "#e5e5e5"
+
+        self.canvas = tk.Canvas(
+            self.center_frame,
+            bg=canvas_bg,
+            highlightthickness=0,
+            bd=0,
+        )
+        self.canvas.grid(row=0, column=0, sticky="nsew")
+
+        self.vbar = ctk.CTkScrollbar(self.center_frame, orientation="vertical",
+                                      command=self.canvas.yview)
+        self.vbar.grid(row=0, column=1, sticky="ns")
+
+        self.hbar = ctk.CTkScrollbar(self.center_frame, orientation="horizontal",
+                                      command=self.canvas.xview)
+        self.hbar.grid(row=1, column=0, sticky="ew")
+
+        self.canvas.configure(yscrollcommand=self.vbar.set,
+                              xscrollcommand=self.hbar.set)
+
+        # --- События мыши ---
+        self.canvas.bind("<ButtonPress-1>", self._on_drag_start)
+        self.canvas.bind("<B1-Motion>", self._on_drag_move)
+        self.canvas.bind("<ButtonRelease-1>", self._on_drag_end)
+        self.canvas.bind("<MouseWheel>", self._on_wheel)
+        self.canvas.bind("<Button-4>", self._on_wheel_linux_up)
+        self.canvas.bind("<Button-5>", self._on_wheel_linux_down)
+        self.canvas.bind("<Shift-MouseWheel>", self._on_wheel_shift)
+        self.canvas.bind("<Control-MouseWheel>", self._on_wheel_ctrl)
+
+        # --- Строка 2: Ширина холста (delta) ---
+        canvas_row = ctk.CTkFrame(self, fg_color="transparent")
+        canvas_row.pack(fill="x", padx=15, pady=(0, 10))
+
+        self.canvas_width_enabled_var = ctk.BooleanVar(
+            value=getattr(self.settings, "canvas_width_enabled", False)
+        )
+        self.canvas_width_check = ctk.CTkCheckBox(
+            canvas_row,
+            text=self.i18n.tr("canvas_width_delta"),
+            variable=self.canvas_width_enabled_var,
+            command=self._on_canvas_width_toggle,
+            checkbox_height=18, checkbox_width=18,
+        )
+        self.canvas_width_check.pack(side="left")
+
+        current_delta = getattr(self.settings, "canvas_width_delta",
+                                getattr(self.settings, "canvas_width", 0))
+
+        self.canvas_width_entry = ctk.CTkEntry(canvas_row, width=50)
+        self.canvas_width_entry.insert(0, str(current_delta))
+        self.canvas_width_entry.pack(side="left", padx=(10, 5))
+        self.canvas_width_entry.bind("<KeyRelease>", self._on_canvas_width_change)
+
+        ctk.CTkLabel(canvas_row, text="px",
+                     font=("Arial", 10)).pack(side="left")
+
+        self.canvas_width_slider = ctk.CTkSlider(
+            canvas_row, from_=-1000, to=1000, number_of_steps=2000,
+            width=140,
+        )
+        self.canvas_width_slider.pack(side="left", padx=(10, 0))
+        self.canvas_width_slider.set(current_delta)
+        self.canvas_width_slider.configure(command=self._on_canvas_width_slider)
+
+        ctk.CTkFrame(canvas_row, fg_color="transparent", height=1).pack(
+            side="left", fill="x", expand=True
+        )
 
         self.bind("<Configure>", lambda e: self._draw_zoomed())
 
-    # --- Навигация ---
+    # ============================================================
+    #  Обработчики ширины холста
+    # ============================================================
+
+    def _on_canvas_width_toggle(self):
+        self.settings.canvas_width_enabled = self.canvas_width_enabled_var.get()
+        self.update()
+
+    def _on_canvas_width_change(self, event):
+        try:
+            val = int(self.canvas_width_entry.get())
+            val = max(-1000, min(1000, val))
+            self.canvas_width_slider.set(val)
+            self.settings.canvas_width_delta = val
+            self.update()
+        except ValueError:
+            pass
+
+    def _on_canvas_width_slider(self, value):
+        val = int(value)
+        self.canvas_width_entry.delete(0, "end")
+        self.canvas_width_entry.insert(0, str(val))
+        self.settings.canvas_width_delta = val
+        self.update()
+
+    # ============================================================
+    #  Навигация
+    # ============================================================
+
     def _prev(self):
         self.current_index -= 1
         self.update()
@@ -98,7 +218,10 @@ class PreviewPanel(ctk.CTkFrame):
         self.current_index += 1
         self.update()
 
-    # --- Зум ---
+    # ============================================================
+    #  Зум
+    # ============================================================
+
     def _on_zoom(self, value):
         self.zoom = int(value)
         self.zoom_entry.delete(0, "end")
@@ -115,7 +238,65 @@ class PreviewPanel(ctk.CTkFrame):
         except ValueError:
             pass
 
-    # --- Перерисовка ---
+    def _set_zoom(self, value):
+        v = max(10, min(1000, int(value)))
+        self.zoom = v
+        self.zoom_slider.set(v)
+        self.zoom_entry.delete(0, "end")
+        self.zoom_entry.insert(0, str(v))
+        self._draw_zoomed()
+
+    # ============================================================
+    #  Мышь
+    # ============================================================
+
+    def _on_drag_start(self, event):
+        self.canvas.scan_mark(event.x, event.y)
+        self.canvas.configure(cursor="fleur")
+
+    def _on_drag_move(self, event):
+        self.canvas.scan_dragto(event.x, event.y, gain=1)
+
+    def _on_drag_end(self, event):
+        self.canvas.configure(cursor="")
+
+    def _on_wheel(self, event):
+        if event.state & 0x0004:
+            self._zoom_at_cursor(event, +120 if event.delta > 0 else -120)
+            return
+        self.canvas.yview_scroll(int(-event.delta / 120), "units")
+
+    def _on_wheel_shift(self, event):
+        self.canvas.xview_scroll(int(-event.delta / 120), "units")
+
+    def _on_wheel_ctrl(self, event):
+        self._zoom_at_cursor(event, +120 if event.delta > 0 else -120)
+
+    def _on_wheel_linux_up(self, event):
+        self.canvas.yview_scroll(-1, "units")
+
+    def _on_wheel_linux_down(self, event):
+        self.canvas.yview_scroll(+1, "units")
+
+    def _zoom_at_cursor(self, event, delta):
+        old_zoom = self.zoom
+        self._set_zoom(self.zoom + (50 if delta > 0 else -50))
+        if old_zoom == self.zoom:
+            return
+        try:
+            cx = self.canvas.canvasx(event.x)
+            cy = self.canvas.canvasy(event.y)
+            sx = cx / max(1, self._display_size[0])
+            sy = cy / max(1, self._display_size[1])
+            self.canvas.xview_moveto(max(0.0, sx - event.x / max(1, self._display_size[0])))
+            self.canvas.yview_moveto(max(0.0, sy - event.y / max(1, self._display_size[1])))
+        except Exception:
+            pass
+
+    # ============================================================
+    #  Перерисовка
+    # ============================================================
+
     def update(self):
         try:
             self._render_preview()
@@ -124,26 +305,22 @@ class PreviewPanel(ctk.CTkFrame):
             print(f"Preview error: {e}")
             traceback.print_exc()
 
-    def _get_current_spec(self):
+    def _get_all_specs(self):
+        """Возвращает полный список CharSpec батча (для batch geometry)."""
         icon_paths = getattr(self.main_window, 'loaded_icon_paths', [])
         if self.settings.icon_mode and icon_paths:
-            total = len(icon_paths)
-            self.current_index %= total
-            spec = CharSpec(icon_path=icon_paths[self.current_index],
-                            index=self.current_index)
-            return spec, total
+            return [CharSpec(icon_path=p, index=i)
+                    for i, p in enumerate(icon_paths)]
 
         entry = getattr(self.main_window, 'characters_entry', None)
         raw = entry.get() if entry else ""
         chars = parse_characters(raw) if raw else parse_characters(PREVIEW_TEXT)
         if not chars:
             chars = parse_characters(PREVIEW_TEXT)
-        total = len(chars)
-        self.current_index %= total
-        spec = CharSpec(text=chars[self.current_index], index=self.current_index)
-        return spec, total
+        return [CharSpec(text=ch, index=i) for i, ch in enumerate(chars)]
 
-    def _signature(self, spec):
+    def _signature(self, spec, all_specs):
+        """Сигнатура кэша: настройки + ВЕСЬ батч (общий холст зависит от всех)."""
         d = {}
         for k, v in vars(self.settings).items():
             if k.startswith("_") or callable(v):
@@ -156,18 +333,34 @@ class PreviewPanel(ctk.CTkFrame):
         d["_spec_text"] = spec.text
         d["_spec_icon"] = spec.icon_path
         d["_spec_index"] = spec.index
+        d["_batch_size"] = len(all_specs)
+        d["_batch_keys"] = [s.text if s.text is not None else s.icon_path
+                            for s in all_specs]
         s = json.dumps(d, sort_keys=True, default=str)
         return hashlib.md5(s.encode("utf-8")).hexdigest()
 
     def _render_preview(self):
-        spec, total = self._get_current_spec()
+        all_specs = self._get_all_specs()
+        total = len(all_specs)
+        self.current_index %= total
+        spec = all_specs[self.current_index]
         self.index_label.configure(text=f"{self.current_index + 1}/{total}")
 
-        sig = self._signature(spec)
+        sig = self._signature(spec, all_specs)
         if sig != self._cached_signature or self._cached_full_image is None:
-            self._cached_full_image = compose_full(spec, self.settings)
+            if self.settings.icon_mode:
+                # У иконок — свой холст на каждую (geom локальный).
+                self._cached_full_image = compose_full(spec, self.settings)
+            else:
+                # Текст / дуга — ОБЩИЙ холст по всем символам батча.
+                batch_geom = compute_batch_geometry(all_specs, self.settings)
+                self._cached_full_image = compose_full(
+                    spec, self.settings, geom=batch_geom
+                )
             self._cached_signature = sig
             self._cached_is_transparent_bg = self.settings.transparent_background
+            self.canvas.xview_moveto(0)
+            self.canvas.yview_moveto(0)
 
         self._draw_zoomed()
 
@@ -177,25 +370,32 @@ class PreviewPanel(ctk.CTkFrame):
 
         full = self._cached_full_image
         z = self.zoom / 100.0
-        if z == 1.0:
+        target_w = max(1, int(round(full.width * z)))
+        target_h = max(1, int(round(full.height * z)))
+
+        if (target_w, target_h) == full.size:
             display = full
         else:
-            w = max(1, int(round(full.width * z)))
-            h = max(1, int(round(full.height * z)))
-            display = full.resize((w, h), Image.Resampling.LANCZOS)
+            display = full.resize((target_w, target_h), Image.Resampling.LANCZOS)
 
         if self._cached_is_transparent_bg:
             bg = create_checkerboard_background(display.width, display.height, 6)
             bg.alpha_composite(display)
             display = bg
 
-        final = self._draw_blueprint(display, full.width, full.height)
-        ctk_img = ctk.CTkImage(light_image=final, dark_image=final, size=final.size)
-        self.image_label.configure(image=ctk_img, text="")
-        self.image_label.image = ctk_img
+        framed = self._draw_blueprint(display, full.width, full.height)
+        self._display_size = framed.size
+
+        from PIL import ImageTk
+        self._display_photo = ImageTk.PhotoImage(framed)
+
+        self.canvas.delete("all")
+        self._canvas_img_id = self.canvas.create_image(
+            0, 0, anchor="nw", image=self._display_photo
+        )
+        self.canvas.configure(scrollregion=(0, 0, framed.width, framed.height))
 
     def _draw_blueprint(self, img, real_w, real_h):
-        """Рамка + размеры вокруг изображения."""
         is_dark = ctk.get_appearance_mode() == "Dark"
         bg_color = "#1a1a1a" if is_dark else "#e5e5e5"
         line_color = "#555555" if is_dark else "#888888"
@@ -213,11 +413,9 @@ class PreviewPanel(ctk.CTkFrame):
         x2, y2 = pad + img.width, pad + img.height
 
         d.rectangle([x1, y1, x2, y2], outline=line_color, width=1)
-        # Верхняя риска
         d.line([x1, 25, x2, 25], fill=line_color, width=1)
         d.line([x1, 20, x1, 30], fill=line_color, width=1)
         d.line([x2, 20, x2, 30], fill=line_color, width=1)
-        # Левая риска
         d.line([25, y1, 25, y2], fill=line_color, width=1)
         d.line([20, y1, 30, y1], fill=line_color, width=1)
         d.line([20, y2, 30, y2], fill=line_color, width=1)

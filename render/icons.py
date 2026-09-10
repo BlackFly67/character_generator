@@ -10,6 +10,12 @@ from utils import format_filename
 
 
 def render_icons(icon_paths, settings, progress_callback=None):
+    """
+    У каждой иконки — СВОЙ холст под её пропорции. Общий холст дал бы
+    кривые отступы для иконок разной формы (широкое облако vs узкая
+    капля дождя). geom здесь НЕ передаётся — compose_full посчитает
+    его локально по одной иконке.
+    """
     os.makedirs("output", exist_ok=True)
     used_filenames = set()
     total = len(icon_paths)

@@ -2,7 +2,9 @@
 import os
 import numpy as np
 
-from render.composer import CharSpec, compose_full
+from render.composer import (
+    CharSpec, compose_full, compute_batch_geometry,
+)
 from utils import parse_characters, format_filename
 
 
@@ -19,13 +21,18 @@ def render_text_characters(characters, settings, progress_callback=None):
     generated = []
     total = len(characters)
 
-    for index, char in enumerate(characters, 1):
-        spec = CharSpec(text=char, index=index)
-        img = compose_full(spec, settings)
-        out_path = _save_one(img, settings, index, char, used_filenames)
+    # ОБЩИЙ ХОЛСТ ДЛЯ ВСЕГО БАТЧА: считаем один раз по максимальным
+    # метрикам всех символов — узкая буква центрируется в слоте
+    # широкой, базовая линия общая.
+    specs = [CharSpec(text=ch, index=i) for i, ch in enumerate(characters, 1)]
+    batch_geom = compute_batch_geometry(specs, settings)
+
+    for spec in specs:
+        img = compose_full(spec, settings, geom=batch_geom)
+        out_path = _save_one(img, settings, spec.index, spec.text, used_filenames)
         generated.append(out_path)
         if progress_callback:
-            progress_callback(index, total)
+            progress_callback(spec.index, total)
 
     return generated
 

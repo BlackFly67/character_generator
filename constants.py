@@ -272,7 +272,7 @@ DEFAULT_CONFIG = {
     "icon_paths": [],
     "create_bin": False,
     "canvas_width_enabled": False,
-    "canvas_width": 0,
+    "canvas_width_delta": 0,
     "saved_background_color": None,
     "saved_text_color": "#ffffff"
 }

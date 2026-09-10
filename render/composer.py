@@ -3,6 +3,19 @@
 Единый пайплайн сборки одного символа (текст / дуга / иконка).
 Используется и превью, и рендером. Без параметра scale —
 масштабирование делает вызывающий код (Image.resize).
+
+Общий холст для батча:
+- Текст и дуга: холст считается ОДИН РАЗ по максимальным метрикам всех
+  символов батча и передаётся во все вызовы compose_full через geom.
+- Иконки: у каждой свой холст (geom не передаётся) — размеры у иконок
+  разные, общий холст дал бы кривые отступы.
+
+Выравнивание:
+- build_content_mask рисует символ БЕЗ выравнивания — маска прижата к
+  левому краю своего слота.
+- compose_full применяет text_alignment при вставке маски в ОБЩИЙ слот
+  (scaled_content_w), поэтому left/center/right работают относительно
+  всего холста, а не относительно ширины отдельного символа.
 """
 
 import math
@@ -160,7 +173,7 @@ def default_icon_font_size(icon_paths):
 
 
 # ============================================================
-#  CharSpec
+#  CharSpec / BatchGeometry
 # ============================================================
 
 @dataclass
@@ -168,9 +181,32 @@ class CharSpec:
     text: Optional[str] = None
     icon_path: Optional[str] = None
     index: int = 0
-    # Заранее посчитанная маска (для batch-рендера)
     arc_mask: Optional[Image.Image] = None
     arc_anchor: Optional[tuple] = None
+
+
+@dataclass
+class BatchGeometry:
+    """Единая геометрия холста для батча символов.
+
+    Все поля — в РЕАЛЬНОМ размере (без scale). Вызывающий код
+    (превью) ресайзит финальную картинку целиком, а не отдельные
+    эффекты.
+    """
+    base_w: int = 0
+    base_h: int = 0
+    rot_base_w: int = 0
+    rot_base_h: int = 0
+    canvas_w: int = 0
+    canvas_h: int = 0
+    offset_x: int = 0
+    offset_y: int = 0
+    text_base_x: int = 0
+    text_base_y: int = 0
+    scaled_content_w: int = 0    # ширина слота под контент (максимум по батчу)
+    content_height: int = 0       # высота слота под контент
+    max_ascent: int = 0           # общая базовая линия (максимум ascent)
+    max_descent: int = 0
 
 
 # ============================================================
@@ -276,18 +312,46 @@ def measure_icon_metrics(icon_path, settings):
 
 
 # ============================================================
-#  Геометрия
+#  Batch geometry — ОБЩИЙ холст для батча
 # ============================================================
 
-def compute_canvas_geometry(metrics, settings):
+def compute_batch_geometry(specs, settings) -> BatchGeometry:
+    """
+    Вычисляет ЕДИНУЮ геометрию холста по всем спеку батча.
+    Холст получается по МАКСИМАЛЬНЫМ метрикам — все символы вставляются
+    в один и тот же размер, узкая буква («.») центрируется в слоте
+    широкой («М»), базовая линия общая.
+    """
     outer = _calc_outer_effects_width(settings)
     safe_pad = 1
-
     eff_x = settings.text_scale_x if settings.text_scale_x > 0 else 1.0
-    scaled_content_w = max(1, int(round(metrics["content_width"] * eff_x)))
 
-    base_w = scaled_content_w + outer * 2 + safe_pad * 2
-    base_h = metrics["content_height"] + outer * 2 + safe_pad * 2
+    max_cw = 1
+    max_ch = 1
+    max_ascent = 1
+    max_descent = 0
+
+    for spec in specs:
+        if spec.icon_path is not None:
+            m = measure_icon_metrics(spec.icon_path, settings)
+        elif settings.arc_text_enabled:
+            m = measure_arc_metrics(spec.text, settings)
+        else:
+            m = measure_text_metrics(spec.text, settings)
+
+        cw = max(1, int(round(m["content_width"] * eff_x)))
+        ch = m["content_height"]
+        if cw > max_cw:
+            max_cw = cw
+        if ch > max_ch:
+            max_ch = ch
+        if m["max_ascent"] > max_ascent:
+            max_ascent = m["max_ascent"]
+        if m["max_descent"] > max_descent:
+            max_descent = m["max_descent"]
+
+    base_w = max_cw + outer * 2 + safe_pad * 2
+    base_h = max_ch + outer * 2 + safe_pad * 2
     text_base_x = outer + safe_pad
     text_base_y = outer + safe_pad
 
@@ -320,10 +384,8 @@ def compute_canvas_geometry(metrics, settings):
     canvas_h = int(max_y - min_y)
     offset_x, offset_y = -min_x, -min_y
 
-    # Отражение расширяет холст снизу
     if settings.reflection_enabled and settings.reflection_opacity > 0:
-        content_h = metrics["max_ascent"] + metrics["max_descent"]
-        canvas_h += max(0, settings.reflection_gap + content_h)
+        canvas_h += max(0, settings.reflection_gap + max_ch)
 
     if getattr(settings, "canvas_width_enabled", False):
         delta = getattr(settings, "canvas_width_delta",
@@ -331,85 +393,77 @@ def compute_canvas_geometry(metrics, settings):
         canvas_w = max(1, canvas_w + delta)
         offset_x += delta // 2
 
-    return {
-        "base_w": base_w, "base_h": base_h,
-        "rot_base_w": rot_w, "rot_base_h": rot_h,
-        "canvas_w": canvas_w, "canvas_h": canvas_h,
-        "offset_x": offset_x, "offset_y": offset_y,
-        "text_base_x": text_base_x, "text_base_y": text_base_y,
-        "scaled_content_w": scaled_content_w,
-        "content_height": metrics["content_height"],
-        "max_ascent": metrics["max_ascent"],
-    }
+    return BatchGeometry(
+        base_w=base_w, base_h=base_h,
+        rot_base_w=rot_w, rot_base_h=rot_h,
+        canvas_w=canvas_w, canvas_h=canvas_h,
+        offset_x=offset_x, offset_y=offset_y,
+        text_base_x=text_base_x, text_base_y=text_base_y,
+        scaled_content_w=max_cw,
+        content_height=max_ch,
+        max_ascent=max_ascent,
+        max_descent=max_descent,
+    )
 
 
 # ============================================================
 #  Маска контента
 # ============================================================
 
-def build_content_mask(spec, metrics, geom, settings):
+def build_content_mask(spec, metrics, settings):
+    """
+    Строит маску контента В НОРМАЛЬНОМ РАЗМЕРЕ (свой размер для каждого
+    символа), затем сжимает её по X, если text_scale_x != 1.0.
+
+    Выравнивание текста (text_alignment) здесь НЕ применяется — маска
+    всегда прижата к левому краю своего слота. Горизонтальное
+    выравнивание делает compose_full при вставке маски в общий слот
+    (scaled_content_w), чтобы left/center/right работали относительно
+    всего холста, а не относительно ширины отдельного символа.
+    """
     if spec.icon_path is not None:
-        mask = metrics["icon_mask"]
-        eff_x = settings.text_scale_x if settings.text_scale_x > 0 else 1.0
-        target_w = max(1, int(round(mask.width * eff_x)))
-        if target_w != mask.width:
-            mask = mask.resize((target_w, mask.height), Image.Resampling.LANCZOS)
-        return mask
-
-    if settings.arc_text_enabled:
+        mask = metrics["icon_mask"].copy()
+    elif settings.arc_text_enabled:
         arc = metrics["arc_mask"]
-        cm = Image.new("L", (geom["scaled_content_w"], geom["content_height"]), 0)
-        px = max(0, (geom["scaled_content_w"] - arc.width) // 2)
-        py = max(0, (geom["content_height"] - arc.height) // 2)
-        cm.paste(arc, (px, py))
-        return cm
-
-    font = metrics["font"]
-    letters = metrics["letters_info"]
-    cm = Image.new("L", (geom["scaled_content_w"], geom["content_height"]), 0)
-    d = ImageDraw.Draw(cm)
-
-    if letters is not None:
-        tmp = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
-        scaled = []
-        cum = 0
-        for ch, _, _ in letters:
-            b = tmp.textbbox((0, 0), ch, font=font, anchor="ls")
-            cl, _, cr, _ = b
-            cw = cr - cl
-            scaled.append((ch, cw, cl))
-            cum += cw
-        total = cum + (len(scaled) - 1) * settings.letter_spacing
-
-        if settings.text_alignment == "left":
-            x0 = -scaled[0][2]
-        elif settings.text_alignment == "right":
-            x0 = geom["scaled_content_w"] - total - scaled[0][2]
-        else:
-            x0 = (geom["scaled_content_w"] - total) / 2 - scaled[0][2]
-
-        cur = x0
-        for ch, cw, _ in scaled:
-            d.text((cur, geom["max_ascent"]), ch, font=font, anchor="ls", fill=255)
-            cur += cw + settings.letter_spacing
+        mask = Image.new("L", (metrics["content_width"], metrics["content_height"]), 0)
+        px = max(0, (mask.width - arc.width) // 2)
+        py = max(0, (mask.height - arc.height) // 2)
+        mask.paste(arc, (px, py))
     else:
-        tmp = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
-        b = tmp.textbbox((0, 0), spec.text, font=font, anchor="ls")
-        left, _, right, _ = b
-        w = right - left
-        if settings.text_alignment == "left":
-            x = -left
-        elif settings.text_alignment == "right":
-            x = geom["scaled_content_w"] - w - left
-        else:
-            x = (geom["scaled_content_w"] - w) / 2 - left
-        d.text((x, geom["max_ascent"]), spec.text, font=font, anchor="ls", fill=255)
+        font = metrics["font"]
+        letters = metrics["letters_info"]
+        mask = Image.new("L", (metrics["content_width"], metrics["content_height"]), 0)
+        d = ImageDraw.Draw(mask)
 
-    return cm
+        if letters is not None:
+            # Побуквенно с разряжением — прижато к левому краю маски.
+            # Первая буква рисуется по x = -letters[0][2] (компенсация её
+            # левого bearing), дальше курсор сдвигается на ширину буквы
+            # плюс межбуквенный зазор.
+            cur = -letters[0][2]
+            for ch, cw, _ in letters:
+                d.text((cur, metrics["max_ascent"]), ch,
+                       font=font, anchor="ls", fill=255)
+                cur += cw + settings.letter_spacing
+        else:
+            tmp = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
+            b = tmp.textbbox((0, 0), spec.text, font=font, anchor="ls")
+            left = b[0]
+            d.text((-left, metrics["max_ascent"]), spec.text,
+                   font=font, anchor="ls", fill=255)
+
+    # Сжатие/расширение по X применяем к маске целиком.
+    eff_x = settings.text_scale_x if settings.text_scale_x > 0 else 1.0
+    if eff_x != 1.0:
+        new_w = max(1, int(round(mask.width * eff_x)))
+        if new_w != mask.width:
+            mask = mask.resize((new_w, mask.height), Image.Resampling.LANCZOS)
+
+    return mask
 
 
 # ============================================================
-#  Отражение (перенесено из превью, работает с финальным img)
+#  Отражение
 # ============================================================
 
 def _apply_reflection(final_img, char_layer, paste_x, paste_y,
@@ -445,12 +499,21 @@ def _apply_reflection(final_img, char_layer, paste_x, paste_y,
 #  Главная функция
 # ============================================================
 
-def compose_full(spec: CharSpec, settings) -> Image.Image:
+def compose_full(spec: CharSpec, settings,
+                 geom: Optional[BatchGeometry] = None) -> Image.Image:
     """
     Собирает финальное изображение одного символа в РЕАЛЬНОМ размере.
-    Масштабирование делает вызывающий код через Image.resize.
+
+    geom — общая геометрия батча. Если None, считается по одному
+    спеку (используется в превью для одиночного символа и в
+    render_icons, где у каждой иконки свой холст).
+
+    Символ центрируется по X в общем слоте scaled_content_w (с учётом
+    text_alignment) и прижимается к общей базовой линии max_ascent —
+    так узкая «.» и широкая «М» стоят на одной базовой линии и
+    выровнены одинаково в одном и том же холсте.
     """
-    # 1. Метрики
+    # 1. Метрики конкретного символа
     if spec.icon_path is not None:
         metrics = measure_icon_metrics(spec.icon_path, settings)
     elif settings.arc_text_enabled:
@@ -458,20 +521,38 @@ def compose_full(spec: CharSpec, settings) -> Image.Image:
     else:
         metrics = measure_text_metrics(spec.text, settings)
 
-    # 2. Геометрия
-    geom = compute_canvas_geometry(metrics, settings)
+    # 2. Маска контента (свой размер, без выравнивания)
+    content_mask = build_content_mask(spec, metrics, settings)
 
-    # 3. Маска
-    content_mask = build_content_mask(spec, metrics, geom, settings)
+    # 3. Геометрия: общая или локальная
+    if geom is None:
+        geom = compute_batch_geometry([spec], settings)
 
-    base_w, base_h = geom["base_w"], geom["base_h"]
+    base_w, base_h = geom.base_w, geom.base_h
+
+    # 4. Вставляем content_mask в ОБЩИЙ слот:
+    #    - по X: выравниваем внутри scaled_content_w согласно text_alignment;
+    #    - по Y: прижимаем к общей базовой линии (max_ascent).
+    content_w = content_mask.width
+    content_h = content_mask.height
+
+    align = settings.text_alignment
+    if align == "left":
+        paste_in_slot_x = geom.text_base_x
+    elif align == "right":
+        paste_in_slot_x = geom.text_base_x + (geom.scaled_content_w - content_w)
+    else:  # center
+        paste_in_slot_x = geom.text_base_x + (geom.scaled_content_w - content_w) // 2
+
+    paste_in_slot_y = geom.text_base_y + (geom.max_ascent - metrics["max_ascent"])
+
     text_mask = Image.new("L", (base_w, base_h), 0)
-    text_mask.paste(content_mask, (geom["text_base_x"], geom["text_base_y"]))
+    text_mask.paste(content_mask, (paste_in_slot_x, paste_in_slot_y))
 
     char_layer = Image.new("RGBA", (base_w, base_h), _transp_bg(settings))
     base_mask = text_mask
 
-    # 4. Halftone до искажений
+    # 5. Halftone до искажений
     will_warp = _will_warp(settings)
     fill_mask = base_mask
     if settings.halftone_enabled and not settings.transparent_text and not will_warp:
@@ -479,7 +560,7 @@ def compose_full(spec: CharSpec, settings) -> Image.Image:
                                     settings.halftone_dot_scale,
                                     settings.halftone_angle)
 
-    # 5. Заливка
+    # 6. Заливка
     if not settings.transparent_text:
         if settings.gradient_enabled:
             stops = settings.gradient_stops or [
@@ -504,7 +585,7 @@ def compose_full(spec: CharSpec, settings) -> Image.Image:
                     settings.pattern_angle, settings.pattern_blend_mode,
                 )
 
-    # 6. Внутренние эффекты
+    # 7. Внутренние эффекты
     if settings.outline_inner_enabled and settings.outline_inner_width > 0:
         char_layer = apply_inner_outline(char_layer, base_mask,
                                           settings.outline_inner_color,
@@ -530,7 +611,7 @@ def compose_full(spec: CharSpec, settings) -> Image.Image:
                                    settings.emboss_depth, settings.emboss_blur,
                                    settings.emboss_highlight, settings.emboss_shadow)
 
-    # 7. Внешние эффекты
+    # 8. Внешние эффекты
     outer_mask = base_mask
     outline_drawn = False
     if settings.outline_outer_enabled and settings.outline_outer_width > 0:
@@ -546,13 +627,13 @@ def compose_full(spec: CharSpec, settings) -> Image.Image:
                                        settings.glow_outer_radius,
                                        settings.glow_outer_intensity)
 
-    # 8. Прозрачность
+    # 9. Прозрачность
     if settings.text_opacity < 1.0:
         r, g, b, a = char_layer.split()
         a = a.point(lambda p: int(p * settings.text_opacity))
         char_layer = Image.merge("RGBA", (r, g, b, a))
 
-    # 9. Поворот / skew / perspective
+    # 10. Поворот / skew / perspective
     if settings.rotation_angle != 0:
         char_layer = rotate_cleanly(char_layer, -settings.rotation_angle,
                                      _text_rgb(settings))
@@ -564,7 +645,7 @@ def compose_full(spec: CharSpec, settings) -> Image.Image:
                                                settings.perspective_y,
                                                _text_rgb(settings))
 
-    # 10. Halftone после искажений
+    # 11. Halftone после искажений
     if settings.halftone_enabled and not settings.transparent_text and will_warp:
         alpha = char_layer.split()[3]
         ht = apply_halftone(alpha, settings.halftone_cell_size,
@@ -572,8 +653,8 @@ def compose_full(spec: CharSpec, settings) -> Image.Image:
         r, g, b, _ = char_layer.split()
         char_layer = Image.merge("RGBA", (r, g, b, ht))
 
-    # 11. Фон
-    cw, ch = geom["canvas_w"], geom["canvas_h"]
+    # 12. Фон
+    cw, ch = geom.canvas_w, geom.canvas_h
     if settings.transparent_background or settings.background_color is None:
         final_img = Image.new("RGBA", (cw, ch), (0, 0, 0, 0))
     else:
@@ -584,11 +665,11 @@ def compose_full(spec: CharSpec, settings) -> Image.Image:
             bg = (255, 255, 255, 255) if bg == "white" else (0, 0, 0, 255)
         final_img = Image.new("RGBA", (cw, ch), bg)
 
-    # 12. Позиция вставки
-    paste_x = geom["offset_x"] + (geom["rot_base_w"] - char_layer.width) // 2
-    paste_y = geom["offset_y"] + (geom["rot_base_h"] - char_layer.height) // 2
+    # 13. Позиция вставки слоя
+    paste_x = geom.offset_x + (geom.rot_base_w - char_layer.width) // 2
+    paste_y = geom.offset_y + (geom.rot_base_h - char_layer.height) // 2
 
-    # 13. Тень
+    # 14. Тень
     if settings.shadow_enabled:
         shadow_rgb = get_color_rgb(settings.shadow_color)
         shadow_bg = (0, 0, 0, 0) if settings.transparent_text else shadow_rgb + (0,)
@@ -606,12 +687,12 @@ def compose_full(spec: CharSpec, settings) -> Image.Image:
             blend_mode = "normal"
         final_img = blend_layers(final_img, sh_final, blend_mode)
 
-    # 14. Текст
+    # 15. Текст
     layer_text = Image.new("RGBA", (cw, ch), (0, 0, 0, 0))
     layer_text.paste(char_layer, (paste_x, paste_y))
     final_img = Image.alpha_composite(final_img, layer_text)
 
-    # 15. Cutout
+    # 16. Cutout
     if (not settings.transparent_text and settings.cutout_mode
             and not settings.transparent_background):
         mask = text_mask.copy()
@@ -624,7 +705,7 @@ def compose_full(spec: CharSpec, settings) -> Image.Image:
         new_a = Image.composite(Image.new("L", final_img.size, 0), a, full_mask)
         final_img = Image.merge("RGBA", (r, g, b, new_a))
 
-    # 16. Отражение
+    # 17. Отражение
     if settings.reflection_enabled:
         final_img = _apply_reflection(
             final_img, char_layer, paste_x, paste_y,
@@ -633,7 +714,7 @@ def compose_full(spec: CharSpec, settings) -> Image.Image:
             settings.reflection_fade / 100.0,
         )
 
-    # 17. Glitch
+    # 18. Glitch
     if settings.glitch_enabled:
         final_img = apply_glitch_effect(
             final_img, settings.glitch_rgb_shift,
