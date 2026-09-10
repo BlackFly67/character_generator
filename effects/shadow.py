@@ -12,10 +12,16 @@ def apply_shadow(char_layer, canvas_w, canvas_h, offset_x, offset_y, rot_base_w,
                  shadow_blend_mode, transparent_text, background_color):
     """
     Применяет внешнюю тень к символу.
-    Возвращает кортеж (shadow_layer, paste_x, paste_y) или (None, 0, 0).
+    Возвращает кортеж (shadow_layer, paste_x, paste_y, effective_blend) или
+    (None, 0, 0, "normal") если тень отключена.
     """
     if not shadow_enabled:
-        return None, 0, 0
+        # ИСПРАВЛЕНО (ошибка №6): раньше здесь возвращался тюпл из 3
+        # элементов (None, 0, 0), а "успешная" ветка ниже возвращает 4
+        # элемента (..., effective_blend). Любая распаковка вида
+        # "a, b, c, d = apply_shadow(...)" падала с ValueError при
+        # shadow_enabled=False. Выравниваем арность возврата.
+        return None, 0, 0, "normal"
     
     shadow_rgb = get_color_rgb(shadow_color)
     transp_shadow_bg = shadow_rgb + (0,) if not transparent_text else (0, 0, 0, 0)

@@ -385,16 +385,28 @@ class MainWindow:
     
     def _set_input_mode(self, is_icon_mode, apply=False):
         """Переключает режим ввода."""
-        # Сохраняем текущий размер
-        try:
-            current_size = int(self.preview.font_size_entry.get()) if hasattr(self.preview, 'font_size_entry') else 64
-        except ValueError:
-            current_size = 64
-        
-        if self.settings.icon_mode:
-            self.icon_font_size = current_size
-        else:
-            self.text_font_size = current_size
+        # ИСПРАВЛЕНО (ошибка №5): параметр apply раньше принимался, но
+        # не использовался. Блок кэширования "текущего размера шрифта"
+        # предполагает, что self.preview.font_size_entry в этот момент
+        # содержит размер ПРЕДЫДУЩЕГО активного режима (текст/иконки) -
+        # это верно только при настоящем переключении режима самим
+        # пользователем. При apply=True (вызов из _apply_settings при
+        # старте/после диалога настроек) в font_size_entry ещё лежит
+        # общее settings.font_size, а не settings.text_font_size /
+        # settings.icon_font_size - кэширование в этом случае затирает
+        # корректно загруженное значение другого режима (см. пример:
+        # config.json font_size=164, text_font_size=64 -> без этой
+        # правки self.text_font_size тихо превращался в 164).
+        if not apply:
+            try:
+                current_size = int(self.preview.font_size_entry.get()) if hasattr(self.preview, 'font_size_entry') else 64
+            except ValueError:
+                current_size = 64
+            
+            if self.settings.icon_mode:
+                self.icon_font_size = current_size
+            else:
+                self.text_font_size = current_size
         
         self.settings.icon_mode = is_icon_mode
         

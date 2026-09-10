@@ -218,6 +218,21 @@ class Sidebar(ctk.CTkScrollableFrame):
         from ui.dialogs import StylePresetsDialog
         dialog = StylePresetsDialog(self, self.settings, self.i18n)
         dialog.wait_window()
+        # ИСПРАВЛЕНО (ошибка №4): StylePresetsDialog._load_preset() (в
+        # ui/dialogs.py) при загрузке/импорте пресета перезаписывает
+        # значения непосредственно в self.settings и уже сам вызывает
+        # settings.save(). Но виджеты сайдбара (чекбоксы, слайдеры,
+        # entry, кнопки цвета) хранят состояние отдельно и не были
+        # синхронизированы - раньше здесь вызывался только
+        # self._on_change(), который лишь пересохраняет settings и
+        # обновляет превью, но не перечитывает значения обратно в
+        # виджеты. В результате превью (читающее значения из виджетов
+        # сайдбара) не менялось после загрузки пресета, пока
+        # пользователь не трогал хоть один слайдер вручную, хотя
+        # реальная генерация уже использовала новые settings.
+        # Пересобираем виджеты сайдбара из актуальных settings, как
+        # это уже делается в _reset_settings().
+        self._refresh_all_widgets()
         self._on_change()
         
     def _redraw_gradient_stops(self):

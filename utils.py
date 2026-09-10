@@ -40,9 +40,18 @@ def get_color_rgba(color):
 
 
 def safe_color(val, default):
-    """Безопасно проверяет цвет."""
-    if isinstance(val, str) and (val == "transparent" or 
-                                  (val.startswith("#") and len(val) in (4, 7, 9))):
+    """
+    Безопасно проверяет цвет.
+
+    ИСПРАВЛЕНО (ошибка №7): раньше допускался короткий формат "#fff"
+    (len == 4), который get_color_rgb/get_color_rgba не умеют парсить
+    (там обрабатываются только len(h) == 6 и len(h) == 8) и который
+    молча превращался в чёрный цвет (0, 0, 0). Поддерживаем только
+    реально распознаваемые форматы: "#RRGGBB" (7 символов с "#") и
+    "#RRGGBBAA" (9 символов с "#"), а также "transparent".
+    """
+    if isinstance(val, str) and (val == "transparent" or
+                                  (val.startswith("#") and len(val) in (7, 9))):
         return val
     return default
 
