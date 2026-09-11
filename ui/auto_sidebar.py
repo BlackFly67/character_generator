@@ -3,14 +3,14 @@
 Автоматическая генерация секций сайдбара из ParamSpec эффектов.
 
 Стиль контролов СОВПАДАЕТ с ручными секциями sidebar.py:
-  - внешний CTkFrame(parent) с fill="x", padx=10, pady=5
+  - внешний CTkFrame(parent, fg_color="transparent") + pack(fill="x", pady=5)
   - чекбокс-заголовок с padx=10, pady=2
   - строка параметра: CTkFrame(fg_color="transparent") + pack(padx=10, pady=2)
-  - цветная кнопка: 25x18, padx=2 справа
+  - цветная кнопка: 40x24, padx=5 справа
   - entry: width=40, padx=(5,0) справа
   - slider: expand=True, padx=5
   - option/combobox: width=100, padx=5
-  - direction grid: label с padx=10 pady=(5,2), grid с pady=2
+  - direction grid: label с padx=10, pady=(5,2); grid с padx=10, pady=2
 """
 
 import os
@@ -32,13 +32,25 @@ MANUAL_EFFECT_IDS = {
 }
 
 
-def build_effect_sections(parent, sidebar, settings, i18n):
+def build_effect_sections(parent, sidebar, settings, i18n, order=None):
     """
-    Проходит по PIPELINE и строит секции для каждого эффекта
-    в указанном родителе.
+    Строит секции для набора эффектов в parent.
+
+    order — список id эффектов в UI-порядке. Если None — берётся
+    PIPELINE целиком. Позволяет строить авто-секции несколькими
+    вызовами (например, чтобы вставить ручную секцию между ними).
+
+    Пропускает эффекты из MANUAL_EFFECT_IDS — для них UI уже
+    собран вручную в sidebar.py.
     """
+    if order is None:
+        cls_list = list(PIPELINE)
+    else:
+        by_id = {cls.id: cls for cls in PIPELINE}
+        cls_list = [by_id[eid] for eid in order if eid in by_id]
+
     result = {}
-    for cls in PIPELINE:
+    for cls in cls_list:
         if cls.id in MANUAL_EFFECT_IDS:
             continue
         eff = cls()
@@ -48,8 +60,11 @@ def build_effect_sections(parent, sidebar, settings, i18n):
 
 
 def _build_one_effect(parent, sidebar, settings, i18n, effect):
-    section = ctk.CTkFrame(parent)
-    section.pack(fill="x", padx=10, pady=5)
+    # Секции авто-эффектов — ПРОЗРАЧНЫЕ (без серой подложки), как
+    # ручные секции. padx снят — style_section уже даёт 10px по бокам.
+    # Оставлен только pady=5 как вертикальный разделитель.
+    section = ctk.CTkFrame(parent, fg_color="transparent")
+    section.pack(fill="x", pady=5)
 
     enabled_key = f"{effect.id}_enabled"
     enabled = bool(getattr(settings, enabled_key, False))
@@ -125,7 +140,6 @@ def _build_param_row(parent, sidebar, settings, i18n, effect, param, widgets_out
 
 def _build_color_row(parent, sidebar, settings, i18n,
                        full_key, label, param, widgets_out):
-    """Строка с цветной кнопкой. Размер кнопки 25x18, padx=2 справа."""
     from ui.dialogs import ask_color
     row = ctk.CTkFrame(parent, fg_color="transparent")
     row.pack(fill="x", padx=10, pady=2)
@@ -141,18 +155,14 @@ def _build_color_row(parent, sidebar, settings, i18n,
             btn.configure(fg_color=color)
             sidebar._on_change()
 
-    btn = ctk.CTkButton(row, text="", width=25, height=18, command=pick)
-    btn.pack(side="right", padx=2)
+    btn = ctk.CTkButton(row, text="", width=40, height=24, command=pick)
+    btn.pack(side="right", padx=5)
     btn.configure(fg_color=current)
     widgets_out[param.key] = btn
 
 
 def _build_int_float_row(parent, sidebar, settings,
                           full_key, label, param, widgets_out):
-    """
-    Строка с label + slider + entry.
-    entry width=40 справа, slider expand=True по центру.
-    """
     row = ctk.CTkFrame(parent, fg_color="transparent")
     row.pack(fill="x", padx=10, pady=2)
     ctk.CTkLabel(row, text=label + ":").pack(side="left")
@@ -206,7 +216,6 @@ def _build_int_float_row(parent, sidebar, settings,
 
 def _build_option_row(parent, sidebar, settings, values,
                        full_key, label, param, widgets_out):
-    """Строка с option menu. width=100."""
     row = ctk.CTkFrame(parent, fg_color="transparent")
     row.pack(fill="x", padx=10, pady=2)
     ctk.CTkLabel(row, text=label + ":").pack(side="left")
@@ -227,19 +236,13 @@ def _build_option_row(parent, sidebar, settings, values,
 
 def _build_dir_row(parent, sidebar, settings,
                     full_key, label, param, widgets_out):
-    """
-    Строка с сеткой 3x3 радио-кнопок (направление).
-    Стиль совпадает с ручными direction-секциями: label над сеткой.
-    """
     symbols = ["↖", "↑", "↗", "←", "●", "→", "↙", "↓", "↘"]
     values = [5, 1, 6, 3, 0, 4, 7, 2, 8]
 
-    label_frame = ctk.CTkFrame(parent, fg_color="transparent")
-    label_frame.pack(anchor="w", padx=10, pady=(5, 2))
-    ctk.CTkLabel(label_frame, text=label + ":").pack(anchor="w")
+    ctk.CTkLabel(parent, text=label + ":").pack(anchor="w", padx=10, pady=(5, 2))
 
     grid = ctk.CTkFrame(parent, fg_color="transparent")
-    grid.pack(pady=2)
+    grid.pack(padx=10, pady=2)
 
     current = getattr(settings, full_key, param.default or 8)
     var = ctk.IntVar(value=int(current))
@@ -263,7 +266,6 @@ def _build_dir_row(parent, sidebar, settings,
 
 def _build_file_row(parent, sidebar, settings, i18n,
                      full_key, label, param, widgets_out):
-    """Строка выбора файла. Стиль как у texture_row в pattern."""
     from tkinter import filedialog
     row = ctk.CTkFrame(parent, fg_color="transparent")
     row.pack(fill="x", padx=10, pady=2)

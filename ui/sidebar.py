@@ -12,9 +12,9 @@ ShadowInner, Emboss, Skew, Perspective, Reflection, Glitch, Halftone)
   - Text color + transparent_text + cutout_mode,
   - Gradient (редактор точек — спец-контрол),
   - Pattern (выбор файла текстуры),
+  - Outer Shadow (внутри style_section),
   - Rotation,
-  - Outer Shadow (не в реестре, работает с paste_x/paste_y),
-  - Arc text (меняет способ построения маски, не эффект),
+  - Arc text,
   - Opacity,
   - Background.
 """
@@ -438,9 +438,21 @@ class Sidebar(ctk.CTkScrollableFrame):
         self.spacing_slider.configure(command=self._on_spacing_slider)
 
         # ============================================================
-        # 3. СЕКЦИЯ: СТИЛЬ СИМВОЛОВ (ручная — цвет/флаги + gradient + pattern)
+        # 3. СЕКЦИЯ: СТИЛЬ СИМВОЛОВ
         # ============================================================
-        style_section = ctk.CTkFrame(self)
+        # style_section — ПРОЗРАЧНЫЙ контейнер. Внутри него:
+        #   - text_color / transparent / cutout — ручные
+        #   - gradient / pattern — ручные (спец-контролы)
+        #   - первая группа auto-эффектов: outline_inner, outline_outer,
+        #     glow_inner, glow_outer, emboss, inner_shadow
+        #   - ВНЕШНЯЯ ТЕНЬ (ручная, внутри style_section)
+        #   - вторая группа auto-эффектов: skew, perspective,
+        #     reflection, halftone, glitch
+        # Вложенные секции (gradient, pattern, shadow, auto) — тоже
+        # прозрачные, чтобы сливаться с фоном. Отступ 10px по бокам
+        # даётся у САМОЙ style_section в её pack().
+        # ============================================================
+        style_section = ctk.CTkFrame(self, fg_color="transparent")
         style_section.pack(fill="x", padx=10, pady=5)
 
         text_style_label = ctk.CTkLabel(style_section, text=self.i18n.tr("text_style"),
@@ -477,8 +489,12 @@ class Sidebar(ctk.CTkScrollableFrame):
         cutout_check.pack(anchor="w", padx=10, pady=2)
 
         # --- ГРАДИЕНТ (ручной: редактор точек) ---
-        gradient_section = ctk.CTkFrame(style_section)
-        gradient_section.pack(fill="x", padx=10, pady=5)
+        # Прозрачная подсекция. Внешний padx НЕ ставим — style_section
+        # уже даёт 10px. Внутри строки снова с padx=10, потому что их
+        # родитель — это gradient_section (её левый край = край
+        # style_section).
+        gradient_section = ctk.CTkFrame(style_section, fg_color="transparent")
+        gradient_section.pack(fill="x", pady=5)
 
         gradient_check = ctk.CTkCheckBox(
             gradient_section, text=self.i18n.tr("gradient_fill"),
@@ -542,8 +558,9 @@ class Sidebar(ctk.CTkScrollableFrame):
         self.gradient_stops_canvas.bind("<Configure>", lambda e: self._redraw_gradient_stops())
 
         # --- ПАТТЕРН (ручной: выбор файла) ---
-        pattern_section = ctk.CTkFrame(style_section)
-        pattern_section.pack(fill="x", padx=10, pady=5)
+        # Прозрачная подсекция, как gradient_section.
+        pattern_section = ctk.CTkFrame(style_section, fg_color="transparent")
+        pattern_section.pack(fill="x", pady=5)
 
         pattern_check = ctk.CTkCheckBox(
             pattern_section, text=self.i18n.tr("pattern_fill"),
@@ -641,17 +658,27 @@ class Sidebar(ctk.CTkScrollableFrame):
         pattern_blend_combo.pack(side="left", padx=5)
 
         # ============================================================
-        # 4. ЭФФЕКТЫ ИЗ PIPELINE (АВТО-ГЕНЕРАЦИЯ)
+        # 4a. ПЕРВАЯ ГРУППА AUTO-ЭФФЕКТОВ:
+        #     outline_inner → outline_outer → glow_inner → glow_outer →
+        #     emboss → inner_shadow
         # ============================================================
-        self.effect_sections = build_effect_sections(
-            style_section, self, self.settings, self.i18n
-        )
+        self.effect_sections.update(build_effect_sections(
+            style_section, self, self.settings, self.i18n,
+            order=[
+                "outline_inner",
+                "outline_outer",
+                "glow_inner",
+                "glow_outer",
+                "emboss",
+                "inner_shadow",
+            ],
+        ))
 
         # ============================================================
-        # 5. СЕКЦИЯ: ТЕНЬ (внешняя, ручная — не в PIPELINE)
+        # 4b. СЕКЦИЯ: ВНЕШНЯЯ ТЕНЬ (ручная, внутри style_section)
         # ============================================================
-        shadow_section = ctk.CTkFrame(self)
-        shadow_section.pack(fill="x", padx=10, pady=5)
+        shadow_section = ctk.CTkFrame(style_section, fg_color="transparent")
+        shadow_section.pack(fill="x", pady=5)
 
         shadow_check = ctk.CTkCheckBox(
             shadow_section, text=self.i18n.tr("shadow"),
@@ -737,7 +764,22 @@ class Sidebar(ctk.CTkScrollableFrame):
         direction_note.pack(anchor="w", padx=10, pady=(0, 5))
 
         # ============================================================
-        # 6. СЕКЦИЯ: ПОВОРОТ (ручная — не в PIPELINE)
+        # 4c. ВТОРАЯ ГРУППА AUTO-ЭФФЕКТОВ:
+        #     skew → perspective → reflection → halftone → glitch
+        # ============================================================
+        self.effect_sections.update(build_effect_sections(
+            style_section, self, self.settings, self.i18n,
+            order=[
+                "skew",
+                "perspective",
+                "reflection",
+                "halftone",
+                "glitch",
+            ],
+        ))
+
+        # ============================================================
+        # 5. СЕКЦИЯ: ПОВОРОТ (ручная — не в PIPELINE)
         # ============================================================
         rotation_section = ctk.CTkFrame(self)
         rotation_section.pack(fill="x", padx=10, pady=5)
@@ -765,7 +807,7 @@ class Sidebar(ctk.CTkScrollableFrame):
         self.rotation_slider.set(self.settings.rotation_angle)
 
         # ============================================================
-        # 7. СЕКЦИЯ: ТЕКСТ ПО ДУГЕ (ручная — не эффект)
+        # 6. СЕКЦИЯ: ТЕКСТ ПО ДУГЕ (ручная — не эффект)
         # ============================================================
         arc_section = ctk.CTkFrame(self)
         arc_section.pack(fill="x", padx=10, pady=5)
@@ -837,7 +879,7 @@ class Sidebar(ctk.CTkScrollableFrame):
         arc_flip_check.pack(side="left")
 
         # ============================================================
-        # 8. СЕКЦИЯ: ПРОЗРАЧНОСТЬ (глобальная, не эффект)
+        # 7. СЕКЦИЯ: ПРОЗРАЧНОСТЬ (глобальная, не эффект)
         # ============================================================
         opacity_section = ctk.CTkFrame(self)
         opacity_section.pack(fill="x", padx=10, pady=5)
@@ -863,7 +905,7 @@ class Sidebar(ctk.CTkScrollableFrame):
         self.opacity_slider.configure(command=self._on_opacity_slider)
 
         # ============================================================
-        # 9. СЕКЦИЯ: ФОН
+        # 8. СЕКЦИЯ: ФОН
         # ============================================================
         background_section = ctk.CTkFrame(self)
         background_section.pack(fill="x", padx=10, pady=5)
