@@ -549,7 +549,14 @@ def _apply_reflection(final_img, char_layer, paste_x, paste_y,
     reflected.putalpha(Image.fromarray(new_alpha))
 
     dest_x = paste_x + cleft
-    dest_y = paste_y + cbottom + gap
+    # ИСПРАВЛЕНО: при большом отрицательном reflection_gap (диапазон
+    # -500..500) dest_y мог уйти в отрицательные значения. Старая
+    # функция apply_reflection в effects/reflection.py корректно
+    # ограничивала это через max(0, ...) — при переносе в composer.py
+    # ограничение потерялось, и Image.alpha_composite с отрицательным
+    # dest бросает ValueError ("Destination must be non-negative"),
+    # генерация падала с "Generation failed".
+    dest_y = max(0, paste_y + cbottom + gap)
     if dest_x < final_img.width and dest_y < final_img.height:
         final_img = final_img.copy()
         final_img.alpha_composite(reflected, (dest_x, dest_y))
@@ -766,12 +773,16 @@ def compose_full(spec: CharSpec, settings,
     # 16. Cutout
     if (not settings.transparent_text and settings.cutout_mode
             and not settings.transparent_background):
-        mask = text_mask.copy()
-        if settings.rotation_angle != 0:
-            mask = mask.rotate(-settings.rotation_angle, resample=Image.BICUBIC, expand=True)
-        mask = mask.point(lambda p: 255 if p > 128 else 0)
-        full_mask = Image.new("L", (cw, ch), 0)
-        full_mask.paste(mask, (paste_x, paste_y))
+        # ИСПРАВЛЕНО: маска для выреза строилась из text_mask — геометрии
+        # ДО skew/perspective (шаг 10) — и вручную поворачивалась только
+        # для rotation_angle. При включённых skew/perspective реальный
+        # силуэт char_layer (и его положение paste_x/paste_y, посчитанное
+        # уже ПОСЛЕ этих трансформаций) не совпадал с использованной для
+        # выреза маской: дыра в фоне вырезалась не там и не той формы.
+        # Берём альфу уже полностью трансформированного layer_text —
+        # она всегда точно соответствует фактическому силуэту символа,
+        # какие бы geometry-эффекты ни были применены.
+        full_mask = layer_text.split()[3].point(lambda p: 255 if p > 128 else 0)
         r, g, b, a = final_img.split()
         new_a = Image.composite(Image.new("L", final_img.size, 0), a, full_mask)
         final_img = Image.merge("RGBA", (r, g, b, new_a))
