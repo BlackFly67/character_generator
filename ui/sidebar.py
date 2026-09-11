@@ -1325,7 +1325,14 @@ class Sidebar(ctk.CTkScrollableFrame):
             self.background_color_button.configure(state="disabled")
         else:
             self.background_color_button.configure(state="normal")
-            saved = getattr(self.settings, "saved_background_color", None)  # <-- читает из settings, а не из объекта Sidebar
+            # ИСПРАВЛЕНО: читали getattr(self, ...) — несуществующий
+            # атрибут Sidebar (всегда None) — вместо
+            # getattr(self.settings, ...), куда реально сохраняется
+            # цвет чуть выше (self.settings.saved_background_color = ...).
+            # Из-за этого при повторном отключении "Прозрачный фон" в
+            # рамках одной сессии пользовательский цвет фона всегда
+            # заменялся на "#ffffff", хотя settings хранил верное значение.
+            saved = getattr(self.settings, "saved_background_color", None)
             if not saved:
                 saved = "#ffffff"
             self.settings.background_color = saved
