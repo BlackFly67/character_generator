@@ -1320,12 +1320,12 @@ class Sidebar(ctk.CTkScrollableFrame):
         self.settings.transparent_background = self.transparent_background_var.get()
         if self.settings.transparent_background:
             if self.settings.background_color is not None:
-                self.settings.saved_background_color = self.settings.background_color
+                self.settings.saved_background_color = self.settings.background_color  # запись в settings — верно
             self.settings.background_color = None
             self.background_color_button.configure(state="disabled")
         else:
             self.background_color_button.configure(state="normal")
-            saved = getattr(self, "saved_background_color", None)
+            saved = getattr(self.settings, "saved_background_color", None)  # <-- читает из settings, а не из объекта Sidebar
             if not saved:
                 saved = "#ffffff"
             self.settings.background_color = saved
