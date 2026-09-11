@@ -183,7 +183,7 @@ class Settings:
             # именно то, чего не хватало: без этого поля выбор цвета
             # фона терялся при перезапуске приложения после включения
             # "прозрачного фона" — см. from_dict ниже.
-            "saved_background_color": getattr(self, "saved_background_color", "#ffffff"),
+            "saved_background_color": getattr(self, "saved_background_color", "#000000"),
             "transparent_background": self.transparent_background,
             "transparent_text": self.transparent_text,
             "cutout_mode": self.cutout_mode,
