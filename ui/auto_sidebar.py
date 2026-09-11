@@ -2,13 +2,15 @@
 """
 Автоматическая генерация секций сайдбара из ParamSpec эффектов.
 
-Идея: у каждого эффекта в PIPELINE есть .params — список ParamSpec.
-Из него строим виджеты (checkbox / entry+slider / color picker /
-blend / option / dir / file). Значения читаем и пишем через settings
-по соглашению f"{effect.id}_{param.key}".
-
-Особые случаи (gradient_stops, pattern_image_path, цветовые пикеры
-со своим диалогом) оставлены «ручными» — см. sidebar.py.
+Стиль контролов СОВПАДАЕТ с ручными секциями sidebar.py:
+  - внешний CTkFrame(parent) с fill="x", padx=10, pady=5
+  - чекбокс-заголовок с padx=10, pady=2
+  - строка параметра: CTkFrame(fg_color="transparent") + pack(padx=10, pady=2)
+  - цветная кнопка: 25x18, padx=2 справа
+  - entry: width=40, padx=(5,0) справа
+  - slider: expand=True, padx=5
+  - option/combobox: width=100, padx=5
+  - direction grid: label с padx=10 pady=(5,2), grid с pady=2
 """
 
 import os
@@ -16,18 +18,17 @@ import customtkinter as ctk
 
 from effects.core import (
     CTRL_CHECKBOX, CTRL_INT, CTRL_FLOAT, CTRL_COLOR,
-    CTRL_BLEND, CTRL_OPTION, CTRL_DIR
+    CTRL_BLEND, CTRL_OPTION, CTRL_DIR, CTRL_STOPS, CTRL_FILE,
 )
 from effects.registry import PIPELINE
 from constants import BLEND_MODES
 
 
 # Эффекты, для которых UI строится ВРУЧНУЮ в sidebar.py
-# (gradient_stops, texture picker — это особые контролы).
 MANUAL_EFFECT_IDS = {
     "color_fill",   # использует text_color, отдельный UI не нужен
     "gradient",     # редактор точек градиента
-    "pattern",      # выбор файла текстуры + специфичный UI
+    "pattern",      # выбор файла текстуры
 }
 
 
@@ -35,11 +36,6 @@ def build_effect_sections(parent, sidebar, settings, i18n):
     """
     Проходит по PIPELINE и строит секции для каждого эффекта
     в указанном родителе.
-
-    sidebar — сам Sidebar (для колбэков вроде _on_change).
-
-    Возвращает dict {effect_id: {"section": Frame, "body_frame": Frame,
-                                  "widgets": {...}}}
     """
     result = {}
     for cls in PIPELINE:
@@ -58,41 +54,34 @@ def _build_one_effect(parent, sidebar, settings, i18n, effect):
     enabled_key = f"{effect.id}_enabled"
     enabled = bool(getattr(settings, enabled_key, False))
 
-    has_checkbox = True   # у всех наших эффектов есть *_enabled
-
     body_frame = ctk.CTkFrame(section, fg_color="transparent")
 
     widgets = {}
 
-    # --- Чекбокс "включено" ---
-    if has_checkbox:
-        enabled_var = ctk.BooleanVar(value=enabled)
+    enabled_var = ctk.BooleanVar(value=enabled)
 
-        def on_toggle():
-            new_val = bool(enabled_var.get())
-            setattr(settings, enabled_key, new_val)
-            if new_val:
-                body_frame.pack(fill="x")
-            else:
-                body_frame.pack_forget()
-            sidebar._on_change()
-
-        ctk.CTkCheckBox(
-            section,
-            text=i18n.tr(effect.label_key),
-            variable=enabled_var,
-            command=on_toggle,
-            checkbox_height=18, checkbox_width=18,
-        ).pack(anchor="w", padx=10, pady=2)
-
-        widgets["__enabled_var__"] = enabled_var
-
-        if enabled:
+    def on_toggle():
+        new_val = bool(enabled_var.get())
+        setattr(settings, enabled_key, new_val)
+        if new_val:
             body_frame.pack(fill="x")
-    else:
+        else:
+            body_frame.pack_forget()
+        sidebar._on_change()
+
+    ctk.CTkCheckBox(
+        section,
+        text=i18n.tr(effect.label_key),
+        variable=enabled_var,
+        command=on_toggle,
+        checkbox_height=18, checkbox_width=18,
+    ).pack(anchor="w", padx=10, pady=2)
+
+    widgets["__enabled_var__"] = enabled_var
+
+    if enabled:
         body_frame.pack(fill="x")
 
-    # --- Остальные параметры ---
     for p in effect.params:
         if p.key == "enabled":
             continue
@@ -124,14 +113,19 @@ def _build_param_row(parent, sidebar, settings, i18n, effect, param, widgets_out
         _build_file_row(parent, sidebar, settings, i18n,
                          full_key, label, param, widgets_out)
     elif param.ctrl == CTRL_STOPS:
-        # Не поддерживается — оставляем ручным (см. MANUAL_EFFECT_IDS)
+        # не поддерживается — оставляем ручным (см. MANUAL_EFFECT_IDS)
         pass
     else:
         print(f"auto_sidebar: unknown ctrl {param.ctrl!r} for {full_key}")
 
 
+# ============================================================
+#  Конкретные строки
+# ============================================================
+
 def _build_color_row(parent, sidebar, settings, i18n,
                        full_key, label, param, widgets_out):
+    """Строка с цветной кнопкой. Размер кнопки 25x18, padx=2 справа."""
     from ui.dialogs import ask_color
     row = ctk.CTkFrame(parent, fg_color="transparent")
     row.pack(fill="x", padx=10, pady=2)
@@ -147,21 +141,25 @@ def _build_color_row(parent, sidebar, settings, i18n,
             btn.configure(fg_color=color)
             sidebar._on_change()
 
-    btn = ctk.CTkButton(row, text="", width=40, height=24, command=pick)
-    btn.pack(side="right", padx=5)
+    btn = ctk.CTkButton(row, text="", width=25, height=18, command=pick)
+    btn.pack(side="right", padx=2)
     btn.configure(fg_color=current)
     widgets_out[param.key] = btn
 
 
 def _build_int_float_row(parent, sidebar, settings,
                           full_key, label, param, widgets_out):
+    """
+    Строка с label + slider + entry.
+    entry width=40 справа, slider expand=True по центру.
+    """
     row = ctk.CTkFrame(parent, fg_color="transparent")
     row.pack(fill="x", padx=10, pady=2)
     ctk.CTkLabel(row, text=label + ":").pack(side="left")
 
     current = getattr(settings, full_key, param.default)
 
-    entry = ctk.CTkEntry(row, width=45)
+    entry = ctk.CTkEntry(row, width=40)
     entry.insert(0, str(current))
     entry.pack(side="right", padx=(5, 0))
 
@@ -208,6 +206,7 @@ def _build_int_float_row(parent, sidebar, settings,
 
 def _build_option_row(parent, sidebar, settings, values,
                        full_key, label, param, widgets_out):
+    """Строка с option menu. width=100."""
     row = ctk.CTkFrame(parent, fg_color="transparent")
     row.pack(fill="x", padx=10, pady=2)
     ctk.CTkLabel(row, text=label + ":").pack(side="left")
@@ -221,21 +220,25 @@ def _build_option_row(parent, sidebar, settings, values,
         sidebar._on_change()
 
     combo = ctk.CTkOptionMenu(row, values=values, variable=var,
-                               width=110, command=on_change)
+                               width=100, command=on_change)
     combo.pack(side="left", padx=5)
     widgets_out[param.key] = combo
 
 
 def _build_dir_row(parent, sidebar, settings,
                     full_key, label, param, widgets_out):
+    """
+    Строка с сеткой 3x3 радио-кнопок (направление).
+    Стиль совпадает с ручными direction-секциями: label над сеткой.
+    """
     symbols = ["↖", "↑", "↗", "←", "●", "→", "↙", "↓", "↘"]
     values = [5, 1, 6, 3, 0, 4, 7, 2, 8]
 
-    wrap = ctk.CTkFrame(parent, fg_color="transparent")
-    wrap.pack(fill="x", padx=10, pady=(5, 2))
-    ctk.CTkLabel(wrap, text=label + ":", anchor="w").pack(anchor="w")
+    label_frame = ctk.CTkFrame(parent, fg_color="transparent")
+    label_frame.pack(anchor="w", padx=10, pady=(5, 2))
+    ctk.CTkLabel(label_frame, text=label + ":").pack(anchor="w")
 
-    grid = ctk.CTkFrame(wrap, fg_color="transparent")
+    grid = ctk.CTkFrame(parent, fg_color="transparent")
     grid.pack(pady=2)
 
     current = getattr(settings, full_key, param.default or 8)
@@ -260,6 +263,7 @@ def _build_dir_row(parent, sidebar, settings,
 
 def _build_file_row(parent, sidebar, settings, i18n,
                      full_key, label, param, widgets_out):
+    """Строка выбора файла. Стиль как у texture_row в pattern."""
     from tkinter import filedialog
     row = ctk.CTkFrame(parent, fg_color="transparent")
     row.pack(fill="x", padx=10, pady=2)
