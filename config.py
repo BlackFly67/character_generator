@@ -46,6 +46,13 @@ class Settings:
         self.text_color = DEFAULT_TEXT_COLOR
         self.saved_text_color = DEFAULT_TEXT_COLOR
         self.background_color = DEFAULT_BACKGROUND_COLOR
+        # FIX: атрибут saved_background_color раньше нигде не
+        # инициализировался (в отличие от симметричного
+        # saved_text_color) — он появлялся только в рантайме, в
+        # ui/sidebar.py::_toggle_transparent_background, через
+        # getattr(..., None). Инициализируем его здесь же, чтобы
+        # атрибут существовал с самого начала жизни Settings.
+        self.saved_background_color = "#ffffff"
         self.shadow_color = DEFAULT_SHADOW_COLOR
         self.emboss_highlight = DEFAULT_EMBOSS_HIGHLIGHT
         self.emboss_shadow = DEFAULT_EMBOSS_SHADOW
@@ -170,6 +177,13 @@ class Settings:
             "theme": self.theme,
             "text_color": self.text_color,
             "background_color": self.background_color,
+            # FIX: сохраняем saved_background_color в конфиг —
+            # симметрично тому, что для текста (текстовый аналог этого
+            # поля в to_dict не хранится тоже, но здесь фиксируем
+            # именно то, чего не хватало: без этого поля выбор цвета
+            # фона терялся при перезапуске приложения после включения
+            # "прозрачного фона" — см. from_dict ниже.
+            "saved_background_color": getattr(self, "saved_background_color", "#ffffff"),
             "transparent_background": self.transparent_background,
             "transparent_text": self.transparent_text,
             "cutout_mode": self.cutout_mode,
@@ -283,6 +297,22 @@ class Settings:
         self.text_color = safe_color(data.get("text_color", DEFAULT_TEXT_COLOR), DEFAULT_TEXT_COLOR)
         self.saved_text_color = self.text_color if self.text_color != "transparent" else DEFAULT_TEXT_COLOR
         self.background_color = safe_color(data.get("background_color", None), None)
+        # FIX: раньше saved_background_color вообще не восстанавливался
+        # из конфига (в отличие от saved_text_color выше), из-за чего
+        # выбор цвета фона терялся при перезапуске приложения после
+        # включения "прозрачного фона" (см. ui/sidebar.py
+        # ::_toggle_transparent_background — там читается через
+        # getattr(..., None) и, если атрибута нет, подставляется
+        # "#ffffff" вместо реального сохранённого цвета).
+        # Приоритет: явно сохранённое значение из файла -> текущий
+        # background_color, если он задан -> "#ffffff" по умолчанию.
+        self.saved_background_color = safe_color(
+            data.get(
+                "saved_background_color",
+                self.background_color if self.background_color is not None else "#ffffff",
+            ),
+            "#ffffff",
+        )
         self.shadow_color = safe_color(data.get("shadow_color", DEFAULT_SHADOW_COLOR), DEFAULT_SHADOW_COLOR)
         self.emboss_highlight = safe_color(data.get("emboss_highlight", DEFAULT_EMBOSS_HIGHLIGHT), DEFAULT_EMBOSS_HIGHLIGHT)
         self.emboss_shadow = safe_color(data.get("emboss_shadow", DEFAULT_EMBOSS_SHADOW), DEFAULT_EMBOSS_SHADOW)
@@ -412,8 +442,18 @@ class Settings:
             except Exception:
                 pass
 
-        # Если файла нет или он повреждён, используем дефолтные
-        self.reset()
+        # FIX: раньше default_config полностью игнорировался — если
+        # config.json отсутствует или повреждён, вызывался просто
+        # self.reset(), а переданный из main.py DEFAULT_CONFIG никак
+        # не использовался, хотя сигнатура функции предполагает
+        # обратное. Теперь, если default_config передан, настройки
+        # загружаются из него через тот же from_dict(), что и из
+        # файла — reset() остаётся резервным вариантом, когда
+        # default_config не передан.
+        if default_config:
+            self.from_dict(default_config)
+        else:
+            self.reset()
 
     def save(self):
         """Сохраняет настройки в файл."""

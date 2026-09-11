@@ -3,6 +3,7 @@
   "theme": "dark",
   "text_color": "#000000",
   "background_color": null,
+  "saved_background_color": "#ffffff",
   "transparent_background": true,
   "transparent_text": false,
   "cutout_mode": false,

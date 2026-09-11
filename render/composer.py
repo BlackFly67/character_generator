@@ -22,6 +22,16 @@
   применяется через _run_stage("inner") и _run_stage("outer").
 - Остальные эффекты пока жёстко зашиты в compose_full и будут мигрированы
   по одному.
+
+  ВАЖНО (FIX двойного применения эффектов):
+  PIPELINE в effects/registry.py регистрирует для стадий "inner"/"outer"
+  не только glow, но и OutlineInner/ShadowInner/Emboss/OutlineOuter —
+  это нужно auto_sidebar.py для автогенерации UI. Но сами эти эффекты
+  ВСЁ ЕЩЁ применяются здесь, в compose_full, напрямую через старые
+  функции (apply_inner_outline/apply_inner_shadow/apply_emboss/
+  apply_outer_outline). Поэтому _run_stage() должен выполнять ТОЛЬКО
+  glow_inner/glow_outer (см. параметр only_ids) — иначе перечисленные
+  эффекты накладывались бы дважды.
 """
 
 import math
@@ -252,9 +262,9 @@ def _transp_bg(settings):
 
 
 def _run_stage(char_layer, base_mask, settings, stage,
-                fill_mask=None, outer_mask=None):
+                fill_mask=None, outer_mask=None, only_ids=None):
     """
-    Применяет все эффекты одной стадии из реестра в порядке PIPELINE.
+    Применяет эффекты одной стадии из реестра в порядке PIPELINE.
 
     Возвращает кортеж (image, base_mask, fill_mask, outer_mask).
 
@@ -262,8 +272,21 @@ def _run_stage(char_layer, base_mask, settings, stage,
     если им нужно вернуть и image, и обновлённый mask. Контракт:
     возвращать либо Image, либо dict с ключами
     "image", "mask", "fill_mask", "outer_mask".
+
+    FIX: параметр only_ids. PIPELINE для стадий "inner"/"outer"
+    содержит не только glow, но и OutlineInner/ShadowInner/Emboss/
+    OutlineOuter (они там нужны для авто-генерации UI в
+    auto_sidebar.py). Но эти эффекты по-прежнему применяются в
+    compose_full напрямую, через старые функции (apply_inner_outline,
+    apply_inner_shadow, apply_emboss, apply_outer_outline). Без
+    фильтрации get_by_stage(stage) вернул бы их все, и они бы
+    отрабатывали ДВАЖДЫ — здесь и ниже в compose_full. only_ids
+    ограничивает выполнение только реально мигрированными эффектами
+    (сейчас — glow_inner/glow_outer).
     """
     for cls in get_by_stage(stage):
+        if only_ids is not None and cls.id not in only_ids:
+            continue
         eff = cls()
         ctx = EffectContext(
             settings=settings,
@@ -627,10 +650,18 @@ def compose_full(spec: CharSpec, settings,
                                           settings.outline_inner_color,
                                           settings.outline_inner_width)
 
-    # --- Стадия "inner" из реестра (пока только glow_inner) ---
+    # --- Стадия "inner" из реестра ---
+    # FIX: only_ids={"glow_inner"} — раньше сюда без фильтра попадали
+    # ТАКЖЕ OutlineInner/ShadowInner/Emboss из PIPELINE (они там
+    # зарегистрированы для авто-UI в auto_sidebar.py), из-за чего эти
+    # три эффекта применялись ЕЩЁ РАЗ ниже жёстко зашитым кодом —
+    # т.е. дважды. Теперь через _run_stage проходит только glow_inner,
+    # а outline_inner/inner_shadow/emboss остаются единственный раз —
+    # в жёстко зашитых вызовах (см. п.7 выше и ниже).
     char_layer, base_mask, fill_mask, outer_mask = _run_stage(
         char_layer, base_mask, settings, "inner",
         fill_mask=fill_mask, outer_mask=None,
+        only_ids={"glow_inner"},
     )
 
     if settings.inner_shadow_enabled:
@@ -656,10 +687,15 @@ def compose_full(spec: CharSpec, settings,
         )
         outline_drawn = True
 
-    # --- Стадия "outer" из реестра (пока только glow_outer) ---
+    # --- Стадия "outer" из реестра ---
+    # FIX: only_ids={"glow_outer"} — та же причина, что и выше: без
+    # фильтра сюда бы попал ещё и OutlineOuter, который уже применён
+    # напрямую строкой выше (apply_outer_outline), и накладывался бы
+    # повторно.
     char_layer, base_mask, fill_mask, outer_mask = _run_stage(
         char_layer, base_mask, settings, "outer",
         fill_mask=fill_mask, outer_mask=outer_mask,
+        only_ids={"glow_outer"},
     )
 
     # 9. Прозрачность
