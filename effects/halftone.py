@@ -35,16 +35,24 @@ def apply_halftone(mask, cell_size, dot_scale, angle_degrees=0, supersample=3):
     y = 0
     while y < rh:
         y0, y1 = y, min(rh, y + cell_size)
-        cy_ss = (y + cell_size / 2.0) * ss
+        # ИСПРАВЛЕНО: центр точки считался по формуле для ПОЛНОЙ ячейки
+        # (y + cell_size/2), а не по фактическим границам клипованной
+        # ячейки (y0, y1). Для краевых неполных ячеек (когда cell_size
+        # не делит content_height/content_width без остатка — почти
+        # всегда так) это смещало центр точки за пределы реального
+        # фрагмента, а иногда и за пределы всего холста out_ss.
+        # Берём midpoint реального диапазона [y0, y1).
+        cy_ss = (y0 + y1) / 2.0 * ss
         x = 0
         while x < rw:
             x0, x1 = x, min(rw, x + cell_size)
-            cx_ss = (x + cell_size / 2.0) * ss
+            # ИСПРАВЛЕНО: аналогично для X.
+            cx_ss = (x0 + x1) / 2.0 * ss
             cell = arr[y0:y1, x0:x1]
             coverage = float(cell.mean()) / 255.0 if cell.size else 0.0
             radius = max_radius_ss * coverage
             if radius >= 0.5:
-                draw.ellipse([cx_ss - radius, cy_ss - radius, 
+                draw.ellipse([cx_ss - radius, cy_ss - radius,
                              cx_ss + radius, cy_ss + radius], fill=255)
             x += cell_size
         y += cell_size
