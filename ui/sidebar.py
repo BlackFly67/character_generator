@@ -1334,7 +1334,7 @@ class Sidebar(ctk.CTkScrollableFrame):
             # заменялся на "#ffffff", хотя settings хранил верное значение.
             saved = getattr(self.settings, "saved_background_color", None)
             if not saved:
-                saved = "#ffffff"
+                saved = "#000000"
             self.settings.background_color = saved
             self.background_color_button.configure(fg_color=saved)
         self._on_change()

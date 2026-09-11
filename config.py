@@ -52,7 +52,7 @@ class Settings:
         # ui/sidebar.py::_toggle_transparent_background, через
         # getattr(..., None). Инициализируем его здесь же, чтобы
         # атрибут существовал с самого начала жизни Settings.
-        self.saved_background_color = "#ffffff"
+        self.saved_background_color = "#000000"
         self.shadow_color = DEFAULT_SHADOW_COLOR
         self.emboss_highlight = DEFAULT_EMBOSS_HIGHLIGHT
         self.emboss_shadow = DEFAULT_EMBOSS_SHADOW
@@ -306,12 +306,10 @@ class Settings:
         # "#ffffff" вместо реального сохранённого цвета).
         # Приоритет: явно сохранённое значение из файла -> текущий
         # background_color, если он задан -> "#ffffff" по умолчанию.
+        smart_default = self.background_color if self.background_color is not None else "#000000"
         self.saved_background_color = safe_color(
-            data.get(
-                "saved_background_color",
-                self.background_color if self.background_color is not None else "#ffffff",
-            ),
-            "#ffffff",
+            data.get("saved_background_color") or smart_default,
+            "#000000",
         )
         self.shadow_color = safe_color(data.get("shadow_color", DEFAULT_SHADOW_COLOR), DEFAULT_SHADOW_COLOR)
         self.emboss_highlight = safe_color(data.get("emboss_highlight", DEFAULT_EMBOSS_HIGHLIGHT), DEFAULT_EMBOSS_HIGHLIGHT)
