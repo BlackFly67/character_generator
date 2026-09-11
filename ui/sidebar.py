@@ -336,7 +336,7 @@ class Sidebar(ctk.CTkScrollableFrame):
         font_section.pack(fill="x", padx=10, pady=5)
 
         font_choice_frame = ctk.CTkFrame(font_section, fg_color="transparent")
-        font_choice_frame.pack(fill="x")
+        font_choice_frame.pack(fill="x", padx=10, pady=2)
 
         self.font_label = ctk.CTkLabel(
             font_choice_frame,
@@ -344,25 +344,25 @@ class Sidebar(ctk.CTkScrollableFrame):
                  f"{os.path.basename(self.settings.font_path) if self.settings.font_path else self.i18n.tr('no_font')}",
             font=("Arial", 12, "bold"),
         )
-        self.font_label.pack(anchor="w", padx=10, pady=5)
+        self.font_label.pack(anchor="w", pady=5)
 
         system_font_button = ctk.CTkButton(
             font_choice_frame, text=self.i18n.tr("system_font"),
             command=self._open_system_font_picker,
         )
-        system_font_button.pack(fill="x", padx=10, pady=5)
+        system_font_button.pack(fill="x", pady=5)
 
         font_button = ctk.CTkButton(
             font_choice_frame, text=self.i18n.tr("choose_font"),
             command=self._select_font,
         )
-        font_button.pack(fill="x", padx=10, pady=5)
+        font_button.pack(fill="x", pady=5)
 
         font_props_frame = ctk.CTkFrame(font_section, fg_color="transparent")
-        font_props_frame.pack(fill="x", padx=10, pady=5)
+        font_props_frame.pack(fill="x", padx=10, pady=2)
 
         size_row = ctk.CTkFrame(font_props_frame, fg_color="transparent")
-        size_row.pack(fill="x")
+        size_row.pack(fill="x", pady=2)
 
         size_label = ctk.CTkLabel(size_row, text=self.i18n.tr("size") + ":")
         size_label.pack(side="left")
@@ -389,7 +389,7 @@ class Sidebar(ctk.CTkScrollableFrame):
         self.font_size_slider.pack(side="left", padx=5, fill="x", expand=True)
 
         alignment_frame = ctk.CTkFrame(font_props_frame, fg_color="transparent")
-        alignment_frame.pack(fill="x", pady=(5, 0))
+        alignment_frame.pack(fill="x", pady=2)
 
         alignment_label = ctk.CTkLabel(alignment_frame, text=self.i18n.tr("align") + ":")
         alignment_label.pack(side="left")
@@ -403,7 +403,7 @@ class Sidebar(ctk.CTkScrollableFrame):
         alignment_menu.pack(side="left", padx=5)
 
         scale_section = ctk.CTkFrame(font_section, fg_color="transparent")
-        scale_section.pack(fill="x", padx=10, pady=5)
+        scale_section.pack(fill="x", padx=10, pady=2)
 
         scale_label = ctk.CTkLabel(scale_section, text=self.i18n.tr("text_scale") + " (%):",
                                     font=("Arial", 11))
@@ -421,7 +421,7 @@ class Sidebar(ctk.CTkScrollableFrame):
         self.scale_slider.configure(command=self._on_scale_slider)
 
         spacing_section = ctk.CTkFrame(font_section, fg_color="transparent")
-        spacing_section.pack(fill="x", padx=10, pady=5)
+        spacing_section.pack(fill="x", padx=10, pady=2)
 
         spacing_label = ctk.CTkLabel(spacing_section, text=self.i18n.tr("letter_spacing") + " (px):",
                                       font=("Arial", 11))
@@ -445,7 +445,7 @@ class Sidebar(ctk.CTkScrollableFrame):
 
         text_style_label = ctk.CTkLabel(style_section, text=self.i18n.tr("text_style"),
                                          font=("Arial", 12, "bold"))
-        text_style_label.pack(anchor="w", padx=10, pady=5)
+        text_style_label.pack(anchor="w", padx=10, pady=2)
 
         # --- Цвет текста ---
         color_flow1 = ctk.CTkFrame(style_section, fg_color="transparent")
@@ -477,9 +477,6 @@ class Sidebar(ctk.CTkScrollableFrame):
         cutout_check.pack(anchor="w", padx=10, pady=2)
 
         # --- ГРАДИЕНТ (ручной: редактор точек) ---
-        # FIX: приведено к auto-стилю — корневой CTkFrame без fg_color,
-        # чекбокс с padx=10. Так эта секция визуально совпадает с
-        # auto-секциями (Outline Inner, Glow Outer и т.п.).
         gradient_section = ctk.CTkFrame(style_section)
         gradient_section.pack(fill="x", padx=10, pady=5)
 
@@ -545,8 +542,6 @@ class Sidebar(ctk.CTkScrollableFrame):
         self.gradient_stops_canvas.bind("<Configure>", lambda e: self._redraw_gradient_stops())
 
         # --- ПАТТЕРН (ручной: выбор файла) ---
-        # FIX: приведено к auto-стилю — корневой CTkFrame без fg_color,
-        # чекбокс с padx=10.
         pattern_section = ctk.CTkFrame(style_section)
         pattern_section.pack(fill="x", padx=10, pady=5)
 
@@ -721,7 +716,7 @@ class Sidebar(ctk.CTkScrollableFrame):
         direction_label.pack(anchor="w", padx=10, pady=(5, 2))
 
         direction_frame = ctk.CTkFrame(shadow_frame, fg_color="transparent")
-        direction_frame.pack(pady=2)
+        direction_frame.pack(padx=10, pady=2)
 
         for i in range(3):
             for j in range(3):
@@ -748,25 +743,25 @@ class Sidebar(ctk.CTkScrollableFrame):
         rotation_section.pack(fill="x", padx=10, pady=5)
 
         rotation_entry_frame = ctk.CTkFrame(rotation_section, fg_color="transparent")
-        rotation_entry_frame.pack(fill="x", pady=2)
+        rotation_entry_frame.pack(fill="x", padx=10, pady=2)
 
         rotation_label = ctk.CTkLabel(rotation_entry_frame, text=self.i18n.tr("rotation") + " (°):",
                                        font=("Arial", 11))
-        rotation_label.pack(side="left", padx=10, pady=5)
+        rotation_label.pack(side="left")
 
         self.rotation_entry = ctk.CTkEntry(rotation_entry_frame, width=40)
         self.rotation_entry.insert(0, str(self.settings.rotation_angle))
-        self.rotation_entry.pack(side="right", padx=10, pady=5)
+        self.rotation_entry.pack(side="right", padx=(5, 0))
         self.rotation_entry.bind("<KeyRelease>", self._on_rotation_change)
 
         rotation_slider_frame = ctk.CTkFrame(rotation_section, fg_color="transparent")
-        rotation_slider_frame.pack(fill="x", pady=2)
+        rotation_slider_frame.pack(fill="x", padx=10, pady=2)
 
         self.rotation_slider = ctk.CTkSlider(
             rotation_slider_frame, from_=-180, to=180, number_of_steps=360,
             command=self._on_rotation_slider,
         )
-        self.rotation_slider.pack(fill="x", padx=10, pady=5)
+        self.rotation_slider.pack(fill="x", padx=5, pady=2)
         self.rotation_slider.set(self.settings.rotation_angle)
 
         # ============================================================
@@ -848,22 +843,22 @@ class Sidebar(ctk.CTkScrollableFrame):
         opacity_section.pack(fill="x", padx=10, pady=5)
 
         opacity_entry_frame = ctk.CTkFrame(opacity_section, fg_color="transparent")
-        opacity_entry_frame.pack(fill="x", pady=2)
+        opacity_entry_frame.pack(fill="x", padx=10, pady=2)
 
         opacity_label = ctk.CTkLabel(opacity_entry_frame, text=self.i18n.tr("opacity") + " (%):",
                                       font=("Arial", 11))
-        opacity_label.pack(side="left", padx=10, pady=5)
+        opacity_label.pack(side="left")
 
         self.opacity_entry = ctk.CTkEntry(opacity_entry_frame, width=50)
         self.opacity_entry.insert(0, str(int(round(self.settings.text_opacity * 100))))
-        self.opacity_entry.pack(side="right", padx=10, pady=5)
+        self.opacity_entry.pack(side="right", padx=(5, 0))
         self.opacity_entry.bind("<KeyRelease>", self._on_opacity_change)
 
         opacity_slider_frame = ctk.CTkFrame(opacity_section, fg_color="transparent")
-        opacity_slider_frame.pack(fill="x", pady=2)
+        opacity_slider_frame.pack(fill="x", padx=10, pady=2)
 
         self.opacity_slider = ctk.CTkSlider(opacity_slider_frame, from_=0, to=100, number_of_steps=100)
-        self.opacity_slider.pack(fill="x", padx=10, pady=5)
+        self.opacity_slider.pack(fill="x", padx=5, pady=2)
         self.opacity_slider.set(int(round(self.settings.text_opacity * 100)))
         self.opacity_slider.configure(command=self._on_opacity_slider)
 
@@ -874,7 +869,7 @@ class Sidebar(ctk.CTkScrollableFrame):
         background_section.pack(fill="x", padx=10, pady=5)
 
         bg_flow = ctk.CTkFrame(background_section, fg_color="transparent")
-        bg_flow.pack(fill="x", padx=10, pady=5)
+        bg_flow.pack(fill="x", padx=10, pady=2)
 
         background_color_label = ctk.CTkLabel(bg_flow, text=self.i18n.tr("background") + ":")
         background_color_label.pack(side="left")
@@ -1288,7 +1283,7 @@ class Sidebar(ctk.CTkScrollableFrame):
             self.background_color_button.configure(state="disabled")
         else:
             self.background_color_button.configure(state="normal")
-            saved = getattr(self.settings, "saved_background_color", None)
+            saved = getattr(self, "saved_background_color", None)
             if not saved:
                 saved = "#ffffff"
             self.settings.background_color = saved
