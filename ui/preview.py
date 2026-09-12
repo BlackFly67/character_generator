@@ -366,15 +366,25 @@ class PreviewPanel(ctk.CTkFrame):
     def _get_all_specs(self):
         icon_paths = getattr(self.main_window, 'loaded_icon_paths', [])
         if self.settings.icon_mode and icon_paths:
+            # ИСПРАВЛЕНО: enumerate(icon_paths, 1) вместо enumerate(icon_paths) —
+            # render_icons в render/icons.py нумерует иконки с 1
+            # (enumerate(icon_paths, 1)). spec.index используется в
+            # compose_full для seed эффекта Glitch (glitch_seed + spec.index).
+            # При 0-based индексации в превью и 1-based при реальном
+            # рендере seed для одного и того же символа/иконки не совпадал,
+            # и превью показывало не тот узор глитча, который окажется в
+            # сохранённом файле.
             return [CharSpec(icon_path=p, index=i)
-                    for i, p in enumerate(icon_paths)]
+                    for i, p in enumerate(icon_paths, 1)]
 
         entry = getattr(self.main_window, 'characters_entry', None)
         raw = entry.get() if entry else ""
         chars = parse_characters(raw) if raw else parse_characters(PREVIEW_TEXT)
         if not chars:
             chars = parse_characters(PREVIEW_TEXT)
-        return [CharSpec(text=ch, index=i) for i, ch in enumerate(chars)]
+        # ИСПРАВЛЕНО: аналогично — render_text_characters в render/text.py
+        # нумерует символы с 1 (enumerate(characters, 1)).
+        return [CharSpec(text=ch, index=i) for i, ch in enumerate(chars, 1)]
 
     def _signature(self, spec, all_specs):
         d = {k: getattr(self.settings, k, None) for k in SIGNATURE_KEYS}
