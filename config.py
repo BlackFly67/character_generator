@@ -93,6 +93,7 @@ class Settings:
         self.text_alignment = "center"
         self.emboss_depth = DEFAULT_EMBOSS_DEPTH
         self.emboss_blur = DEFAULT_EMBOSS_BLUR
+        self.emboss_angle = 135
         self.outline_outer_width = 2
         self.outline_inner_width = 1
         self.glow_outer_radius = 5
@@ -203,6 +204,7 @@ class Settings:
             "emboss_enabled": self.emboss_enabled,
             "emboss_depth": self.emboss_depth,
             "emboss_blur": self.emboss_blur,
+            "emboss_angle": self.emboss_angle,
             "emboss_highlight": self.emboss_highlight,
             "emboss_shadow": self.emboss_shadow,
             "outline_outer_enabled": self.outline_outer_enabled,
@@ -351,6 +353,7 @@ class Settings:
         self.text_alignment = data.get("text_alignment", "center")
         self.emboss_depth = data.get("emboss_depth", DEFAULT_EMBOSS_DEPTH)
         self.emboss_blur = data.get("emboss_blur", DEFAULT_EMBOSS_BLUR)
+        self.emboss_angle = data.get("emboss_angle", 135)
         self.outline_outer_width = data.get("outline_outer_width", 2)
         self.outline_inner_width = data.get("outline_inner_width", 1)
         self.glow_outer_radius = data.get("glow_outer_radius", 5)

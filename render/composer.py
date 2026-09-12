@@ -682,6 +682,7 @@ def compose_full(spec: CharSpec, settings,
     if settings.emboss_enabled:
         char_layer = apply_emboss(char_layer, base_mask,
                                    settings.emboss_depth, settings.emboss_blur,
+                                   getattr(settings, "emboss_angle", 135),
                                    settings.emboss_highlight, settings.emboss_shadow)
 
     # 8. Внешние эффекты (жёстко зашитые)

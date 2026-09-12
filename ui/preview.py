@@ -40,7 +40,7 @@ SIGNATURE_KEYS = [
     "shadow_blur", "shadow_blend_mode",
     "inner_shadow_enabled", "inner_shadow_color", "inner_shadow_distance",
     "inner_shadow_direction", "inner_shadow_blur", "inner_shadow_blend_mode",
-    "emboss_enabled", "emboss_depth", "emboss_blur",
+    "emboss_enabled", "emboss_depth", "emboss_blur", "emboss_angle",
     "emboss_highlight", "emboss_shadow",
     "rotation_angle",
     "skew_enabled", "skew_x", "skew_y",

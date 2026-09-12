@@ -70,7 +70,7 @@ PATTERN_ANGLE_MAX = 360
 DEFAULT_FONT_SIZE = 64
 DEFAULT_SHADOW_DISTANCE = 5
 DEFAULT_SHADOW_BLUR = 2
-DEFAULT_EMBOSS_DEPTH = 3
+DEFAULT_EMBOSS_DEPTH = 4
 DEFAULT_EMBOSS_BLUR = 1
 DEFAULT_OUTLINE_WIDTH = 2
 DEFAULT_INNER_OUTLINE_WIDTH = 1
@@ -165,7 +165,8 @@ LVGL_SWAP_16 = False
 STYLE_PRESET_KEYS = [
     "text_color", "background_color", "transparent_background", "transparent_text", "cutout_mode",
     "shadow_enabled", "shadow_color", "shadow_distance", "shadow_direction", "shadow_blur", "shadow_blend_mode",
-    "emboss_enabled", "emboss_depth", "emboss_blur", "emboss_highlight", "emboss_shadow",
+    "emboss_enabled", "emboss_depth", "emboss_blur", "emboss_angle",
+    "emboss_highlight", "emboss_shadow",
     "outline_outer_enabled", "outline_outer_color", "outline_outer_width",
     "outline_inner_enabled", "outline_inner_color", "outline_inner_width",
     "glow_outer_enabled", "glow_outer_color", "glow_outer_radius", "glow_outer_intensity",
@@ -203,8 +204,9 @@ DEFAULT_CONFIG = {
     "text_alignment": "center",
     "font_path": None,
     "emboss_enabled": False,
-    "emboss_depth": 3,
+    "emboss_depth": 4,
     "emboss_blur": 1,
+    "emboss_angle": 45,
     "emboss_highlight": "#ffffff",
     "emboss_shadow": "#000000",
     "outline_outer_enabled": False,
