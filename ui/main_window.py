@@ -181,7 +181,7 @@ class MainWindow:
         )
         self.characters_entry.pack(fill="x", padx=15, pady=(0, 15))
         self.characters_entry.bind("<KeyRelease>", self._on_characters_change)
-        self.characters_entry.bind("<Control-c>", lambda e: self.characters_entry.event_generate("<<Cut>>"))
+        self.characters_entry.bind("<Control-c>", lambda e: self.characters_entry.event_generate("<<Copy>>"))
         self.characters_entry.bind("<Control-v>", lambda e: self.characters_entry.event_generate("<<Paste>>"))
         self.characters_entry.bind("<Control-x>", lambda e: self.characters_entry.event_generate("<<Cut>>"))
         self.characters_entry.bind("<Control-a>", lambda e: self.characters_entry.select_range(0, "end"))
@@ -575,11 +575,14 @@ class MainWindow:
         menu.add_command(label=self.i18n.tr("copy"), command=lambda: self.characters_entry.event_generate("<<Copy>>"))
         menu.add_command(label=self.i18n.tr("paste"), command=lambda: self.characters_entry.event_generate("<<Paste>>"))
         menu.add_separator()
-        menu.add_command(label=self.i18n.tr("delete"), command=lambda: self.characters_entry.delete("sel.first", "sel.last"))
+        menu.add_command(label=self.i18n.tr("delete"), command=self._delete_selection)
         menu.add_separator()
         menu.add_command(label=self.i18n.tr("select_all"), command=lambda: self.characters_entry.select_range(0, "end"))
         menu.post(event.x_root, event.y_root)
-
+    def _delete_selection(self):
+        """Удаляет выделенный текст в characters_entry, если он есть."""
+        if self.characters_entry.selection_present():
+            self.characters_entry.delete("sel.first", "sel.last")
     # ==================== PATTERNS ====================
 
     def _load_pattern_file(self):

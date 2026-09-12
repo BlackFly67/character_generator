@@ -1,0 +1,69 @@
+{
+ "version": "auto-py-to-exe-configuration_v1",
+ "pyinstallerOptions": [
+  {
+   "optionDest": "noconfirm",
+   "value": true
+  },
+  {
+   "optionDest": "filenames",
+   "value": "C:/git/main.py"
+  },
+  {
+   "optionDest": "onefile",
+   "value": true
+  },
+  {
+   "optionDest": "console",
+   "value": false
+  },
+  {
+   "optionDest": "icon_file",
+   "value": "C:/watchfaces/Misc/create_char2/ico.ico"
+  },
+  {
+   "optionDest": "upx_dir",
+   "value": "C:/watchfaces/Misc/create_char2/upx"
+  },
+  {
+   "optionDest": "clean_build",
+   "value": false
+  },
+  {
+   "optionDest": "strip",
+   "value": false
+  },
+  {
+   "optionDest": "noupx",
+   "value": false
+  },
+  {
+   "optionDest": "disable_windowed_traceback",
+   "value": false
+  },
+  {
+   "optionDest": "uac_admin",
+   "value": false
+  },
+  {
+   "optionDest": "uac_uiaccess",
+   "value": false
+  },
+  {
+   "optionDest": "argv_emulation",
+   "value": false
+  },
+  {
+   "optionDest": "bootloader_ignore_signals",
+   "value": false
+  },
+  {
+   "optionDest": "excludes",
+   "value": "CTkColorPicker, matplotlib, pandas, scipy, PyQt5, PySide6, PyQt6, PySide2, tensorflow, torch, opencv-python, scikit-learn, seaborn, plotly, django, flask, fastapi, requests, beautifulsoup4, selenium, lxml, openpyxl, xlsxwriter, xlrd, xlwt, cryptography, paramiko, twisted, scrapy, asyncio, aiohttp, jinja2, markupsafe, werkzeug, click, itsdangerous, sqlalchemy, sqlite3, psycopg2, pymysql, pymongo, redis, celery, kombu, boto3, botocore, s3transfer, awscli, azure, google-cloud, firebase-admin, pygame, pyglet, kivy, wxPython, chardet, certifi, urllib3, idna, charset_normalizer, tzdata, pytz, dateutil"
+  }
+ ],
+ "nonPyinstallerOptions": {
+  "increaseRecursionLimit": true,
+  "manualArguments": ""
+ }
+}
