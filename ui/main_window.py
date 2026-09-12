@@ -181,10 +181,17 @@ class MainWindow:
         )
         self.characters_entry.pack(fill="x", padx=15, pady=(0, 15))
         self.characters_entry.bind("<KeyRelease>", self._on_characters_change)
-        self.characters_entry.bind("<Control-c>", lambda e: self.characters_entry.event_generate("<<Copy>>"))
-        self.characters_entry.bind("<Control-v>", lambda e: self.characters_entry.event_generate("<<Paste>>"))
-        self.characters_entry.bind("<Control-x>", lambda e: self.characters_entry.event_generate("<<Cut>>"))
-        self.characters_entry.bind("<Control-a>", lambda e: self.characters_entry.select_range(0, "end"))
+        # ИСПРАВЛЕНО: event_generate("<<Copy>>"/"<<Cut>>"/"<<Paste>>") на
+        # CTkEntry не работает — виртуальные события полагаются на
+        # class-биндинги обычного tkinter.Entry, которых у составного
+        # CTkEntry нет. Реализуем clipboard-операции напрямую через
+        # _copy_selection/_cut_selection/_paste_clipboard, работая с
+        # внутренним _entry и возвращая "break", чтобы событие не
+        # всплывало дальше и не дублировалось.
+        self.characters_entry.bind("<Control-c>", lambda e: self._copy_selection())
+        self.characters_entry.bind("<Control-v>", lambda e: self._paste_clipboard())
+        self.characters_entry.bind("<Control-x>", lambda e: self._cut_selection())
+        self.characters_entry.bind("<Control-a>", lambda e: self._select_all())
         self.characters_entry.bind("<Button-3>", self._show_context_menu)
 
         self.text_input_frame.pack(fill="x")
@@ -568,21 +575,105 @@ class MainWindow:
         self.case_button.configure(text=f"Aa\n{mode_names[mode]}")
         self._on_characters_change(None)
 
+    # ==================== CONTEXT MENU & CLIPBOARD ====================
+
     def _show_context_menu(self, event):
         import tkinter as tk
         menu = tk.Menu(self.root, tearoff=0)
-        menu.add_command(label=self.i18n.tr("cut"), command=lambda: self.characters_entry.event_generate("<<Cut>>"))
-        menu.add_command(label=self.i18n.tr("copy"), command=lambda: self.characters_entry.event_generate("<<Copy>>"))
-        menu.add_command(label=self.i18n.tr("paste"), command=lambda: self.characters_entry.event_generate("<<Paste>>"))
+        # ИЗМЕНЕНО: команды меню больше не полагаются на
+        # event_generate("<<Cut>>"/"<<Copy>>"/"<<Paste>>") — см. причину
+        # в бинде Ctrl-C/V/X выше. Используют те же новые методы.
+        menu.add_command(label=self.i18n.tr("cut"), command=self._cut_selection)
+        menu.add_command(label=self.i18n.tr("copy"), command=self._copy_selection)
+        menu.add_command(label=self.i18n.tr("paste"), command=self._paste_clipboard)
         menu.add_separator()
         menu.add_command(label=self.i18n.tr("delete"), command=self._delete_selection)
         menu.add_separator()
-        menu.add_command(label=self.i18n.tr("select_all"), command=lambda: self.characters_entry.select_range(0, "end"))
+        menu.add_command(label=self.i18n.tr("select_all"), command=self._select_all)
         menu.post(event.x_root, event.y_root)
+
+    def _entry_widget(self):
+        """Возвращает внутренний tkinter.Entry у CTkEntry.
+
+        CTkEntry — составной виджет; виртуальные события <<Copy>>,
+        <<Cut>>, <<Paste>> и методы selection_get()/selection_present()
+        у него работают нестабильно, потому что делегируют к
+        внутреннему _entry. Работаем с ним напрямую.
+        """
+        return getattr(self.characters_entry, "_entry", self.characters_entry)
+
+    def _has_selection(self):
+        """Проверяет наличие выделения через index('sel.first').
+
+        Надёжнее, чем selection_present() у CTkEntry: последний
+        иногда возвращает True при потере фокуса или наоборот.
+        """
+        try:
+            self._entry_widget().index("sel.first")
+            return True
+        except Exception:
+            return False
+
+    def _copy_selection(self):
+        """Копирует выделенный текст characters_entry в буфер обмена."""
+        entry = self._entry_widget()
+        if not self._has_selection():
+            return "break"
+        try:
+            text = entry.selection_get()
+        except Exception:
+            return "break"
+        self.root.clipboard_clear()
+        self.root.clipboard_append(text)
+        return "break"
+
+    def _cut_selection(self):
+        """Вырезает выделенный текст: копирует в буфер и удаляет из поля."""
+        entry = self._entry_widget()
+        if not self._has_selection():
+            return "break"
+        try:
+            text = entry.selection_get()
+        except Exception:
+            return "break"
+        self.root.clipboard_clear()
+        self.root.clipboard_append(text)
+        entry.delete("sel.first", "sel.last")
+        self._on_characters_change(None)
+        return "break"
+
+    def _paste_clipboard(self):
+        """Вставляет текст из буфера обмена на место курсора,
+        предварительно заменяя выделение, если оно есть."""
+        entry = self._entry_widget()
+        try:
+            text = self.root.clipboard_get()
+        except Exception:
+            # Буфер пуст или содержит не текст — тихо выходим.
+            return "break"
+        if self._has_selection():
+            entry.delete("sel.first", "sel.last")
+        entry.insert("insert", text)
+        self._on_characters_change(None)
+        return "break"
+
     def _delete_selection(self):
         """Удаляет выделенный текст в characters_entry, если он есть."""
-        if self.characters_entry.selection_present():
-            self.characters_entry.delete("sel.first", "sel.last")
+        entry = self._entry_widget()
+        if not self._has_selection():
+            return
+        entry.delete("sel.first", "sel.last")
+        # ИСПРАВЛЕНО: программное .delete() не порождает <KeyRelease>,
+        # поэтому settings.characters и превью не обновлялись после
+        # удаления через меню — синхронизируем вручную, как уже
+        # делает _cycle_case() после своих правок текста.
+        self._on_characters_change(None)
+
+    def _select_all(self):
+        """Выделяет весь текст в characters_entry."""
+        self._entry_widget().select_range(0, "end")
+        return "break"
+
     # ==================== PATTERNS ====================
 
     def _load_pattern_file(self):
