@@ -26,6 +26,7 @@ from effects.emboss import Emboss
 # outer
 from effects.outline import OutlineOuter
 from effects.glow import GlowOuter
+from effects.extrude import Extrude3D
 
 # geometry
 from effects.skew import Skew
@@ -51,6 +52,7 @@ PIPELINE = [
 
     # ---- outer ----
     OutlineOuter,
+    Extrude3D,
     GlowOuter,
 
     # ---- geometry ----

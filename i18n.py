@@ -170,7 +170,11 @@ DEFAULT_LANGUAGES = {
         "skew_y": "Skew Y",
         "perspective": "Perspective",
         "perspective_x": "Perspective X",
-        "perspective_y": "Perspective Y"
+        "perspective_y": "Perspective Y",
+        "extrude": "3D Extrude",
+        "extrude_depth": "Depth",
+        "extrude_color_near": "Near color",
+        "extrude_color_far": "Far color"
     }
 }
 

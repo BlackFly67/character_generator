@@ -242,6 +242,8 @@ def _calc_outer_effects_width(settings):
         w += settings.shadow_blur
     if settings.glitch_enabled:
         w += settings.glitch_rgb_shift
+    if getattr(settings, "extrude_enabled", False):
+        w += getattr(settings, "extrude_depth", 0)
     return w
 
 
@@ -668,7 +670,7 @@ def compose_full(spec: CharSpec, settings,
     char_layer, base_mask, fill_mask, outer_mask = _run_stage(
         char_layer, base_mask, settings, "inner",
         fill_mask=fill_mask, outer_mask=None,
-        only_ids={"glow_inner"},
+        only_ids={"glow_inner", "extrude"},
     )
 
     if settings.inner_shadow_enabled:
@@ -703,7 +705,7 @@ def compose_full(spec: CharSpec, settings,
     char_layer, base_mask, fill_mask, outer_mask = _run_stage(
         char_layer, base_mask, settings, "outer",
         fill_mask=fill_mask, outer_mask=outer_mask,
-        only_ids={"glow_outer"},
+        only_ids={"glow_outer", "extrude"},
     )
 
     # 9. Прозрачность

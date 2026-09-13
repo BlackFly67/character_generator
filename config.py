@@ -17,7 +17,9 @@ from constants import (
     DEFAULT_HALFTONE_CELL, DEFAULT_HALFTONE_DOT, DEFAULT_HALFTONE_ANGLE,
     DEFAULT_GLITCH_RGB_SHIFT, DEFAULT_GLITCH_SLICE, DEFAULT_GLITCH_SEED,
     DEFAULT_SKEW, DEFAULT_PERSPECTIVE, DEFAULT_PATTERN_SCALE,
-    DEFAULT_PATTERN_OFFSET, DEFAULT_PATTERN_ANGLE
+    DEFAULT_PATTERN_OFFSET, DEFAULT_PATTERN_ANGLE,
+    DEFAULT_EXTRUDE_DEPTH, DEFAULT_EXTRUDE_ANGLE,
+    DEFAULT_EXTRUDE_COLOR_NEAR, DEFAULT_EXTRUDE_COLOR_FAR
 )
 from fonts import get_default_font
 from utils import safe_color
@@ -81,6 +83,7 @@ class Settings:
         self.skew_enabled = False
         self.perspective_enabled = False
         self.reflection_enabled = False
+        self.extrude_enabled = False
         self.create_bin = False
         self.canvas_width_enabled = False
         self.icon_mode = False
@@ -135,6 +138,11 @@ class Settings:
         self.reflection_gap = DEFAULT_REFLECTION_GAP
         self.reflection_opacity = DEFAULT_REFLECTION_OPACITY
         self.reflection_fade = DEFAULT_REFLECTION_FADE
+        self.extrude_depth = DEFAULT_EXTRUDE_DEPTH
+        self.extrude_angle = DEFAULT_EXTRUDE_ANGLE
+        self.extrude_color_near = DEFAULT_EXTRUDE_COLOR_NEAR
+        self.extrude_color_far = DEFAULT_EXTRUDE_COLOR_FAR
+        self.extrude_blend_mode = "normal"        
         self.canvas_width_delta = 0
 
         # Текст и иконки
@@ -267,6 +275,12 @@ class Settings:
             "reflection_gap": self.reflection_gap,
             "reflection_opacity": self.reflection_opacity,
             "reflection_fade": self.reflection_fade,
+            "extrude_enabled": self.extrude_enabled,
+            "extrude_depth": self.extrude_depth,
+            "extrude_angle": self.extrude_angle,
+            "extrude_color_near": self.extrude_color_near,
+            "extrude_color_far": self.extrude_color_far,
+            "extrude_blend_mode": self.extrude_blend_mode,            
             "filename_template": self.filename_template,
             "icon_mode": self.icon_mode,
             "icon_paths": self.icon_paths,
@@ -341,6 +355,7 @@ class Settings:
         self.skew_enabled = data.get("skew_enabled", False)
         self.perspective_enabled = data.get("perspective_enabled", False)
         self.reflection_enabled = data.get("reflection_enabled", False)
+        self.extrude_enabled = data.get("extrude_enabled", False)
         self.create_bin = data.get("create_bin", False)
         self.canvas_width_enabled = data.get("canvas_width_enabled", False)
         self.icon_mode = data.get("icon_mode", False)
@@ -425,6 +440,17 @@ class Settings:
         self.reflection_gap = data.get("reflection_gap", DEFAULT_REFLECTION_GAP)
         self.reflection_opacity = data.get("reflection_opacity", DEFAULT_REFLECTION_OPACITY)
         self.reflection_fade = data.get("reflection_fade", DEFAULT_REFLECTION_FADE)
+        
+        # 3D-выдавливание
+        self.extrude_depth = data.get("extrude_depth", DEFAULT_EXTRUDE_DEPTH)
+        self.extrude_angle = data.get("extrude_angle", DEFAULT_EXTRUDE_ANGLE)
+        self.extrude_color_near = safe_color(
+            data.get("extrude_color_near", DEFAULT_EXTRUDE_COLOR_NEAR),
+            DEFAULT_EXTRUDE_COLOR_NEAR)
+        self.extrude_color_far = safe_color(
+            data.get("extrude_color_far", DEFAULT_EXTRUDE_COLOR_FAR),
+            DEFAULT_EXTRUDE_COLOR_FAR)
+        self.extrude_blend_mode = data.get("extrude_blend_mode", "normal")
 
         # Текст и иконки
         self.characters = data.get("characters", "")

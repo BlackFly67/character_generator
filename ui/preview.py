@@ -36,6 +36,8 @@ SIGNATURE_KEYS = [
     "glow_outer_enabled", "glow_outer_color", "glow_outer_radius", "glow_outer_intensity",
     "glow_inner_enabled", "glow_inner_color", "glow_inner_radius", "glow_inner_intensity",
     "glow_inner_blend_mode",
+    "extrude_enabled", "extrude_depth", "extrude_angle",
+    "extrude_color_near", "extrude_color_far", "extrude_blend_mode",
     "shadow_enabled", "shadow_color", "shadow_distance", "shadow_direction",
     "shadow_blur", "shadow_blend_mode",
     "inner_shadow_enabled", "inner_shadow_color", "inner_shadow_distance",

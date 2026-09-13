@@ -669,6 +669,7 @@ class Sidebar(ctk.CTkScrollableFrame):
                 "outline_outer",
                 "glow_inner",
                 "glow_outer",
+                "extrude",
                 "emboss",
                 "inner_shadow",
             ],

@@ -57,6 +57,8 @@ GLITCH_SLICE_MIN = 0
 GLITCH_SLICE_MAX = 100
 SKEW_MIN = -75
 SKEW_MAX = 75
+EXTRUDE_DEPTH_MIN = 1
+EXTRUDE_DEPTH_MAX = 100
 PERSPECTIVE_MIN = -50
 PERSPECTIVE_MAX = 50
 PATTERN_SCALE_MIN = 5
@@ -96,6 +98,10 @@ DEFAULT_GLITCH_SLICE = 30
 DEFAULT_GLITCH_SEED = 0
 DEFAULT_SKEW = 0
 DEFAULT_PERSPECTIVE = 0
+DEFAULT_EXTRUDE_DEPTH = 10
+DEFAULT_EXTRUDE_ANGLE = 315
+DEFAULT_EXTRUDE_COLOR_NEAR = "#808080"
+DEFAULT_EXTRUDE_COLOR_FAR = "#202020"
 DEFAULT_PATTERN_SCALE = 100
 DEFAULT_PATTERN_OFFSET = 0
 DEFAULT_PATTERN_ANGLE = 0
@@ -180,6 +186,8 @@ STYLE_PRESET_KEYS = [
     "reflection_enabled", "reflection_gap", "reflection_opacity", "reflection_fade",
     "halftone_enabled", "halftone_cell_size", "halftone_dot_scale", "halftone_angle",
     "glitch_enabled", "glitch_rgb_shift", "glitch_slice_intensity", "glitch_seed",
+    "extrude_enabled", "extrude_depth", "extrude_angle",
+    "extrude_color_near", "extrude_color_far", "extrude_blend_mode",
 ]
 
 # ==================== НАСТРОЙКИ ПО УМОЛЧАНИЮ ====================

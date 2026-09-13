@@ -34,6 +34,7 @@ from .pattern import apply_pattern_fill, load_pattern_image
 from .halftone import apply_halftone
 from .reflection import apply_reflection
 from .glitch import apply_glitch_effect
+from .extrude import apply_extrude
 from .skew import apply_skew_effect
 from .perspective import apply_perspective_effect
 
@@ -69,6 +70,7 @@ __all__ = [
     'apply_halftone',
     'apply_reflection',
     'apply_glitch_effect',
+    'apply_extrude',
     'apply_skew_effect',
     'apply_perspective_effect',
 
