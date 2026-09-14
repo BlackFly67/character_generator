@@ -3,7 +3,7 @@
 Константы приложения
 """
 
-APP_VERSION = "v2 6.0.0"
+APP_VERSION = "v2 6.1.0"
 APP_NAME = "Character Image Generator"
 
 # Диапазоны значений
@@ -155,10 +155,14 @@ LANGUAGES_FILE = "languages.json"
 PATTERNS_FILE = "patterns.json"
 
 # Текст для превью
-PREVIEW_TEXT = "АаБбГг149"
+PREVIEW_TEXT = "АаБбРр149"
 
 # Константы для иконок
 ICON_CANVAS_BASELINE_OVERHEAD = 4
+
+# Undo/Redo настроек (см. ui/main_window.py)
+SETTINGS_HISTORY_MAX = 50
+SETTINGS_HISTORY_DEBOUNCE_MS = 600
 
 # Параметры LVGL
 LVGL_COLOR_DEPTH = 32

@@ -13,7 +13,8 @@ import numpy as np
 from config import Settings
 from constants import (
     APP_VERSION, APP_NAME, CONFIG_FILE, DEFAULT_FILENAME_TEMPLATE,
-    PREVIEW_TEXT, ICON_CANVAS_BASELINE_OVERHEAD, IMAGE_EXTENSIONS
+    PREVIEW_TEXT, ICON_CANVAS_BASELINE_OVERHEAD, IMAGE_EXTENSIONS,
+    SETTINGS_HISTORY_MAX, SETTINGS_HISTORY_DEBOUNCE_MS
 )
 from fonts import load_font_safe, SYSTEM_FONTS
 from utils import parse_characters, format_filename, get_color_rgb
@@ -44,6 +45,15 @@ class MainWindow:
         # нужное поле по settings.icon_mode. Ручная синхронизация не нужна.
         self.preview_index = 0
         self.loaded_icon_paths = list(settings.icon_paths)
+        
+        # История для Undo/Redo (только изменения, идущие через
+        # Sidebar._on_change — цвета/эффекты/градиент/тень/поворот
+        # и т.п.; изменения characters_entry/icon_paths сюда
+        # намеренно не включены). См. _schedule_history_snapshot.
+        self._history = []
+        self._history_index = -1
+        self._history_job = None
+        self._applying_history = False
 
         # Настройка окна
         self._setup_window()
@@ -56,6 +66,18 @@ class MainWindow:
 
         # Обновление превью
         self.preview.update()
+        
+
+        # Базовый снимок — состояние ПОСЛЕ загрузки настроек, чтобы
+        # Undo не улетал в пустой Settings(), а останавливался на
+        # состоянии "как открыли программу".
+        self._history = [self.settings.to_dict()]
+        self._history_index = 0
+        self._update_undo_redo_buttons()
+
+        self.root.bind_all("<Control-z>", self._undo)
+        self.root.bind_all("<Control-y>", self._redo)
+        self.root.bind_all("<Control-Shift-Z>", self._redo)        
 
         # Обработчик закрытия
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
@@ -76,6 +98,7 @@ class MainWindow:
         self.sidebar = Sidebar(self.root, self.settings, self.i18n)
         self.sidebar.grid(row=0, column=0, sticky="nsew")
         self.sidebar.add_change_callback(self._on_settings_change)
+        self.sidebar.add_change_callback(self._schedule_history_snapshot)
 
         # Основная область
         content_frame = ctk.CTkFrame(self.root, fg_color="transparent")
@@ -289,6 +312,8 @@ class MainWindow:
         bottom_bar.grid_columnconfigure(0, weight=0)
         bottom_bar.grid_columnconfigure(1, weight=1)
         bottom_bar.grid_columnconfigure(2, weight=0)
+        bottom_bar.grid_columnconfigure(3, weight=0)
+        bottom_bar.grid_columnconfigure(4, weight=0)
 
         self.create_bin_var = ctk.BooleanVar(value=self.settings.create_bin)
         bin_check = ctk.CTkCheckBox(
@@ -309,6 +334,27 @@ class MainWindow:
         )
         self.generate_btn.grid(row=0, column=1, sticky="ew", padx=(0, 10))
 
+
+        self.undo_btn = ctk.CTkButton(
+            bottom_bar, text="↶", width=40, height=50,
+            font=("Segoe UI Symbol", 18),
+            fg_color=("#dbdbdb", "#2b2b2b"),
+            text_color=("#1a1a1a", "#e0e0e0"),
+            hover_color=("#c7c7c7", "#3a3a3a"),
+            command=self._undo, state="disabled",
+        )
+        self.undo_btn.grid(row=0, column=2, sticky="e", padx=(0, 4))
+
+        self.redo_btn = ctk.CTkButton(
+            bottom_bar, text="↷", width=40, height=50,
+            font=("Segoe UI Symbol", 18),
+            fg_color=("#dbdbdb", "#2b2b2b"),
+            text_color=("#1a1a1a", "#e0e0e0"),
+            hover_color=("#c7c7c7", "#3a3a3a"),
+            command=self._redo, state="disabled",
+        )
+        self.redo_btn.grid(row=0, column=3, sticky="e", padx=(0, 10))
+
         settings_btn = ctk.CTkButton(
             bottom_bar, text="⚙", width=50, height=50,
             font=("Segoe UI Symbol", 20),
@@ -317,7 +363,7 @@ class MainWindow:
             hover_color=("#c7c7c7", "#3a3a3a"),
             command=self._open_settings
         )
-        settings_btn.grid(row=0, column=2, sticky="e")
+        settings_btn.grid(row=0, column=4, sticky="e")
 
     # ==================== SETTINGS ====================
 
@@ -908,6 +954,86 @@ class MainWindow:
 
     def _on_bin_toggle(self):
         self.settings.create_bin = self.create_bin_var.get()
+
+    # ==================== UNDO / REDO ====================
+
+    def _schedule_history_snapshot(self):
+        """
+        Вызывается через Sidebar._on_change при каждом изменении
+        стиля/эффектов. Debounce (SETTINGS_HISTORY_DEBOUNCE_MS) —
+        чтобы перетаскивание одного слайдера попало в ОДИН шаг
+        истории, а не в десятки промежуточных, как и в
+        ui/preview.py::PreviewPanel.update() (тот же паттерн, окно
+        просто шире).
+        """
+        if self._applying_history:
+            return
+        if self._history_job is not None:
+            try:
+                self.root.after_cancel(self._history_job)
+            except Exception:
+                pass
+        self._history_job = self.root.after(
+            SETTINGS_HISTORY_DEBOUNCE_MS, self._commit_history_snapshot
+        )
+
+    def _commit_history_snapshot(self):
+        self._history_job = None
+        snapshot = self.settings.to_dict()
+        if snapshot == self._history[self._history_index]:
+            # Ничего реально не изменилось (например, значение вернули
+            # обратно за время debounce-окна) — не плодим пустые шаги.
+            return
+        # Обрезаем "redo"-ветку — как в любом стандартном Undo-стеке:
+        # новое изменение после отката делает старые "будущие" шаги
+        # недостижимыми.
+        self._history = self._history[:self._history_index + 1]
+        self._history.append(snapshot)
+        if len(self._history) > SETTINGS_HISTORY_MAX:
+            self._history = self._history[-SETTINGS_HISTORY_MAX:]
+        self._history_index = len(self._history) - 1
+        self._update_undo_redo_buttons()
+
+    def _undo(self, event=None):
+        if self._history_index <= 0:
+            return "break"
+        self._history_index -= 1
+        self._restore_history_snapshot(self._history[self._history_index])
+        return "break"
+
+    def _redo(self, event=None):
+        if self._history_index >= len(self._history) - 1:
+            return "break"
+        self._history_index += 1
+        self._restore_history_snapshot(self._history[self._history_index])
+        return "break"
+
+    def _restore_history_snapshot(self, snapshot):
+        # _applying_history блокирует _schedule_history_snapshot на
+        # время применения снимка — иначе sidebar._refresh_all_widgets()
+        # ниже само по себе ничего не триггерит (см. комментарий в
+        # ui/auto_sidebar.py — создание виджетов не вызывает command=),
+        # но settings.from_dict() потенциально мог бы попасть под
+        # чей-то отложенный debounce-колбэк из предыдущего изменения.
+        self._applying_history = True
+        try:
+            self.settings.from_dict(snapshot)
+            self.sidebar._refresh_all_widgets()
+            self.preview.update()
+            self._update_undo_redo_buttons()
+        finally:
+            self._applying_history = False
+
+    def _update_undo_redo_buttons(self):
+        self.undo_btn.configure(
+            state="normal" if self._history_index > 0 else "disabled"
+        )
+        self.redo_btn.configure(
+            state="normal" if self._history_index < len(self._history) - 1 else "disabled"
+        )
+
+
+
 
     # ==================== CLOSE ====================
 
