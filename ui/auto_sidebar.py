@@ -318,26 +318,57 @@ def _build_stops_row(parent, sidebar, settings, i18n,
       - драг — переместить выделенную
       - дабл-клик — сменить цвет
       - правый клик — удалить (если точек > 2)
+
+    FIX: tk.Canvas не поддерживает пары цветов CTk и НЕ следует за
+    ctk.set_appearance_mode() автоматически. Раньше фон (#2b2b2b) и
+    рамка (#555555) были жёстко зашиты — при светлой теме canvas
+    оставался тёмным. Теперь цвет фона/рамки вычисляется по текущей
+    теме и при создании, и при каждой перерисовке (redraw_stops).
     """
     import tkinter as tk
     from PIL import Image, ImageTk
     from utils import create_checkerboard_background
     from effects.gradient import sample_gradient_color
 
+    def themed_colors():
+        is_dark = ctk.get_appearance_mode() == "Dark"
+        bg = "#2b2b2b" if is_dark else "#e5e5e5"
+        border = "#555555" if is_dark else "#aaaaaa"
+        return bg, border
+
     ctk.CTkLabel(parent, text=label + ":",
                  font=("Arial", 11)).pack(anchor="w", padx=10, pady=(5, 0))
 
+    init_bg, init_border = themed_colors()
     stops_canvas = tk.Canvas(
         parent, height=40, highlightthickness=1,
-        highlightbackground="#555555", bg="#2b2b2b",
+        highlightbackground=init_border, bg=init_bg,
     )
     stops_canvas.pack(fill="x", padx=10, pady=(2, 8))
 
-    state = {"selected_idx": None, "photo": None}
+    state = {
+        "selected_idx": None,
+        "photo": None,
+        "bg": init_bg,
+        "border": init_border,
+    }
 
     def redraw_stops():
         canvas = stops_canvas
         canvas.delete("all")
+
+        # Синхронизация фона/рамки canvas с текущей темой — до отрисовки.
+        # Сравниваем с сохранённым значением, чтобы не дёргать
+        # configure() на каждый кадр.
+        bg, border = themed_colors()
+        if state["bg"] != bg or state["border"] != border:
+            state["bg"] = bg
+            state["border"] = border
+            try:
+                canvas.configure(bg=bg, highlightbackground=border)
+            except Exception:
+                pass
+
         w = max(canvas.winfo_width(), 10)
         h = max(canvas.winfo_height(), 30)
         ramp_h = max(1, int(h * 0.6))

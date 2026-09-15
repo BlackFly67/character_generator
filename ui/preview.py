@@ -81,6 +81,10 @@ class PreviewPanel(ctk.CTkFrame):
         # Debounce рендера
         self._render_job = None
 
+        # Текущий применённый цвет фона canvas (для дешёвой проверки
+        # "нужно ли перекрашивать" в _draw_zoomed).
+        self._canvas_bg_applied = None
+
         self._create_widgets()
 
     def add_callback(self, callback):
@@ -368,14 +372,6 @@ class PreviewPanel(ctk.CTkFrame):
     def _get_all_specs(self):
         icon_paths = getattr(self.main_window, 'loaded_icon_paths', [])
         if self.settings.icon_mode and icon_paths:
-            # ИСПРАВЛЕНО: enumerate(icon_paths, 1) вместо enumerate(icon_paths) —
-            # render_icons в render/icons.py нумерует иконки с 1
-            # (enumerate(icon_paths, 1)). spec.index используется в
-            # compose_full для seed эффекта Glitch (glitch_seed + spec.index).
-            # При 0-based индексации в превью и 1-based при реальном
-            # рендере seed для одного и того же символа/иконки не совпадал,
-            # и превью показывало не тот узор глитча, который окажется в
-            # сохранённом файле.
             return [CharSpec(icon_path=p, index=i)
                     for i, p in enumerate(icon_paths, 1)]
 
@@ -384,8 +380,6 @@ class PreviewPanel(ctk.CTkFrame):
         chars = parse_characters(raw) if raw else parse_characters(PREVIEW_TEXT)
         if not chars:
             chars = parse_characters(PREVIEW_TEXT)
-        # ИСПРАВЛЕНО: аналогично — render_text_characters в render/text.py
-        # нумерует символы с 1 (enumerate(characters, 1)).
         return [CharSpec(text=ch, index=i) for i, ch in enumerate(chars, 1)]
 
     def _signature(self, spec, all_specs):
@@ -424,9 +418,46 @@ class PreviewPanel(ctk.CTkFrame):
 
         self._draw_zoomed()
 
+    def _sync_canvas_bg(self):
+        """
+        Синхронизирует цвет фона внешнего tk.Canvas (и center_frame)
+        с текущей темой приложения.
+
+        FIX: tk.Canvas не поддерживает пары цветов CTk и НЕ следует
+        за ctk.set_appearance_mode() автоматически — цвет фона,
+        заданный в момент создания, остаётся прежним при смене темы.
+        Из-за этого при переключении на светлую тему вокруг
+        отрисованного превью оставалась тёмная рамка (цвет
+        исходного canvas), хотя сам _draw_blueprint уже рисовал
+        светлый фон.
+
+        _draw_blueprint использует ровно этот же bg_color
+        (#1a1a1a для dark, #e5e5e5 для light), поэтому canvas
+        должен использовать идентичный.
+        """
+        is_dark = ctk.get_appearance_mode() == "Dark"
+        bg_color = "#1a1a1a" if is_dark else "#e5e5e5"
+
+        if self._canvas_bg_applied == bg_color:
+            return
+        self._canvas_bg_applied = bg_color
+
+        try:
+            self.canvas.configure(bg=bg_color)
+        except Exception:
+            pass
+        try:
+            self.center_frame.configure(fg_color=bg_color)
+        except Exception:
+            pass
+
     def _draw_zoomed(self):
         if self._cached_full_image is None:
             return
+
+        # Синхронизация фона canvas с текущей темой — до отрисовки
+        # (иначе вокруг картинки видна рамка старого цвета).
+        self._sync_canvas_bg()
 
         full = self._cached_full_image
         z = self.zoom / 100.0
