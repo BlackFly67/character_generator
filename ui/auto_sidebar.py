@@ -68,6 +68,68 @@ def build_effect_sections(parent, sidebar, settings, i18n, order=None):
     return result
 
 
+def build_single_effect_panel(parent, sidebar, settings, i18n, effect_cls):
+    """
+    Строит панель параметров ОДНОГО эффекта — для Photoshop-style
+    режима (ui/effect_rail.py + Sidebar справа показывает только
+    активный эффект).
+
+    В отличие от _build_one_effect(), используемого build_effect_sections,
+    здесь чекбокс "включено" не прячет/показывает body_frame — body_frame
+    всегда виден, т.к. вся панель и так посвящена одному эффекту.
+    Чекбокс дублирует переключатель на самой иконке рельса (оба пишут
+    в один и тот же settings.<id>_enabled) — после переключения отсюда
+    вызывающая сторона (ui/sidebar.py) обязана дёрнуть EffectRail.refresh(),
+    иначе рельс не подсветится: см. MainWindow._on_settings_change,
+    который вызывается из sidebar._on_change().
+
+    Параметры эффекта строятся ТЕМИ ЖЕ builder-функциями
+    (_build_param_row и её ветки) — дублирования логики контролов нет.
+
+    parent должен быть уже очищен вызывающей стороной (Sidebar
+    вызывает это после self.winfo_children()... .destroy() в
+    _refresh_all_widgets()).
+
+    Возвращает dict с "widgets" (как у _build_one_effect) и отдельно
+    "enabled_var" — Sidebar сохраняет её в self._current_enabled_var
+    для sync_enabled_checkbox().
+    """
+    effect = effect_cls()
+    enabled_key = f"{effect.id}_enabled"
+
+    widgets = {}
+    enabled_var = ctk.BooleanVar(value=bool(getattr(settings, enabled_key, False)))
+
+    def on_toggle():
+        setattr(settings, enabled_key, bool(enabled_var.get()))
+        sidebar._on_change()
+
+    # Тот же паттерн, что и в _build_one_effect: чекбокс подписан
+    # именем самого эффекта (effect.label_key) — это единственный
+    # "заголовок" панели, отдельная надпись не нужна и не дублирует
+    # название эффекта неверным текстом (см. правку выше — раньше
+    # здесь ошибочно всегда подставлялся "enable_shadow"/"transparent_text"
+    # независимо от того, какой эффект открыт).
+    ctk.CTkCheckBox(
+        parent, text=i18n.tr(effect.label_key),
+        variable=enabled_var, command=on_toggle,
+        checkbox_height=20, checkbox_width=20,
+        font=("Arial", 14, "bold"),
+    ).pack(anchor="w", padx=10, pady=(10, 8))
+
+    widgets["__enabled_var__"] = enabled_var
+
+    body_frame = ctk.CTkFrame(parent, fg_color="transparent")
+    body_frame.pack(fill="x")
+
+    for p in effect.params:
+        if p.key == "enabled":
+            continue
+        _build_param_row(body_frame, sidebar, settings, i18n, effect, p, widgets)
+
+    return {"body_frame": body_frame, "widgets": widgets, "enabled_var": enabled_var}
+
+
 def _build_one_effect(parent, sidebar, settings, i18n, effect):
     # Секции авто-эффектов — ПРОЗРАЧНЫЕ (без серой подложки), как
     # ручные секции. padx снят — style_section уже даёт 10px по бокам.
@@ -318,57 +380,26 @@ def _build_stops_row(parent, sidebar, settings, i18n,
       - драг — переместить выделенную
       - дабл-клик — сменить цвет
       - правый клик — удалить (если точек > 2)
-
-    FIX: tk.Canvas не поддерживает пары цветов CTk и НЕ следует за
-    ctk.set_appearance_mode() автоматически. Раньше фон (#2b2b2b) и
-    рамка (#555555) были жёстко зашиты — при светлой теме canvas
-    оставался тёмным. Теперь цвет фона/рамки вычисляется по текущей
-    теме и при создании, и при каждой перерисовке (redraw_stops).
     """
     import tkinter as tk
     from PIL import Image, ImageTk
     from utils import create_checkerboard_background
     from effects.gradient import sample_gradient_color
 
-    def themed_colors():
-        is_dark = ctk.get_appearance_mode() == "Dark"
-        bg = "#2b2b2b" if is_dark else "#e5e5e5"
-        border = "#555555" if is_dark else "#aaaaaa"
-        return bg, border
-
     ctk.CTkLabel(parent, text=label + ":",
                  font=("Arial", 11)).pack(anchor="w", padx=10, pady=(5, 0))
 
-    init_bg, init_border = themed_colors()
     stops_canvas = tk.Canvas(
         parent, height=40, highlightthickness=1,
-        highlightbackground=init_border, bg=init_bg,
+        highlightbackground="#555555", bg="#2b2b2b",
     )
     stops_canvas.pack(fill="x", padx=10, pady=(2, 8))
 
-    state = {
-        "selected_idx": None,
-        "photo": None,
-        "bg": init_bg,
-        "border": init_border,
-    }
+    state = {"selected_idx": None, "photo": None}
 
     def redraw_stops():
         canvas = stops_canvas
         canvas.delete("all")
-
-        # Синхронизация фона/рамки canvas с текущей темой — до отрисовки.
-        # Сравниваем с сохранённым значением, чтобы не дёргать
-        # configure() на каждый кадр.
-        bg, border = themed_colors()
-        if state["bg"] != bg or state["border"] != border:
-            state["bg"] = bg
-            state["border"] = border
-            try:
-                canvas.configure(bg=bg, highlightbackground=border)
-            except Exception:
-                pass
-
         w = max(canvas.winfo_width(), 10)
         h = max(canvas.winfo_height(), 30)
         ramp_h = max(1, int(h * 0.6))
@@ -569,30 +600,3 @@ def _build_seed_row(parent, sidebar, settings,
 
     entry.bind("<KeyRelease>", on_entry)
     widgets_out[param.key] = (entry, dice_btn)
-    
-def build_single_effect(parent, sidebar, settings, i18n, effect_id):
-    """
-    Строит UI для ОДНОГО эффекта по его id. Обёртка над
-    _build_one_effect.
-
-    Используется в SettingsPanel: правая панель показывает настройки
-    только одного эффекта, а не всех сразу.
-
-    Возвращает dict виджетов (section/body_frame/widgets) или None,
-    если effect_id не найден.
-
-    Пропускает эффекты из MANUAL_EFFECT_IDS — у них своя фабрика
-    в manual_sidebar.MANUAL_PANELS, вызывающий код должен
-    маршрутизировать их отдельно.
-    """
-    if effect_id in MANUAL_EFFECT_IDS:
-        return None
-
-    all_effects = PIPELINE + POST_COMPOSE_EFFECTS
-    by_id = {cls.id: cls for cls in all_effects}
-    cls = by_id.get(effect_id)
-    if cls is None:
-        return None
-
-    eff = cls()
-    return _build_one_effect(parent, sidebar, settings, i18n, eff)  

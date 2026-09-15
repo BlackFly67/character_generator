@@ -1,0 +1,687 @@
+diff --git a/ui/auto_sidebar.py b/ui/auto_sidebar.py
+index c65b39a..adb9cf6 100644
+--- a/ui/auto_sidebar.py
++++ b/ui/auto_sidebar.py
+@@ -68,6 +68,68 @@ def build_effect_sections(parent, sidebar, settings, i18n, order=None):
+     return result
+ 
+ 
++def build_single_effect_panel(parent, sidebar, settings, i18n, effect_cls):
++    """
++    Строит панель параметров ОДНОГО эффекта — для Photoshop-style
++    режима (ui/effect_rail.py + Sidebar справа показывает только
++    активный эффект).
++
++    В отличие от _build_one_effect(), используемого build_effect_sections,
++    здесь чекбокс "включено" не прячет/показывает body_frame — body_frame
++    всегда виден, т.к. вся панель и так посвящена одному эффекту.
++    Чекбокс дублирует переключатель на самой иконке рельса (оба пишут
++    в один и тот же settings.<id>_enabled) — после переключения отсюда
++    вызывающая сторона (ui/sidebar.py) обязана дёрнуть EffectRail.refresh(),
++    иначе рельс не подсветится: см. MainWindow._on_settings_change,
++    который вызывается из sidebar._on_change().
++
++    Параметры эффекта строятся ТЕМИ ЖЕ builder-функциями
++    (_build_param_row и её ветки) — дублирования логики контролов нет.
++
++    parent должен быть уже очищен вызывающей стороной (Sidebar
++    вызывает это после self.winfo_children()... .destroy() в
++    _refresh_all_widgets()).
++
++    Возвращает dict с "widgets" (как у _build_one_effect) и отдельно
++    "enabled_var" — Sidebar сохраняет её в self._current_enabled_var
++    для sync_enabled_checkbox().
++    """
++    effect = effect_cls()
++    enabled_key = f"{effect.id}_enabled"
++
++    widgets = {}
++    enabled_var = ctk.BooleanVar(value=bool(getattr(settings, enabled_key, False)))
++
++    def on_toggle():
++        setattr(settings, enabled_key, bool(enabled_var.get()))
++        sidebar._on_change()
++
++    # Тот же паттерн, что и в _build_one_effect: чекбокс подписан
++    # именем самого эффекта (effect.label_key) — это единственный
++    # "заголовок" панели, отдельная надпись не нужна и не дублирует
++    # название эффекта неверным текстом (см. правку выше — раньше
++    # здесь ошибочно всегда подставлялся "enable_shadow"/"transparent_text"
++    # независимо от того, какой эффект открыт).
++    ctk.CTkCheckBox(
++        parent, text=i18n.tr(effect.label_key),
++        variable=enabled_var, command=on_toggle,
++        checkbox_height=20, checkbox_width=20,
++        font=("Arial", 14, "bold"),
++    ).pack(anchor="w", padx=10, pady=(10, 8))
++
++    widgets["__enabled_var__"] = enabled_var
++
++    body_frame = ctk.CTkFrame(parent, fg_color="transparent")
++    body_frame.pack(fill="x")
++
++    for p in effect.params:
++        if p.key == "enabled":
++            continue
++        _build_param_row(body_frame, sidebar, settings, i18n, effect, p, widgets)
++
++    return {"body_frame": body_frame, "widgets": widgets, "enabled_var": enabled_var}
++
++
+ def _build_one_effect(parent, sidebar, settings, i18n, effect):
+     # Секции авто-эффектов — ПРОЗРАЧНЫЕ (без серой подложки), как
+     # ручные секции. padx снят — style_section уже даёт 10px по бокам.
+diff --git a/ui/effect_rail.py b/ui/effect_rail.py
+new file mode 100644
+index 0000000..6bc32bb
+--- /dev/null
++++ b/ui/effect_rail.py
+@@ -0,0 +1,205 @@
++# -*- coding: utf-8 -*-
++"""
++Левый "рельс" (rail) с пиктограммами эффектов — Photoshop-style.
++
++Каждая иконка соответствует одному эффекту из effects/registry.py
++(PIPELINE + POST_COMPOSE_EFFECTS). Клик по иконке делает эффект
++"активным" — Sidebar (ui/sidebar.py) показывает справа только его
++параметры (см. Sidebar.select_effect / build_single_effect_panel в
++ui/auto_sidebar.py).
++
++Включение/выключение эффекта НЕ требует открытия панели параметров —
++у каждой строки есть свой чекбокс, как галочка слева от названия
++эффекта в панели fx в Photoshop.
++
++Подсветка:
++  - включённый эффект (settings.<id>_enabled == True) — зелёный акцент;
++  - выбранный сейчас (открыт в панели справа) — синий акцент;
++  - both одновременно — выбранный побеждает по цвету, но чекбокс уже
++    сам по себе показывает состояние enabled.
++
++Первая строка — "Base": не эффект из реестра, а способ вернуть панель
++справа к общим настройкам (шрифт, цвет текста, поворот, дуга,
++прозрачность, фон) — тем самым, что раньше были видны без выбора
++эффекта.
++"""
++
++import customtkinter as ctk
++
++from effects.registry import PIPELINE, POST_COMPOSE_EFFECTS
++
++# Порядок и иконки эффектов на рельсе. Порядок сохраняет прежний
++# линейный порядок из ui/sidebar.py — так пользователи, привыкшие к
++# старому расположению, не путаются.
++RAIL_ORDER = [
++    ("gradient",      "🌈"),
++    ("pattern",       "🧱"),
++    ("outline_inner", "◻"),
++    ("outline_outer", "⬜"),
++    ("glow_inner",    "🔆"),
++    ("glow_outer",    "✨"),
++    ("extrude",       "🧊"),
++    ("emboss",        "🗿"),
++    ("inner_shadow",  "🕳"),
++    ("shadow",        "🌑"),
++    ("skew",          "📐"),
++    ("perspective",   "🎭"),
++    ("reflection",    "🪞"),
++    ("halftone",      "⚫"),
++    ("glitch",        "📺"),
++]
++
++BASE_ID = "base"
++
++_COLOR_SELECTED = "#1f538d"
++_COLOR_SELECTED_TEXT = "white"
++_COLOR_ENABLED = ("#8fd19e", "#1e5631")
++_COLOR_ENABLED_TEXT = ("#0a2a12", "#eaffef")
++_COLOR_IDLE = ("#dbdbdb", "#2b2b2b")
++_COLOR_IDLE_TEXT = ("#1a1a1a", "#e0e0e0")
++
++
++class EffectRail(ctk.CTkScrollableFrame):
++    """Вертикальная плёнка иконок эффектов (левая колонка окна)."""
++
++    def __init__(self, parent, settings, i18n, on_select):
++        super().__init__(parent, width=76, corner_radius=0)
++        self.settings = settings
++        self.i18n = i18n
++        self._on_select = on_select
++        self._on_change_callbacks = []
++
++        self.selected_id = BASE_ID
++        # id -> {"icon_btn": CTkButton, "checkbox": CTkCheckBox|None,
++        #        "enabled_var": BooleanVar|None}
++        self._rows = {}
++
++        by_id = {cls.id: cls for cls in PIPELINE + POST_COMPOSE_EFFECTS}
++
++        self._build_base_row()
++        for effect_id, glyph in RAIL_ORDER:
++            cls = by_id.get(effect_id)
++            if cls is None:
++                # Эффект мог быть удалён из реестра — не падаем,
++                # просто пропускаем несуществующую иконку.
++                continue
++            self._build_effect_row(cls, glyph)
++
++    # ------------------------------------------------------------
++    #  Callbacks — тот же контракт, что у Sidebar._on_change, чтобы
++    #  MainWindow могла подключать оба источника изменений одинаково.
++    # ------------------------------------------------------------
++
++    def add_change_callback(self, callback):
++        self._on_change_callbacks.append(callback)
++
++    def _on_change(self):
++        for callback in self._on_change_callbacks:
++            callback()
++
++    # ------------------------------------------------------------
++    #  Строим строки рельса
++    # ------------------------------------------------------------
++
++    def _build_base_row(self):
++        row = ctk.CTkFrame(self, fg_color="transparent")
++        row.pack(fill="x", pady=(4, 10))
++
++        btn = ctk.CTkButton(
++            row, text="⚙", width=52, height=40,
++            font=("Segoe UI Symbol", 18),
++            command=lambda: self._select(BASE_ID),
++        )
++        btn.pack(padx=4)
++
++        ctk.CTkLabel(row, text=self.i18n.tr("settings"),
++                     font=("Arial", 9), wraplength=68).pack()
++
++        self._rows[BASE_ID] = {"icon_btn": btn, "checkbox": None, "enabled_var": None}
++        self._update_row_style(BASE_ID)
++
++    def _build_effect_row(self, cls, glyph):
++        effect_id = cls.id
++        row = ctk.CTkFrame(self, fg_color="transparent")
++        row.pack(fill="x", pady=3)
++
++        icon_btn = ctk.CTkButton(
++            row, text=glyph, width=52, height=36,
++            font=("Segoe UI Symbol", 16),
++            command=lambda eid=effect_id: self._select(eid),
++        )
++        icon_btn.pack(padx=4)
++
++        enabled_key = f"{effect_id}_enabled"
++        enabled_var = ctk.BooleanVar(value=bool(getattr(self.settings, enabled_key, False)))
++
++        def on_toggle(eid=effect_id, key=enabled_key, var=enabled_var):
++            setattr(self.settings, key, bool(var.get()))
++            self._update_row_style(eid)
++            self._on_change()
++
++        checkbox = ctk.CTkCheckBox(
++            row, text="", variable=enabled_var, command=on_toggle,
++            width=18, checkbox_width=16, checkbox_height=16,
++        )
++        checkbox.pack(pady=(3, 0))
++
++        ctk.CTkLabel(row, text=self.i18n.tr(cls.label_key),
++                     font=("Arial", 9), wraplength=68).pack()
++
++        self._rows[effect_id] = {
++            "icon_btn": icon_btn, "checkbox": checkbox, "enabled_var": enabled_var,
++        }
++        self._update_row_style(effect_id)
++
++    # ------------------------------------------------------------
++    #  Выбор / подсветка
++    # ------------------------------------------------------------
++
++    def _select(self, effect_id):
++        previous = self.selected_id
++        self.selected_id = effect_id
++        self._update_row_style(previous)
++        self._update_row_style(effect_id)
++        self._on_select(effect_id)
++
++    def _update_row_style(self, effect_id):
++        info = self._rows.get(effect_id)
++        if info is None:
++            return
++        is_selected = (self.selected_id == effect_id)
++        is_enabled = effect_id != BASE_ID and bool(
++            getattr(self.settings, f"{effect_id}_enabled", False)
++        )
++
++        if is_selected:
++            fg, text_color = _COLOR_SELECTED, _COLOR_SELECTED_TEXT
++        elif is_enabled:
++            fg, text_color = _COLOR_ENABLED, _COLOR_ENABLED_TEXT
++        else:
++            fg, text_color = _COLOR_IDLE, _COLOR_IDLE_TEXT
++
++        info["icon_btn"].configure(fg_color=fg, text_color=text_color)
++
++    # ------------------------------------------------------------
++    #  Синхронизация извне (Undo/Redo, сброс настроек, пресеты,
++    #  переключение чекбокса ИЗ панели параметров справа)
++    # ------------------------------------------------------------
++
++    def refresh(self):
++        """
++        Перечитывает enabled-флаги из settings и перекрашивает рельс.
++
++        Нужно вызывать после ЛЮБОГО изменения settings, которое могло
++        произойти не через сам рельс: Undo/Redo, сброс настроек,
++        загрузку пресета стиля, переключение чекбокса "enabled" внутри
++        панели параметров (build_single_effect_panel в auto_sidebar.py)
++        — там свой, независимый BooleanVar.
++        """
++        for effect_id, info in self._rows.items():
++            if effect_id == BASE_ID:
++                continue
++            var = info.get("enabled_var")
++            if var is not None:
++                var.set(bool(getattr(self.settings, f"{effect_id}_enabled", False)))
++            self._update_row_style(effect_id)
+diff --git a/ui/main_window.py b/ui/main_window.py
+index 9be096a..2f6d04b 100644
+--- a/ui/main_window.py
++++ b/ui/main_window.py
+@@ -22,6 +22,7 @@ from render.text import render_text_characters
+ from render.icons import render_icons, get_icon_mask, default_icon_font_size
+ from render.lvgl import save_lvgl_v8_bin
+ from ui.sidebar import Sidebar
++from ui.effect_rail import EffectRail
+ from ui.preview import PreviewPanel
+ from ui.dialogs import SettingsDialog, SystemFontPicker, StylePresetsDialog
+ from ui.widgets import IntSliderRow, ColorPickerButton, DirectionSelector
+@@ -87,20 +88,28 @@ class MainWindow:
+         self.root.geometry("1050x750")
+         self.root.minsize(950, 650)
+ 
++        # 3 колонки, Photoshop-style: рельс иконок (лево) | превью
++        # (центр, тянется) | панель настроек активного эффекта (право).
+         self.root.grid_columnconfigure(0, weight=0)
+         self.root.grid_columnconfigure(1, weight=1)
++        self.root.grid_columnconfigure(2, weight=0)
+         self.root.grid_rowconfigure(0, weight=1)
+ 
+     # ==================== LAYOUT ====================
+ 
+     def _create_layout(self):
+-        # Боковая панель
+-        self.sidebar = Sidebar(self.root, self.settings, self.i18n)
+-        self.sidebar.grid(row=0, column=0, sticky="nsew")
+-        self.sidebar.add_change_callback(self._on_settings_change)
+-        self.sidebar.add_change_callback(self._schedule_history_snapshot)
++        # Рельс иконок эффектов (лево). on_select приходит из
++        # EffectRail при клике на иконку — просто просим Sidebar
++        # показать соответствующий раздел.
++        self.effect_rail = EffectRail(
++            self.root, self.settings, self.i18n,
++            on_select=self._on_effect_selected,
++        )
++        self.effect_rail.grid(row=0, column=0, sticky="nsew")
++        self.effect_rail.add_change_callback(self._on_settings_change)
++        self.effect_rail.add_change_callback(self._schedule_history_snapshot)
+ 
+-        # Основная область
++        # Основная область (центр)
+         content_frame = ctk.CTkFrame(self.root, fg_color="transparent")
+         content_frame.grid(row=0, column=1, sticky="nsew", padx=15, pady=15)
+         content_frame.grid_rowconfigure(1, weight=1)
+@@ -114,6 +123,16 @@ class MainWindow:
+         self.preview.pack(fill="both", expand=True, pady=(0, 10))
+         self.preview.add_callback(self._on_preview_change)
+ 
++        # Панель настроек активного раздела (право, Base по умолчанию)
++        self.sidebar = Sidebar(self.root, self.settings, self.i18n)
++        self.sidebar.grid(row=0, column=2, sticky="nsew")
++        self.sidebar.add_change_callback(self._on_settings_change)
++        self.sidebar.add_change_callback(self._schedule_history_snapshot)
++
++    def _on_effect_selected(self, effect_id):
++        """Клик по иконке на рельсе — переключает панель справа."""
++        self.sidebar.select_effect(effect_id)
++
+     # ==================== INPUT PANEL ====================
+ 
+     def _create_input_panel(self, parent):
+@@ -384,9 +403,22 @@ class MainWindow:
+         self.preview_index = 0
+ 
+         self.sidebar._refresh_all_widgets()
++        # ДОБАВЛЕНО: _apply_settings вызывается и после SettingsDialog
++        # (смена языка/темы), и при первом запуске — settings могли
++        # прийти извне (загруженный config.json), рельс должен сразу
++        # показывать актуальные enabled-флаги, а не только те, что были
++        # на момент создания EffectRail в _create_layout.
++        self.effect_rail.refresh()
+ 
+     def _on_settings_change(self):
+         self.preview.update()
++        # Rail и Sidebar имеют НЕЗАВИСИМЫЕ BooleanVar на один и тот же
++        # settings.<id>_enabled (чекбокс на иконке рельса и чекбокс
++        # внутри панели параметров). Любое изменение с одной стороны
++        # должно быть видно на другой — обе стороны просто перечитывают
++        # settings, дорого это не стоит (несколько getattr + configure).
++        self.sidebar.sync_enabled_checkbox()
++        self.effect_rail.refresh()
+ 
+     def _on_preview_change(self):
+         pass
+@@ -434,10 +466,17 @@ class MainWindow:
+                 self.settings.text_font_size = 64
+ 
+         # 2. Обновляем UI размера в сайдбаре (entry + slider)
+-        if hasattr(self.sidebar, 'font_size_entry'):
++        # ИСПРАВЛЕНО: раньше проверялось hasattr(self.sidebar, 'font_size_entry'),
++        # но в Photoshop-style режиме этот атрибут ВСЕГДА существует
++        # (задан в Sidebar.__init__), просто может быть None или указывать
++        # на уже уничтоженный виджет (см. Sidebar._build_effect_section),
++        # если сейчас справа открыт не Base, а панель конкретного эффекта.
++        # hasattr в такой ситуации всегда True, и .delete()/.set() упали бы
++        # с TclError на уничтоженном виджете. Проверяем None явно.
++        if getattr(self.sidebar, 'font_size_entry', None) is not None:
+             self.sidebar.font_size_entry.delete(0, "end")
+             self.sidebar.font_size_entry.insert(0, str(self.settings.font_size))
+-        if hasattr(self.sidebar, 'font_size_slider'):
++        if getattr(self.sidebar, 'font_size_slider', None) is not None:
+             self.sidebar.font_size_slider.set(self.settings.font_size)
+ 
+         self._update_mode_buttons()
+@@ -504,10 +543,13 @@ class MainWindow:
+             if dim:
+                 # settings.font_size в режиме иконок пишет в icon_font_size
+                 self.settings.font_size = dim
+-                if hasattr(self.sidebar, 'font_size_entry'):
++                # См. пояснение в _set_input_mode: hasattr тут не годится,
++                # т.к. атрибут существует всегда, но может указывать на
++                # уничтоженный виджет, если сейчас открыта не Base-панель.
++                if getattr(self.sidebar, 'font_size_entry', None) is not None:
+                     self.sidebar.font_size_entry.delete(0, "end")
+                     self.sidebar.font_size_entry.insert(0, str(dim))
+-                if hasattr(self.sidebar, 'font_size_slider'):
++                if getattr(self.sidebar, 'font_size_slider', None) is not None:
+                     self.sidebar.font_size_slider.set(dim)
+ 
+         dims_after = set(self._get_icon_dims(self.loaded_icon_paths))
+@@ -1019,6 +1061,13 @@ class MainWindow:
+         try:
+             self.settings.from_dict(snapshot)
+             self.sidebar._refresh_all_widgets()
++            # ДОБАВЛЕНО: Undo/Redo может разом переключить enabled-флаги
++            # сразу нескольких эффектов (например, откат к состоянию, где
++            # был включён glow, а сейчас — нет). sidebar._refresh_all_widgets()
++            # выше уже перечитает settings для ТЕКУЩЕЙ открытой панели, но
++            # рельс слева никак не подписан на settings — без явного
++            # refresh() его подсветка эффектов останется устаревшей.
++            self.effect_rail.refresh()
+             self.preview.update()
+             self._update_undo_redo_buttons()
+         finally:
+diff --git a/ui/sidebar.py b/ui/sidebar.py
+index d6a5873..721edef 100644
+--- a/ui/sidebar.py
++++ b/ui/sidebar.py
+@@ -1,32 +1,38 @@
+ # -*- coding: utf-8 -*-
+ """
+-Боковая панель с настройками.
+-
+-Эффекты из PIPELINE — включая fill-стадию (halftone_mask → color_fill →
+-gradient → pattern), inner/outer и post — строятся АВТОМАТИЧЕСКИ из
+-ParamSpec, см. ui/auto_sidebar.py.
+-
+-Внешняя тень (ShadowOuter) — тоже строится автоматически, но не из
+-PIPELINE, а из POST_COMPOSE_EFFECTS: она работает с final_img, а не с
+-char_layer, поэтому вызывается вручную в compose_full. Для UI это
+-прозрачно — просто order=["shadow"] в build_effect_sections.
+-
+-Ручные секции (header, font, style-text, rotation, arc, opacity,
+-background) вынесены в ui/manual_sidebar.py — их фабрики
+-build_*_section(parent, sidebar, settings, i18n) возвращают dict
+-виджетов. Sidebar._create_sidebar только собирает всё в нужном порядке
+-и сохраняет ссылки в self.*, которые нужны MainWindow (см.
+-main_window.py: sidebar.font_size_entry, sidebar.font_size_slider).
++Боковая панель с настройками — Photoshop-style режим.
++
++Раньше Sidebar показывал ВСЕ секции (шрифт, стиль, все эффекты) одним
++длинным списком с прокруткой. Теперь это правая колонка окна:
++пиктограммы эффектов вынесены в отдельный виджет EffectRail
++(ui/effect_rail.py, левая колонка), а Sidebar показывает НАСТРОЙКИ
++ТОЛЬКО ОДНОГО активного раздела за раз:
++
++  - selected_effect_id == BASE_ID ("base") — общие настройки: шрифт,
++    цвет текста, поворот, дуга, прозрачность, фон (build_*_section из
++    ui/manual_sidebar.py — как раньше, без эффектов из PIPELINE);
++  - selected_effect_id == <effect_id> — параметры одного эффекта из
++    PIPELINE/POST_COMPOSE_EFFECTS (build_single_effect_panel из
++    ui/auto_sidebar.py).
++
++EffectRail сообщает о выборе через колбэк on_select, переданный при
++создании (см. MainWindow._create_layout -> EffectRail(..., on_select=
++self._on_effect_selected) -> self.sidebar.select_effect(effect_id)).
++
++Header (reset / presets) остаётся виден всегда — это глобальные
++действия, не привязанные к конкретному эффекту.
+ """
+ 
+ import customtkinter as ctk
+ 
+-from ui.auto_sidebar import build_effect_sections
++from ui.auto_sidebar import build_single_effect_panel
++from ui.effect_rail import BASE_ID
++from effects.registry import PIPELINE, POST_COMPOSE_EFFECTS
+ from ui import manual_sidebar as ms
+ 
+ 
+ class Sidebar(ctk.CTkScrollableFrame):
+-    """Боковая панель с настройками."""
++    """Правая панель настроек: Base или один активный эффект."""
+ 
+     def __init__(self, parent, settings, i18n):
+         super().__init__(parent, width=320, corner_radius=0)
+@@ -34,15 +40,29 @@ class Sidebar(ctk.CTkScrollableFrame):
+         self.i18n = i18n
+         self._on_change_callbacks = []
+ 
+-        # Секции авто-эффектов
+-        self.effect_sections = {}
+-
+-        # Публичные атрибуты, которые читает MainWindow
++        # Какой раздел сейчас показан справа: BASE_ID или id эффекта.
++        self.selected_effect_id = BASE_ID
++
++        # BooleanVar чекбокса "включено" ТЕКУЩЕЙ открытой панели эффекта
++        # (None, если сейчас показан Base). Нужна для
++        # sync_enabled_checkbox() — синхронизации со значением,
++        # переключённым через чекбокс НА РЕЛЬСЕ (EffectRail), у которого
++        # свой, независимый BooleanVar на тот же settings.<id>_enabled.
++        self._current_enabled_var = None
++
++        # Публичные атрибуты, которые читает MainWindow. Существуют
++        # ТОЛЬКО когда открыт Base-раздел (там же и создаются) — в
++        # остальное время равны None. Вызывающий код в main_window.py
++        # обязан проверять на None (не просто hasattr — атрибут
++        # объявлен всегда, но может указывать на уже уничтоженный
++        # виджет после _refresh_all_widgets(), если панель эффекта
++        # была открыта не в первый раз).
+         self.font_size_entry = None
+         self.font_size_slider = None
+ 
+         # Прочие ссылки, которые были у Sidebar раньше (для совместимости
+-        # с возможным внешним кодом, который мог их читать).
++        # с возможным внешним кодом, который мог их читать). Тоже валидны
++        # только при selected_effect_id == BASE_ID.
+         self.text_color_button = None
+         self.rotation_entry = None
+         self.rotation_slider = None
+@@ -68,30 +88,68 @@ class Sidebar(ctk.CTkScrollableFrame):
+         self._on_change_callbacks.append(callback)
+ 
+     def _refresh_all_widgets(self):
+-        """Обновляет все виджеты после сброса."""
++        """Обновляет все виджеты (текущего раздела) после сброса."""
+         for widget in self.winfo_children():
+             widget.destroy()
+         self._create_sidebar()
+ 
++    # ------------------------------------------------------------
++    #  Выбор раздела — вызывается из MainWindow по клику на рельсе
++    # ------------------------------------------------------------
++
++    def select_effect(self, effect_id):
++        """Переключает панель на Base или на один из эффектов."""
++        self.selected_effect_id = effect_id
++        self._refresh_all_widgets()
++
++    def sync_enabled_checkbox(self):
++        """
++        Подтягивает enabled_var текущей открытой панели эффекта из
++        settings. Нужно вызывать после ЛЮБОГО изменения settings извне
++        текущей панели (в первую очередь — после переключения чекбокса
++        на самой иконке в EffectRail: там свой BooleanVar, физически
++        не связанный с тем, что лежит в панели справа).
++
++        Если сейчас открыт Base — делать нечего (_current_enabled_var
++        is None).
++        """
++        if self._current_enabled_var is None:
++            return
++        if self.selected_effect_id in (None, BASE_ID):
++            return
++        key = f"{self.selected_effect_id}_enabled"
++        self._current_enabled_var.set(bool(getattr(self.settings, key, False)))
++
+     # ============================================================
+     #  Сборка сайдбара
+     # ============================================================
+ 
+     def _create_sidebar(self):
+-        """Создаёт весь sidebar."""
++        """Создаёт содержимое текущего раздела (Base или эффект)."""
+ 
+-        # 1. Header
++        # Header виден всегда — reset/presets не привязаны к разделу.
+         header = ms.build_header(self, self, self.settings, self.i18n)
+         self.settings_label = header["label"]
+         self.style_presets_button = header["presets_button"]
+ 
+-        # 2. Font
++        if self.selected_effect_id in (None, BASE_ID):
++            self.selected_effect_id = BASE_ID
++            self._current_enabled_var = None
++            self._build_base_section()
++        else:
++            self._build_effect_section(self.selected_effect_id)
++
++    def _build_base_section(self):
++        """Общие настройки — то, что раньше было видно без выбора эффекта."""
++
++        # font_size_entry/slider существуют ТОЛЬКО пока открыт Base —
++        # обнуляем на входе в _build_effect_section (см. ниже), чтобы
++        # main_window.py не трогал уничтоженные виджеты (см. комментарий
++        # в __init__).
+         font_w = ms.build_font_section(self, self, self.settings, self.i18n)
+         self.font_size_entry = font_w["size_entry"]
+         self.font_size_slider = font_w["size_slider"]
+ 
+-        # 3. Style: text color + transparent + cutout (ручное),
+-        #    gradient + pattern (теперь авто — из PIPELINE fill-стадии).
+         style_section = ctk.CTkFrame(self, fg_color="transparent")
+         style_section.pack(fill="x", padx=10, pady=5)
+ 
+@@ -100,62 +158,51 @@ class Sidebar(ctk.CTkScrollableFrame):
+         )
+         self.text_color_button = style_text["text_color_button"]
+ 
+-        # 4a. Первая группа auto-эффектов (включая gradient и pattern —
+-        #     они идут первыми в order, чтобы остаться на прежнем месте UI:
+-        #     сразу после text-color, до outline_inner).
+-        self.effect_sections.update(build_effect_sections(
+-            style_section, self, self.settings, self.i18n,
+-            order=[
+-                "gradient",
+-                "pattern",
+-                "outline_inner",
+-                "outline_outer",
+-                "glow_inner",
+-                "glow_outer",
+-                "extrude",
+-                "emboss",
+-                "inner_shadow",
+-            ],
+-        ))
+-
+-        # 4b. Внешняя тень (POST_COMPOSE_EFFECTS)
+-        self.effect_sections.update(build_effect_sections(
+-            style_section, self, self.settings, self.i18n,
+-            order=["shadow"],
+-        ))
+-
+-        # 4c. Вторая группа auto-эффектов
+-        self.effect_sections.update(build_effect_sections(
+-            style_section, self, self.settings, self.i18n,
+-            order=[
+-                "skew",
+-                "perspective",
+-                "reflection",
+-                "halftone",
+-                "glitch",
+-            ],
+-        ))
+-
+-        # 5. Rotation
+         rotation_w = ms.build_rotation_section(
+             self, self, self.settings, self.i18n
+         )
+         self.rotation_entry = rotation_w["entry"]
+         self.rotation_slider = rotation_w["slider"]
+ 
+-        # 6. Arc
+         arc_w = ms.build_arc_section(self, self, self.settings, self.i18n)
+         self.arc_frame = arc_w["body_frame"]
+ 
+-        # 7. Opacity
+         opacity_w = ms.build_opacity_section(
+             self, self, self.settings, self.i18n
+         )
+         self.opacity_entry = opacity_w["entry"]
+         self.opacity_slider = opacity_w["slider"]
+ 
+-        # 8. Background
+         bg_w = ms.build_background_section(
+             self, self, self.settings, self.i18n
+         )
+-        self.background_color_button = bg_w["color_button"]
+\ No newline at end of file
++        self.background_color_button = bg_w["color_button"]
++
++    def _build_effect_section(self, effect_id):
++        """Параметры одного эффекта (PIPELINE/POST_COMPOSE_EFFECTS)."""
++
++        # Base-виджеты сейчас не существуют — обнуляем ссылки, чтобы
++        # main_window.py не пытался писать в уже уничтоженные объекты
++        # (см. комментарий у self.font_size_entry в __init__).
++        self.font_size_entry = None
++        self.font_size_slider = None
++        self.text_color_button = None
++        self.rotation_entry = None
++        self.rotation_slider = None
++        self.arc_frame = None
++        self.opacity_entry = None
++        self.opacity_slider = None
++        self.background_color_button = None
++
++        by_id = {cls.id: cls for cls in PIPELINE + POST_COMPOSE_EFFECTS}
++        cls = by_id.get(effect_id)
++        if cls is None:
++            # Неизвестный/удалённый из реестра id — не падаем, тихо
++            # откатываемся на Base.
++            self.selected_effect_id = BASE_ID
++            self._current_enabled_var = None
++            self._build_base_section()
++            return
++
++        panel = build_single_effect_panel(self, self, self.settings, self.i18n, cls)
++        self._current_enabled_var = panel["enabled_var"]
