@@ -8,7 +8,7 @@ from PIL import Image
 
 from effects.core import (
     EffectBase, EffectContext, ParamSpec,
-    CTRL_CHECKBOX, CTRL_INT,
+    CTRL_CHECKBOX, CTRL_INT, CTRL_SEED,
 )
 
 
@@ -20,7 +20,7 @@ class Glitch(EffectBase):
         ParamSpec("enabled",         "glitch",                 CTRL_CHECKBOX, False),
         ParamSpec("rgb_shift",       "glitch_rgb_shift",       CTRL_INT, 4, 0, 30),
         ParamSpec("slice_intensity", "glitch_slice_intensity", CTRL_INT, 30, 0, 100),
-        ParamSpec("seed",            "glitch_seed",            CTRL_INT, 0),
+        ParamSpec("seed",            "glitch_seed",            CTRL_SEED, 0, 0, 9999),
     ]
 
     def apply(self, ctx: EffectContext):
@@ -29,9 +29,9 @@ class Glitch(EffectBase):
         rgb_shift = int(self._get(ctx, "rgb_shift", 4))
         slice_intensity = int(self._get(ctx, "slice_intensity", 30))
         seed = int(self._get(ctx, "seed", 0))
-        index = int(ctx.extra.get("spec_index", 0))
+        # Seed одинаковый для всех символов батча — глитч одинаковый.
         return apply_glitch_effect(ctx.image, rgb_shift, slice_intensity,
-                                    seed=(seed + index) & 0xFFFFFFFF)
+                                    seed=seed & 0xFFFFFFFF)
 
 
 # ============================================================

@@ -29,6 +29,7 @@ CTRL_OPTION   = "option"
 CTRL_DIR      = "dir"
 CTRL_STOPS    = "stops"     # редактор цветовых точек (задел на gradient)
 CTRL_FILE     = "file"      # выбор файла (задел на pattern)
+CTRL_SEED     = "seed"      # целое число + кнопка-рандом (🎲)
 
 
 @dataclass

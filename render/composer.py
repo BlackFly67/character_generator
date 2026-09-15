@@ -26,8 +26,8 @@
     post       — reflection → glitch
 - _run_stage() работает либо с char_layer (fill/inner/outer/geometry),
   либо с final_img (post) — см. параметр image и extra. Post-эффектам
-  нужны char_layer/paste_x/paste_y/spec_index — они передаются через
-  extra и попадают в EffectContext.extra.
+  нужны char_layer/paste_x/paste_y — они передаются через extra
+  и попадают в EffectContext.extra.
 - Rotation остаётся отдельным вызовом: она глобальная, применяется ко
   всему холсту, а не к символу как эффект.
 - ShadowOuter (внешняя тень) — POST_COMPOSE_EFFECTS: работает с
@@ -268,7 +268,7 @@ def _run_stage(image, base_mask, settings, stage,
 
     extra — словарь доп. данных, прокидывается в EffectContext.extra.
     Нужен post-эффектам: Reflection использует char_layer/paste_x/
-    paste_y, Glitch — spec_index.
+    paste_y.
 
     Возвращает кортеж (image, base_mask, fill_mask, outer_mask).
 
@@ -670,15 +670,14 @@ def compose_full(spec: CharSpec, settings,
 
     # 17. Post-стадия: reflection → glitch
     # Работает с final_img. Reflection берёт char_layer/paste_x/paste_y
-    # из extra, Glitch — spec_index. Оба уже умеют читать EffectContext
-    # (см. effects/reflection.py, effects/glitch.py).
+    # из extra. Glitch использует settings.glitch_seed — общий для
+    # всех символов батча (поэтому spec_index в extra НЕ передаётся).
     final_img, _, _, _ = _run_stage(
         final_img, base_mask, settings, "post",
         extra={
             "char_layer": char_layer,
             "paste_x": paste_x,
             "paste_y": paste_y,
-            "spec_index": spec.index,
         },
     )
 

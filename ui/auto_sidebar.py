@@ -13,14 +13,17 @@
   - direction grid: label с padx=10, pady=(5,2); grid с padx=10, pady=2
   - file row: label (basename пути или label_key) слева + кнопка справа
   - stops row: canvas 40px + редактор точек
+  - seed row: entry + кнопка 🎲 (рандом 0..9999)
 """
 
 import os
+import random
 import customtkinter as ctk
 
 from effects.core import (
     CTRL_CHECKBOX, CTRL_INT, CTRL_FLOAT, CTRL_COLOR,
     CTRL_BLEND, CTRL_OPTION, CTRL_DIR, CTRL_STOPS, CTRL_FILE,
+    CTRL_SEED,
 )
 from effects.registry import PIPELINE, POST_COMPOSE_EFFECTS
 from constants import BLEND_MODES
@@ -136,6 +139,9 @@ def _build_param_row(parent, sidebar, settings, i18n, effect, param, widgets_out
     elif param.ctrl == CTRL_STOPS:
         _build_stops_row(parent, sidebar, settings, i18n,
                           full_key, label, param, widgets_out)
+    elif param.ctrl == CTRL_SEED:
+        _build_seed_row(parent, sidebar, settings,
+                         full_key, label, param, widgets_out)
     else:
         print(f"auto_sidebar: unknown ctrl {param.ctrl!r} for {full_key}")
 
@@ -475,3 +481,60 @@ def _build_stops_row(parent, sidebar, settings, i18n,
         "state": state,
         "redraw": redraw_stops,
     }
+
+
+def _build_seed_row(parent, sidebar, settings,
+                     full_key, label, param, widgets_out):
+    """
+    Seed: поле ввода (0..9999) + кнопка 🎲 (рандом).
+
+    Значение хранится в settings.<full_key> (для Glitch —
+    settings.glitch_seed). Кнопка 🎲 генерирует новое случайное
+    значение, обновляет поле и уведомляет sidebar.
+    """
+    row = ctk.CTkFrame(parent, fg_color="transparent")
+    row.pack(fill="x", padx=10, pady=2)
+    ctk.CTkLabel(row, text=label + ":").pack(side="left")
+
+    mn = param.min_val if param.min_val is not None else 0
+    mx = param.max_val if param.max_val is not None else 9999
+
+    current = getattr(settings, full_key, param.default or 0)
+    try:
+        current = int(current)
+    except (TypeError, ValueError):
+        current = mn
+    current = max(mn, min(mx, current))
+
+    entry = ctk.CTkEntry(row, width=55)
+    entry.insert(0, str(current))
+    entry.pack(side="right", padx=(5, 0))
+
+    def clamp(v):
+        return max(mn, min(mx, v))
+
+    def on_entry(event=None):
+        try:
+            raw = entry.get().strip()
+            if not raw:
+                return
+            val = clamp(int(raw))
+            setattr(settings, full_key, val)
+            sidebar._on_change()
+        except ValueError:
+            pass
+
+    def on_random():
+        val = random.randint(mn, mx)
+        setattr(settings, full_key, val)
+        entry.delete(0, "end")
+        entry.insert(0, str(val))
+        sidebar._on_change()
+
+    dice_btn = ctk.CTkButton(row, text="🎲", width=32, height=24,
+                              font=("Segoe UI Symbol", 14),
+                              command=on_random)
+    dice_btn.pack(side="right", padx=(2, 0))
+
+    entry.bind("<KeyRelease>", on_entry)
+    widgets_out[param.key] = (entry, dice_btn)
