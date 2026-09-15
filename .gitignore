@@ -181,3 +181,4 @@ cython_debug/
 .cursorindexingignore
 create_char_gui.py
 output/test6.exe
+/output/exe
