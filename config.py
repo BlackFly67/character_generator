@@ -87,6 +87,12 @@ class Settings:
         self.create_bin = False
         self.canvas_width_enabled = False
         self.icon_mode = False
+        # FIX: эти три поля читались в main_window.py и preview.py,
+        # но никогда не были объявлены в Settings — при первом запуске
+        # без конфига падало с AttributeError. Теперь объявлены явно.
+        self.icon_preserve_color = False
+        self.icon_recolor_mode = "none"
+        self.icon_tint_blend_mode = "multiply"
 
         # Числовые параметры
         self.shadow_distance = DEFAULT_SHADOW_DISTANCE
@@ -283,6 +289,9 @@ class Settings:
             "extrude_blend_mode": self.extrude_blend_mode,            
             "filename_template": self.filename_template,
             "icon_mode": self.icon_mode,
+            "icon_preserve_color": getattr(self, "icon_preserve_color", False),
+            "icon_recolor_mode": getattr(self, "icon_recolor_mode", "none"),
+            "icon_tint_blend_mode": getattr(self, "icon_tint_blend_mode", "multiply"),
             "icon_paths": self.icon_paths,
             "create_bin": self.create_bin,
             "canvas_width_enabled": self.canvas_width_enabled,
@@ -359,6 +368,11 @@ class Settings:
         self.create_bin = data.get("create_bin", False)
         self.canvas_width_enabled = data.get("canvas_width_enabled", False)
         self.icon_mode = data.get("icon_mode", False)
+        # FIX: эти три поля раньше не загружались из конфига — при
+        # первом запуске с новым конфигом падало (см. reset()).
+        self.icon_preserve_color = data.get("icon_preserve_color", False)
+        self.icon_recolor_mode = data.get("icon_recolor_mode", "none")
+        self.icon_tint_blend_mode = data.get("icon_tint_blend_mode", "multiply")
 
         # Числовые параметры
         self.shadow_distance = data.get("shadow_distance", DEFAULT_SHADOW_DISTANCE)
