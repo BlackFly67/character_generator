@@ -18,20 +18,21 @@
   всего холста, а не относительно ширины отдельного символа.
 
 Система эффектов:
-- Glow (inner / outer) уже вынесен в effects/base.py + effects/registry.py,
-  применяется через _run_stage("inner") и _run_stage("outer").
-- Остальные эффекты пока жёстко зашиты в compose_full и будут мигрированы
-  по одному.
-
-  ВАЖНО (FIX двойного применения эффектов):
-  PIPELINE в effects/registry.py регистрирует для стадий "inner"/"outer"
-  не только glow, но и OutlineInner/ShadowInner/Emboss/OutlineOuter —
-  это нужно auto_sidebar.py для автогенерации UI. Но сами эти эффекты
-  ВСЁ ЕЩЁ применяются здесь, в compose_full, напрямую через старые
-  функции (apply_inner_outline/apply_inner_shadow/apply_emboss/
-  apply_outer_outline). Поэтому _run_stage() должен выполнять ТОЛЬКО
-  glow_inner/glow_outer (см. параметр only_ids) — иначе перечисленные
-  эффекты накладывались бы дважды.
+- Все стадии PIPELINE применяются через единый _run_stage():
+    fill       — halftone_mask → color_fill → gradient → pattern
+    inner      — outline_inner → glow_inner → inner_shadow → emboss
+    outer      — outline_outer → extrude → glow_outer
+    geometry   — skew → perspective
+    post       — reflection → glitch
+- _run_stage() работает либо с char_layer (fill/inner/outer/geometry),
+  либо с final_img (post) — см. параметр image и extra. Post-эффектам
+  нужны char_layer/paste_x/paste_y/spec_index — они передаются через
+  extra и попадают в EffectContext.extra.
+- Rotation остаётся отдельным вызовом: она глобальная, применяется ко
+  всему холсту, а не к символу как эффект.
+- ShadowOuter (внешняя тень) — POST_COMPOSE_EFFECTS: работает с
+  final_img, вызывается вручную в шаге 14, потому что должна
+  находиться ПОД текстом (между фоном и alpha_composite текста).
 """
 
 import math
@@ -39,26 +40,19 @@ from dataclasses import dataclass
 from typing import Optional
 
 import numpy as np
-from PIL import Image, ImageDraw, ImageFilter, ImageChops
+from PIL import Image, ImageDraw, ImageChops
 
 from utils import (
     get_color_rgb, get_shadow_offset, blend_layers,
     rotate_cleanly, create_checkerboard_background,
 )
 from fonts import load_font_safe_cached as load_font_safe
-from effects.outline import apply_outer_outline, apply_inner_outline
-from effects.emboss import apply_emboss
-from effects.gradient import apply_gradient_fill
-from effects.pattern import apply_pattern_fill, load_pattern_image
-from effects.inner_shadow import apply_inner_shadow
 from effects.halftone import apply_halftone
-from effects.glitch import apply_glitch_effect
-from effects.skew import apply_skew_effect
-from effects.perspective import apply_perspective_effect
 
-# --- Система эффектов (этап 1: реестр + core + glow) ---
+# --- Система эффектов ---
 from effects.core import EffectContext
 from effects.registry import get_by_stage
+from effects.shadow_outer import ShadowOuter
 
 
 # ============================================================
@@ -263,50 +257,46 @@ def _transp_bg(settings):
     return (0, 0, 0, 0) if settings.transparent_text else _text_rgb(settings) + (0,)
 
 
-def _run_stage(char_layer, base_mask, settings, stage,
-                fill_mask=None, outer_mask=None, only_ids=None):
+def _run_stage(image, base_mask, settings, stage,
+                fill_mask=None, outer_mask=None, extra=None):
     """
     Применяет эффекты одной стадии из реестра в порядке PIPELINE.
+
+    image — что подаётся эффектам:
+      - для fill/inner/outer/geometry: char_layer (RGBA-слой символа);
+      - для post: final_img (готовый холст с фоном и текстом).
+
+    extra — словарь доп. данных, прокидывается в EffectContext.extra.
+    Нужен post-эффектам: Reflection использует char_layer/paste_x/
+    paste_y, Glitch — spec_index.
 
     Возвращает кортеж (image, base_mask, fill_mask, outer_mask).
 
     Некоторые эффекты могут возвращать dict вместо Image — например,
-    если им нужно вернуть и image, и обновлённый mask. Контракт:
-    возвращать либо Image, либо dict с ключами
+    если им нужно вернуть и image, и обновлённый mask/outer_mask.
+    Контракт: возвращать либо Image, либо dict с ключами
     "image", "mask", "fill_mask", "outer_mask".
-
-    FIX: параметр only_ids. PIPELINE для стадий "inner"/"outer"
-    содержит не только glow, но и OutlineInner/ShadowInner/Emboss/
-    OutlineOuter (они там нужны для авто-генерации UI в
-    auto_sidebar.py). Но эти эффекты по-прежнему применяются в
-    compose_full напрямую, через старые функции (apply_inner_outline,
-    apply_inner_shadow, apply_emboss, apply_outer_outline). Без
-    фильтрации get_by_stage(stage) вернул бы их все, и они бы
-    отрабатывали ДВАЖДЫ — здесь и ниже в compose_full. only_ids
-    ограничивает выполнение только реально мигрированными эффектами
-    (сейчас — glow_inner/glow_outer).
     """
     for cls in get_by_stage(stage):
-        if only_ids is not None and cls.id not in only_ids:
-            continue
         eff = cls()
         ctx = EffectContext(
             settings=settings,
-            image=char_layer,
+            image=image,
             mask=base_mask,
             fill_mask=fill_mask,
             outer_mask=outer_mask,
             will_warp=_will_warp(settings),
+            extra=extra or {},
         )
         result = eff.apply(ctx)
         if isinstance(result, dict):
-            char_layer = result.get("image", char_layer)
+            image = result.get("image", image)
             base_mask = result.get("mask", base_mask)
             fill_mask = result.get("fill_mask", fill_mask)
             outer_mask = result.get("outer_mask", outer_mask)
         else:
-            char_layer = result
-    return char_layer, base_mask, fill_mask, outer_mask
+            image = result
+    return image, base_mask, fill_mask, outer_mask
 
 
 # ============================================================
@@ -526,46 +516,6 @@ def build_content_mask(spec, metrics, settings):
 
 
 # ============================================================
-#  Отражение
-# ============================================================
-
-def _apply_reflection(final_img, char_layer, paste_x, paste_y,
-                       gap, opacity, fade):
-    bbox = char_layer.split()[3].getbbox()
-    if bbox is None:
-        return final_img
-
-    cleft, ctop, cright, cbottom = bbox
-    visible = char_layer.crop(bbox)
-    reflected = visible.transpose(Image.FLIP_TOP_BOTTOM)
-
-    rp_h = reflected.height
-    fade_px = max(1, min(rp_h, int(round(rp_h * fade))))
-    grad = np.linspace(opacity, 0.0, fade_px, dtype=np.float64)
-    if rp_h > fade_px:
-        grad = np.concatenate([grad, np.zeros(rp_h - fade_px, dtype=np.float64)])
-
-    r, g, b, a = reflected.split()
-    alpha = np.asarray(a, dtype=np.float64)
-    new_alpha = np.clip(alpha * grad.reshape(-1, 1), 0, 255).astype(np.uint8)
-    reflected.putalpha(Image.fromarray(new_alpha))
-
-    dest_x = paste_x + cleft
-    # ИСПРАВЛЕНО: при большом отрицательном reflection_gap (диапазон
-    # -500..500) dest_y мог уйти в отрицательные значения. Старая
-    # функция apply_reflection в effects/reflection.py корректно
-    # ограничивала это через max(0, ...) — при переносе в composer.py
-    # ограничение потерялось, и Image.alpha_composite с отрицательным
-    # dest бросает ValueError ("Destination must be non-negative"),
-    # генерация падала с "Generation failed".
-    dest_y = max(0, paste_y + cbottom + gap)
-    if dest_x < final_img.width and dest_y < final_img.height:
-        final_img = final_img.copy()
-        final_img.alpha_composite(reflected, (dest_x, dest_y))
-    return final_img
-
-
-# ============================================================
 #  Главная функция
 # ============================================================
 
@@ -620,111 +570,46 @@ def compose_full(spec: CharSpec, settings,
     char_layer = Image.new("RGBA", (base_w, base_h), _transp_bg(settings))
     base_mask = text_mask
 
-    # 5. Halftone до искажений
+    # 5. Fill-стадия: halftone_mask → color_fill → gradient → pattern
     will_warp = _will_warp(settings)
     fill_mask = base_mask
-    if settings.halftone_enabled and not settings.transparent_text and not will_warp:
-        fill_mask = apply_halftone(base_mask, settings.halftone_cell_size,
-                                    settings.halftone_dot_scale,
-                                    settings.halftone_angle)
+    char_layer, base_mask, fill_mask, outer_mask = _run_stage(
+        char_layer, base_mask, settings, "fill",
+        fill_mask=fill_mask, outer_mask=None,
+    )
 
-    # 6. Заливка
-    if not settings.transparent_text:
-        if settings.gradient_enabled:
-            stops = settings.gradient_stops or [
-                {"pos": 0.0, "color": "#ff0000"},
-                {"pos": 1.0, "color": "#0000ff"},
-            ]
-            char_layer = apply_gradient_fill(char_layer, fill_mask, stops,
-                                              settings.gradient_type,
-                                              settings.gradient_angle)
-        else:
-            fill = Image.new("RGBA", char_layer.size, _text_rgb(settings) + (255,))
-            fill.putalpha(fill_mask)
-            char_layer = Image.alpha_composite(char_layer, fill)
-
-        if settings.pattern_enabled and settings.pattern_image_path:
-            pat = load_pattern_image(settings.pattern_image_path)
-            if pat is not None:
-                char_layer = apply_pattern_fill(
-                    char_layer, fill_mask, pat,
-                    settings.pattern_scale,
-                    settings.pattern_offset_x, settings.pattern_offset_y,
-                    settings.pattern_angle, settings.pattern_blend_mode,
-                )
-
-    # 7. Внутренние эффекты (жёстко зашитые)
-    if settings.outline_inner_enabled and settings.outline_inner_width > 0:
-        char_layer = apply_inner_outline(char_layer, base_mask,
-                                          settings.outline_inner_color,
-                                          settings.outline_inner_width)
-
-    # --- Стадия "inner" из реестра ---
-    # FIX: only_ids={"glow_inner"} — раньше сюда без фильтра попадали
-    # ТАКЖЕ OutlineInner/ShadowInner/Emboss из PIPELINE (они там
-    # зарегистрированы для авто-UI в auto_sidebar.py), из-за чего эти
-    # три эффекта применялись ЕЩЁ РАЗ ниже жёстко зашитым кодом —
-    # т.е. дважды. Теперь через _run_stage проходит только glow_inner,
-    # а outline_inner/inner_shadow/emboss остаются единственный раз —
-    # в жёстко зашитых вызовах (см. п.7 выше и ниже).
+    # 6. Inner-стадия: outline_inner → glow_inner → inner_shadow → emboss
     char_layer, base_mask, fill_mask, outer_mask = _run_stage(
         char_layer, base_mask, settings, "inner",
         fill_mask=fill_mask, outer_mask=None,
-        only_ids={"glow_inner", "extrude"},
     )
 
-    if settings.inner_shadow_enabled:
-        char_layer = apply_inner_shadow(char_layer, base_mask,
-                                         settings.inner_shadow_color,
-                                         settings.inner_shadow_distance,
-                                         settings.inner_shadow_direction,
-                                         settings.inner_shadow_blur,
-                                         settings.inner_shadow_blend_mode)
-
-    if settings.emboss_enabled:
-        char_layer = apply_emboss(char_layer, base_mask,
-                                   settings.emboss_depth, settings.emboss_blur,
-                                   getattr(settings, "emboss_angle", 135),
-                                   settings.emboss_highlight, settings.emboss_shadow)
-
-    # 8. Внешние эффекты (жёстко зашитые)
+    # 7. Outer-стадия: outline_outer → extrude → glow_outer
+    # OutlineOuter возвращает dict с обновлённым outer_mask — его
+    # увидит GlowOuter. Если OutlineOuter выключен, outer_mask
+    # остаётся base_mask.
     outer_mask = base_mask
-    outline_drawn = False
-    if settings.outline_outer_enabled and settings.outline_outer_width > 0:
-        char_layer, outer_mask = apply_outer_outline(
-            char_layer, base_mask, settings.outline_outer_color,
-            settings.outline_outer_width,
-        )
-        outline_drawn = True
-
-    # --- Стадия "outer" из реестра ---
-    # FIX: only_ids={"glow_outer"} — та же причина, что и выше: без
-    # фильтра сюда бы попал ещё и OutlineOuter, который уже применён
-    # напрямую строкой выше (apply_outer_outline), и накладывался бы
-    # повторно.
     char_layer, base_mask, fill_mask, outer_mask = _run_stage(
         char_layer, base_mask, settings, "outer",
         fill_mask=fill_mask, outer_mask=outer_mask,
-        only_ids={"glow_outer", "extrude"},
     )
 
-    # 9. Прозрачность
+    # 8. Прозрачность (глобальная, не эффект)
     if settings.text_opacity < 1.0:
         r, g, b, a = char_layer.split()
         a = a.point(lambda p: int(p * settings.text_opacity))
         char_layer = Image.merge("RGBA", (r, g, b, a))
 
-    # 10. Поворот / skew / perspective
+    # 9. Rotation (глобальная, вне PIPELINE)
     if settings.rotation_angle != 0:
         char_layer = rotate_cleanly(char_layer, -settings.rotation_angle,
                                      _text_rgb(settings))
-    if settings.skew_enabled and (settings.skew_x != 0 or settings.skew_y != 0):
-        char_layer = apply_skew_effect(char_layer, settings.skew_x,
-                                        settings.skew_y, _text_rgb(settings))
-    if settings.perspective_enabled and (settings.perspective_x != 0 or settings.perspective_y != 0):
-        char_layer = apply_perspective_effect(char_layer, settings.perspective_x,
-                                               settings.perspective_y,
-                                               _text_rgb(settings))
+
+    # 10. Geometry-стадия: skew → perspective
+    char_layer, base_mask, fill_mask, outer_mask = _run_stage(
+        char_layer, base_mask, settings, "geometry",
+        fill_mask=fill_mask, outer_mask=outer_mask,
+    )
 
     # 11. Halftone после искажений
     if settings.halftone_enabled and not settings.transparent_text and will_warp:
@@ -750,23 +635,23 @@ def compose_full(spec: CharSpec, settings,
     paste_x = geom.offset_x + (geom.rot_base_w - char_layer.width) // 2
     paste_y = geom.offset_y + (geom.rot_base_h - char_layer.height) // 2
 
-    # 14. Тень
+    # 14. Тень (post-compose: работает с final_img, вызывается вручную,
+    #     потому что должна оказаться ПОД текстом — между фоном и
+    #     alpha_composite текста в шаге 15).
     if settings.shadow_enabled:
-        shadow_rgb = get_color_rgb(settings.shadow_color)
-        shadow_bg = (0, 0, 0, 0) if settings.transparent_text else shadow_rgb + (0,)
-        sh_mask = char_layer.split()[3]
-        sh_layer = Image.new("RGBA", char_layer.size, shadow_rgb + (255,))
-        sh_layer.putalpha(sh_mask)
-        if settings.shadow_blur > 0:
-            sh_layer = sh_layer.filter(ImageFilter.GaussianBlur(radius=settings.shadow_blur))
-        dx, dy = get_shadow_offset(settings.shadow_direction, settings.shadow_distance)
-        sh_final = Image.new("RGBA", (cw, ch), shadow_bg)
-        sh_final.paste(sh_layer, (paste_x + dx, paste_y + dy))
-
-        blend_mode = settings.shadow_blend_mode
-        if settings.transparent_background and blend_mode in ("multiply", "overlay"):
-            blend_mode = "normal"
-        final_img = blend_layers(final_img, sh_final, blend_mode)
+        shadow_ctx = EffectContext(
+            settings=settings,
+            image=final_img,
+            mask=base_mask,
+            extra={
+                "char_layer": char_layer,
+                "paste_x": paste_x,
+                "paste_y": paste_y,
+                "canvas_w": cw,
+                "canvas_h": ch,
+            },
+        )
+        final_img = ShadowOuter().apply(shadow_ctx)
 
     # 15. Текст
     layer_text = Image.new("RGBA", (cw, ch), (0, 0, 0, 0))
@@ -776,35 +661,25 @@ def compose_full(spec: CharSpec, settings,
     # 16. Cutout
     if (not settings.transparent_text and settings.cutout_mode
             and not settings.transparent_background):
-        # ИСПРАВЛЕНО: маска для выреза строилась из text_mask — геометрии
-        # ДО skew/perspective (шаг 10) — и вручную поворачивалась только
-        # для rotation_angle. При включённых skew/perspective реальный
-        # силуэт char_layer (и его положение paste_x/paste_y, посчитанное
-        # уже ПОСЛЕ этих трансформаций) не совпадал с использованной для
-        # выреза маской: дыра в фоне вырезалась не там и не той формы.
-        # Берём альфу уже полностью трансформированного layer_text —
-        # она всегда точно соответствует фактическому силуэту символа,
-        # какие бы geometry-эффекты ни были применены.
+        # Маска для выреза — альфа уже полностью трансформированного
+        # layer_text (см. FIX в предыдущих итерациях).
         full_mask = layer_text.split()[3].point(lambda p: 255 if p > 128 else 0)
         r, g, b, a = final_img.split()
         new_a = Image.composite(Image.new("L", final_img.size, 0), a, full_mask)
         final_img = Image.merge("RGBA", (r, g, b, new_a))
 
-    # 17. Отражение
-    if settings.reflection_enabled:
-        final_img = _apply_reflection(
-            final_img, char_layer, paste_x, paste_y,
-            settings.reflection_gap,
-            settings.reflection_opacity / 100.0,
-            settings.reflection_fade / 100.0,
-        )
-
-    # 18. Glitch
-    if settings.glitch_enabled:
-        final_img = apply_glitch_effect(
-            final_img, settings.glitch_rgb_shift,
-            settings.glitch_slice_intensity,
-            seed=(settings.glitch_seed + spec.index) & 0xFFFFFFFF,
-        )
+    # 17. Post-стадия: reflection → glitch
+    # Работает с final_img. Reflection берёт char_layer/paste_x/paste_y
+    # из extra, Glitch — spec_index. Оба уже умеют читать EffectContext
+    # (см. effects/reflection.py, effects/glitch.py).
+    final_img, _, _, _ = _run_stage(
+        final_img, base_mask, settings, "post",
+        extra={
+            "char_layer": char_layer,
+            "paste_x": paste_x,
+            "paste_y": paste_y,
+            "spec_index": spec.index,
+        },
+    )
 
     return final_img

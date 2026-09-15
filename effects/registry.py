@@ -12,6 +12,13 @@ PIPELINE задаёт порядок применения. Стадии:
 
 Порядок ВНУТРИ стадии тоже важен: он определяет, что поверх чего
 рисуется. Менять осторожно.
+
+POST_COMPOSE_EFFECTS — эффекты, которые НЕ участвуют в _run_stage()
+и НЕ входят в PIPELINE. Они работают не с char_layer, а с final_img
+(фон + эффект + текст) и вызываются вручную из compose_full.
+Сейчас это только внешняя тень (ShadowOuter) — она накладывается
+между фоном и текстом, поэтому не может жить в общем пайплайне.
+UI для них строится тем же build_effect_sections из auto_sidebar.py.
 """
 
 # fill
@@ -27,6 +34,7 @@ from effects.emboss import Emboss
 from effects.outline import OutlineOuter
 from effects.glow import GlowOuter
 from effects.extrude import Extrude3D
+from effects.shadow_outer import ShadowOuter
 
 # geometry
 from effects.skew import Skew
@@ -39,10 +47,12 @@ from effects.glitch import Glitch
 
 PIPELINE = [
     # ---- fill ----
+    # HalftoneMask ПЕРВЫМ: он меняет fill_mask ДО заливки, чтобы
+    # ColorFill/GradientFill/PatternFill увидели уже растровую маску.
+    HalftoneMask,
     ColorFill,
     GradientFill,
     PatternFill,
-    HalftoneMask,
 
     # ---- inner ----
     OutlineInner,
@@ -65,7 +75,15 @@ PIPELINE = [
 ]
 
 
-ALL_EFFECTS = {cls.id: cls for cls in PIPELINE}
+# Эффекты, которые НЕ участвуют в _run_stage() и не входят в PIPELINE:
+# они работают не с char_layer, а с final_img (фон + тень + текст).
+# Вызываются вручную из compose_full.
+POST_COMPOSE_EFFECTS = [
+    ShadowOuter,
+]
+
+
+ALL_EFFECTS = {cls.id: cls for cls in PIPELINE + POST_COMPOSE_EFFECTS}
 
 
 def get_effect(effect_id):

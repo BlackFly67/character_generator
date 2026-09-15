@@ -11,6 +11,8 @@
   - slider: expand=True, padx=5
   - option/combobox: width=100, padx=5
   - direction grid: label с padx=10, pady=(5,2); grid с padx=10, pady=2
+  - file row: label (basename пути или label_key) слева + кнопка справа
+  - stops row: canvas 40px + редактор точек
 """
 
 import os
@@ -20,15 +22,13 @@ from effects.core import (
     CTRL_CHECKBOX, CTRL_INT, CTRL_FLOAT, CTRL_COLOR,
     CTRL_BLEND, CTRL_OPTION, CTRL_DIR, CTRL_STOPS, CTRL_FILE,
 )
-from effects.registry import PIPELINE
+from effects.registry import PIPELINE, POST_COMPOSE_EFFECTS
 from constants import BLEND_MODES
 
 
-# Эффекты, для которых UI строится ВРУЧНУЮ в sidebar.py
+# Эффекты, для которых UI строится ВРУЧНУЮ в sidebar.py / manual_sidebar.py
 MANUAL_EFFECT_IDS = {
-    "color_fill",   # использует text_color, отдельный UI не нужен
-    "gradient",     # редактор точек градиента
-    "pattern",      # выбор файла текстуры
+    "color_fill",   # UI = ручной text_color, отдельный чекбокс не нужен
 }
 
 
@@ -37,16 +37,22 @@ def build_effect_sections(parent, sidebar, settings, i18n, order=None):
     Строит секции для набора эффектов в parent.
 
     order — список id эффектов в UI-порядке. Если None — берётся
-    PIPELINE целиком. Позволяет строить авто-секции несколькими
-    вызовами (например, чтобы вставить ручную секцию между ними).
+    PIPELINE + POST_COMPOSE_EFFECTS целиком. Позволяет строить
+    авто-секции несколькими вызовами (например, чтобы вставить
+    ручную секцию между ними).
 
     Пропускает эффекты из MANUAL_EFFECT_IDS — для них UI уже
-    собран вручную в sidebar.py.
+    собран вручную (sidebar.py / manual_sidebar.py).
+
+    POST_COMPOSE_EFFECTS (например, ShadowOuter) доступны здесь же,
+    через order=["shadow"], хотя в PIPELINE их нет — они работают
+    не с char_layer, а с final_img.
     """
+    all_effects = PIPELINE + POST_COMPOSE_EFFECTS
     if order is None:
-        cls_list = list(PIPELINE)
+        cls_list = list(all_effects)
     else:
-        by_id = {cls.id: cls for cls in PIPELINE}
+        by_id = {cls.id: cls for cls in all_effects}
         cls_list = [by_id[eid] for eid in order if eid in by_id]
 
     result = {}
@@ -128,8 +134,8 @@ def _build_param_row(parent, sidebar, settings, i18n, effect, param, widgets_out
         _build_file_row(parent, sidebar, settings, i18n,
                          full_key, label, param, widgets_out)
     elif param.ctrl == CTRL_STOPS:
-        # не поддерживается — оставляем ручным (см. MANUAL_EFFECT_IDS)
-        pass
+        _build_stops_row(parent, sidebar, settings, i18n,
+                          full_key, label, param, widgets_out)
     else:
         print(f"auto_sidebar: unknown ctrl {param.ctrl!r} for {full_key}")
 
@@ -291,3 +297,181 @@ def _build_file_row(parent, sidebar, settings, i18n,
                          width=100, height=24, command=pick)
     btn.pack(side="right", padx=(5, 0))
     widgets_out[param.key] = (lbl, btn)
+
+
+def _build_stops_row(parent, sidebar, settings, i18n,
+                      full_key, label, param, widgets_out):
+    """
+    Редактор цветовых точек градиента.
+    Читает/пишет список точек в getattr(settings, full_key) —
+    для GradientFill это settings.gradient_stops.
+
+    Взаимодействие:
+      - клик по свободному месту — добавить точку
+      - клик по существующей — выделить
+      - драг — переместить выделенную
+      - дабл-клик — сменить цвет
+      - правый клик — удалить (если точек > 2)
+    """
+    import tkinter as tk
+    from PIL import Image, ImageTk
+    from utils import create_checkerboard_background
+    from effects.gradient import sample_gradient_color
+
+    ctk.CTkLabel(parent, text=label + ":",
+                 font=("Arial", 11)).pack(anchor="w", padx=10, pady=(5, 0))
+
+    stops_canvas = tk.Canvas(
+        parent, height=40, highlightthickness=1,
+        highlightbackground="#555555", bg="#2b2b2b",
+    )
+    stops_canvas.pack(fill="x", padx=10, pady=(2, 8))
+
+    state = {"selected_idx": None, "photo": None}
+
+    def redraw_stops():
+        canvas = stops_canvas
+        canvas.delete("all")
+        w = max(canvas.winfo_width(), 10)
+        h = max(canvas.winfo_height(), 30)
+        ramp_h = max(1, int(h * 0.6))
+
+        stops = getattr(settings, full_key, None)
+        if not stops:
+            stops = [{"pos": 0.0, "color": "#ff0000"},
+                     {"pos": 1.0, "color": "#0000ff"}]
+
+        sorted_stops = sorted(stops, key=lambda s: s["pos"])
+        ramp_w = max(w, 2)
+        ramp_h2 = max(ramp_h, 2)
+
+        row = [sample_gradient_color(sorted_stops, x / max(1, ramp_w - 1))
+               for x in range(ramp_w)]
+        ramp_rgba = Image.new("RGBA", (ramp_w, ramp_h2))
+        ramp_rgba.putdata(row * ramp_h2)
+        checker = create_checkerboard_background(ramp_w, ramp_h2, cell_size=6)
+        ramp = Image.alpha_composite(checker, ramp_rgba).convert("RGB")
+
+        state["photo"] = ImageTk.PhotoImage(ramp)
+        canvas.create_image(0, 0, anchor="nw", image=state["photo"])
+
+        for i, stop in enumerate(stops):
+            x = int(stop["pos"] * w)
+            color_str = stop["color"]
+            if color_str == "transparent" or color_str is None:
+                r, g, b, a = 0, 0, 0, 0
+            else:
+                hex_color = color_str.lstrip('#')
+                if len(hex_color) == 6:
+                    r = int(hex_color[0:2], 16)
+                    g = int(hex_color[2:4], 16)
+                    b = int(hex_color[4:6], 16)
+                    a = 255
+                elif len(hex_color) == 8:
+                    r = int(hex_color[0:2], 16)
+                    g = int(hex_color[2:4], 16)
+                    b = int(hex_color[4:6], 16)
+                    a = int(hex_color[6:8], 16)
+                else:
+                    r, g, b, a = 255, 255, 255, 255
+
+            fill = "" if a == 0 else "#{:02x}{:02x}{:02x}".format(r, g, b)
+            canvas.create_polygon(
+                x - 6, h, x + 6, h, x, ramp_h + 2,
+                fill=fill, outline="#ffffff", width=2,
+                dash=(None if a == 255 else (3, 2)),
+            )
+
+    def get_stop_at(x, w):
+        stops = getattr(settings, full_key, None)
+        if not stops:
+            return None
+        best_idx, best_dist = None, None
+        for i, stop in enumerate(stops):
+            dist = abs(stop["pos"] * w - x)
+            if best_dist is None or dist < best_dist:
+                best_idx, best_dist = i, dist
+        return best_idx if best_dist is not None and best_dist <= 10 else None
+
+    def on_click(event):
+        w = max(stops_canvas.winfo_width(), 1)
+        idx = get_stop_at(event.x, w)
+        if idx is not None:
+            state["selected_idx"] = idx
+        else:
+            t = max(0.0, min(1.0, event.x / w))
+            stops = getattr(settings, full_key, None)
+            if not stops:
+                stops = [
+                    {"pos": 0.0, "color": "#ff0000"},
+                    {"pos": 1.0, "color": "#0000ff"},
+                ]
+                setattr(settings, full_key, stops)
+            sorted_stops = sorted(stops, key=lambda s: s["pos"])
+            r, g, b, a = sample_gradient_color(sorted_stops, t)
+            color = "#{:02x}{:02x}{:02x}".format(r, g, b)
+            if a < 255:
+                color += "{:02x}".format(a)
+            stops.append({"pos": t, "color": color})
+            state["selected_idx"] = len(stops) - 1
+            sidebar._on_change()
+            redraw_stops()
+
+    def on_drag(event):
+        idx = state["selected_idx"]
+        if idx is None:
+            return
+        stops = getattr(settings, full_key, None)
+        if not stops:
+            return
+        w = max(stops_canvas.winfo_width(), 1)
+        t = max(0.0, min(1.0, event.x / w))
+        if 0 <= idx < len(stops):
+            stops[idx]["pos"] = t
+            redraw_stops()
+
+    def on_release(event):
+        redraw_stops()
+        sidebar._on_change()
+
+    def on_double_click(event):
+        w = max(stops_canvas.winfo_width(), 1)
+        idx = get_stop_at(event.x, w)
+        if idx is None:
+            return
+        stops = getattr(settings, full_key, None)
+        if not stops or idx >= len(stops):
+            return
+        color = stops[idx]["color"]
+        from ui.dialogs import ask_color
+        new_color = ask_color(sidebar, color, i18n.tr("select_gradient_color"), i18n)
+        if new_color:
+            stops[idx]["color"] = new_color
+            sidebar._on_change()
+            redraw_stops()
+
+    def on_right_click(event):
+        stops = getattr(settings, full_key, None)
+        if not stops or len(stops) <= 2:
+            return
+        w = max(stops_canvas.winfo_width(), 1)
+        idx = get_stop_at(event.x, w)
+        if idx is None:
+            return
+        del stops[idx]
+        state["selected_idx"] = None
+        sidebar._on_change()
+        redraw_stops()
+
+    stops_canvas.bind("<Button-1>", on_click)
+    stops_canvas.bind("<B1-Motion>", on_drag)
+    stops_canvas.bind("<ButtonRelease-1>", on_release)
+    stops_canvas.bind("<Double-Button-1>", on_double_click)
+    stops_canvas.bind("<Button-3>", on_right_click)
+    stops_canvas.bind("<Configure>", lambda e: redraw_stops())
+
+    widgets_out[param.key] = {
+        "canvas": stops_canvas,
+        "state": state,
+        "redraw": redraw_stops,
+    }

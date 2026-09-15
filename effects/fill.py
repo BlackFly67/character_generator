@@ -19,7 +19,7 @@ from effects.halftone import apply_halftone
 from effects.core import (
     EffectBase, EffectContext, ParamSpec,
     CTRL_CHECKBOX, CTRL_INT, CTRL_COLOR, CTRL_FLOAT,
-    CTRL_OPTION, CTRL_BLEND,
+    CTRL_OPTION, CTRL_BLEND, CTRL_FILE, CTRL_STOPS,
 )
 
 
@@ -38,6 +38,12 @@ class ColorFill(EffectBase):
     def apply(self, ctx: EffectContext):
         s = ctx.settings
         if s.transparent_text:
+            return ctx.image
+
+        # Если включён градиент — плоский цвет НЕ накладывается:
+        # градиент полностью заменяет его (как было в ручном шаге 6
+        # compose_full: if gradient_enabled ... else: плоский цвет).
+        if getattr(s, "gradient_enabled", False):
             return ctx.image
 
         rgb = get_color_rgb(s.text_color)
@@ -62,10 +68,15 @@ class GradientFill(EffectBase):
         ParamSpec("type",     "gradient_type",  CTRL_OPTION,   "linear",
                   values=["linear", "radial", "angle", "reflected", "diamond"]),
         ParamSpec("angle",    "gradient_angle", CTRL_INT,      0, 0, 360),
+        ParamSpec("stops",    "gradient_stops", CTRL_STOPS,    None),
     ]
 
     def apply(self, ctx: EffectContext):
         if not self._enabled(ctx):
+            return ctx.image
+        # При transparent_text градиент не применяется — как в ручном
+        # шаге 6 (весь блок заливки был под if not transparent_text).
+        if ctx.settings.transparent_text:
             return ctx.image
         stops = ctx.settings.gradient_stops or [
             {"pos": 0.0, "color": "#ff0000"},
@@ -90,18 +101,21 @@ class PatternFill(EffectBase):
     label_key = "pattern_fill"
     stage = "fill"
     params = [
-        ParamSpec("enabled",     "pattern_fill",   CTRL_CHECKBOX, False),
-        ParamSpec("scale",       "pattern_scale",  CTRL_INT,      100, 5, 500),
-        ParamSpec("offset_x",    "pattern_offset_x", CTRL_INT,    0, -9999, 9999),
-        ParamSpec("offset_y",    "pattern_offset_y", CTRL_INT,    0, -9999, 9999),
-        ParamSpec("angle",       "pattern_angle",  CTRL_INT,      0, 0, 360),
-        ParamSpec("blend_mode",  "blend_mode",     CTRL_BLEND,    "normal"),
+        ParamSpec("enabled",     "pattern_fill",     CTRL_CHECKBOX, False),
+        ParamSpec("image_path",  "choose_texture",   CTRL_FILE,     None),
+        ParamSpec("scale",       "pattern_scale",    CTRL_INT,      100, 5, 500),
+        ParamSpec("offset_x",    "pattern_offset_x", CTRL_INT,      0, -9999, 9999),
+        ParamSpec("offset_y",    "pattern_offset_y", CTRL_INT,      0, -9999, 9999),
+        ParamSpec("angle",       "pattern_angle",    CTRL_INT,      0, 0, 360),
+        ParamSpec("blend_mode",  "blend_mode",       CTRL_BLEND,    "normal"),
     ]
 
     def apply(self, ctx: EffectContext):
         if not self._enabled(ctx):
             return ctx.image
         s = ctx.settings
+        if s.transparent_text:
+            return ctx.image
         if not s.pattern_image_path:
             return ctx.image
         pat = load_pattern_image(s.pattern_image_path)
