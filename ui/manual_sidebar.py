@@ -59,6 +59,14 @@ def build_header(parent, sidebar, settings, i18n):
         command=lambda: _reset_settings(sidebar, i18n),
     )
     reset_button.pack(side="right")
+    # ДОБАВЛЕНО: раньше reset_button был локальной переменной, недоступной
+    # вызывающей стороне. ui/sidebar.py на этой ветке добавляет свою
+    # кнопку "⚙" ПОСЛЕ вызова build_header() и пытается разместить её
+    # правее reset/presets — но т.к. pack(side="right") укладывает
+    # виджеты от правого края ВНУТРЬ в порядке вызовов, третий по счёту
+    # side="right"-виджет оказывается ЛЕВЕЕ первых двух, а не правее
+    # (см. фикс в ui/sidebar.py, использующий before=widgets["reset_button"]).
+    widgets["reset_button"] = reset_button
 
     presets_button = ctk.CTkButton(
         header, text="🎨 " + i18n.tr("style_presets"),
@@ -689,4 +697,4 @@ MANUAL_PANELS = {
         "builder": build_background_section,
         "label_key": "background",
     },
-}    
+}

@@ -10,17 +10,23 @@
     │ Chars: [_______________________] [Aa][📋][📂]│              │  ← тоже над preview
     ├──────────────────────────────────────────┤                  │
     │ Zoom: [🔍 —●] [100] %  [◀] 1/1 [▶]       │  Settings ⚙      │  ← Sidebar во всю высоту
-    ├──────────────────────────────────────────┤  🎨 Presets ↺    │
-    │                                          │                  │
+    │                                          │  🎨 Presets ↺    │
     │              Preview                     │  ┌────────────┐  │
     │              (canvas)                    │  │ Base (50%) │  │
-    │                                          │  └────────────┘  │
-    │                                          │  ┌────────────┐  │
+    │        [ ] Canvas width delta [0]px —●   │  └────────────┘  │
+    │        (строка внутри PreviewPanel)      │  ┌────────────┐  │
     │                                          │  │ FX (50%)   │  │
     │                                          │  └────────────┘  │
-    ├──────────────────────────────────────────┤                  │
-    │ [ ] Canvas width delta  [0] px —●        │                  │
     └──────────────────────────────────────────┴──────────────────┘
+
+ИСПРАВЛЕНО: раньше схема показывала отдельную "row 3 — canvas_width_delta"
+под превью, и _setup_window() резервировал под неё
+grid_rowconfigure(3, weight=0) — но ни один виджет НИКОГДА не кладётся
+в row=3 (canvas_width_delta живёт внутри ui/preview.py::PreviewPanel,
+упакован pack()-ом в её собственный низ, т.е. фактически в row=2).
+grid_rowconfigure(3, ...) — мёртвая, ничем не используемая настройка
+сетки; схема и комментарии приведены в соответствие с тем, что реально
+происходит, чтобы не вводить в заблуждение при дальнейшей поддержке.
 """
 
 import os
@@ -96,8 +102,15 @@ class MainWindow:
         # 4 строки:
         #   row 0 — topbar (только column 0).
         #   row 1 — chars row (только column 0).
-        #   row 2 — preview (column 0). Sidebar занимает row 0..3 в column 1.
-        #   row 3 — canvas_width_delta (column 0).
+        #   row 2 — preview (column 0, тянется).
+        #   row 3 — column 0 ПУСТАЯ (ничего туда не кладётся; в
+        #     докстрине модуля раньше значилось "canvas_width_delta",
+        #     но этот контрол живёт ВНУТРИ ui/preview.py::PreviewPanel,
+        #     т.е. фактически в row=2 — см. исправленный докстринг
+        #     выше). Строка row=3 не мёртвая: sidebar_holder занимает
+        #     rowspan=4 (row 0..3) в column 1, и весь этот диапазон
+        #     нужен, чтобы правая колонка растягивалась на всю высоту
+        #     окна наравне с превью (row 2, weight=1).
         self.root.grid_rowconfigure(0, weight=0)
         self.root.grid_rowconfigure(1, weight=0)
         self.root.grid_rowconfigure(2, weight=1)

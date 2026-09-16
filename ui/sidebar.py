@@ -69,8 +69,8 @@ class Sidebar(ctk.CTkFrame):
 
         # Пропорция 50/50 между Base и FX scroll.
         self.grid_rowconfigure(0, weight=0)  # header (фикс)
-        self.grid_rowconfigure(1, weight=4)  # base_scroll
-        self.grid_rowconfigure(2, weight=6)  # fx_scroll
+        self.grid_rowconfigure(1, weight=3)  # base_scroll
+        self.grid_rowconfigure(2, weight=7)  # fx_scroll
         self.grid_columnconfigure(0, weight=1)
 
         self.settings = settings
@@ -191,7 +191,26 @@ class Sidebar(ctk.CTkFrame):
                 hover_color=("#c7c7c7", "#3a3a3a"),
                 command=self._on_settings_clicked,
             )
-            settings_btn.pack(side="right", padx=(4, 0))
+            # ИСПРАВЛЕНО: раньше здесь был просто
+            #   settings_btn.pack(side="right", padx=(4, 0))
+            # Т.к. reset_button и presets_button (оба side="right")
+            # уже упакованы ВНУТРИ build_header() ДО этого момента,
+            # третий side="right"-вызов встаёт НЕ правее них (как
+            # предполагает докстринг класса: "... ↺  ⚙"), а левее —
+            # pack(side="right") укладывает каждый следующий виджет
+            # ближе к центру, а не к краю. Проверено визуально под
+            # Xvfb: раньше реальный порядок слева направо получался
+            # "Настройки … ⚙ … 🎨 Пресеты … ↺", хотя нужно было
+            # "Настройки … 🎨 Пресеты … ↺ … ⚙" (шестерёнка — крайняя
+            # справа). before=reset_button вставляет ⚙ в очередь
+            # упаковки ПЕРЕД reset_button, из-за чего сама reset_button
+            # (а не ⚙) сдвигается на одну позицию левее, и ⚙ занимает
+            # освободившееся крайнее правое место.
+            reset_button = header.get("reset_button")
+            if reset_button is not None:
+                settings_btn.pack(side="right", padx=(4, 0), before=reset_button)
+            else:
+                settings_btn.pack(side="right", padx=(4, 0))
 
         self._reset_base_refs()
         self._enabled_vars = {}
@@ -335,6 +354,21 @@ class Sidebar(ctk.CTkFrame):
             except Exception:
                 pass
             self._active_panel_frame = None
+
+        # ИСПРАВЛЕНО: раньше _enabled_vars/_enabled_keys чистились
+        # ТОЛЬКО в _create_sidebar() (полная пересборка), а не здесь —
+        # при каждом клике по новой иконке FX сюда добавлялась запись
+        # для нового active_id, но запись для ПРЕДЫДУЩЕГО активного
+        # эффекта никуда не девалась (хотя его чекбокс/панель только что
+        # уничтожены строкой выше). В текущем дизайне открыта максимум
+        # ОДНА панель эффекта одновременно — держать в словарях записи
+        # про все когда-либо посещённые эффекты не нужно: они копятся
+        # за сессию (до 15 штук, по числу эффектов) и указывают на
+        # BooleanVar от уже уничтоженных виджетов. sync_enabled_vars()
+        # ниже проделывала бесполезную работу над каждой такой записью
+        # при любом Undo/Redo/сбросе/загрузке пресета.
+        self._enabled_vars = {}
+        self._enabled_keys = {}
 
         if self.active_id is None:
             return
