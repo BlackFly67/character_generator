@@ -1,6 +1,6 @@
 {
-  "language": "en",
-  "theme": "system",
+  "language": "ru",
+  "theme": "light",
   "text_color": "#ffffff",
   "background_color": null,
   "saved_background_color": "#000000",
@@ -8,36 +8,36 @@
   "transparent_text": false,
   "cutout_mode": false,
   "shadow_enabled": true,
-  "shadow_color": "#092438",
-  "shadow_distance": 3,
+  "shadow_color": "#080c10",
+  "shadow_distance": 2,
   "shadow_direction": 8,
-  "shadow_blur": 3,
+  "shadow_blur": 2,
   "text_font_size": 64,
   "icon_font_size": null,
   "rotation_angle": 0,
   "text_alignment": "center",
   "font_path": "arial.ttf",
   "emboss_enabled": true,
-  "emboss_depth": 2,
+  "emboss_depth": 1,
   "emboss_blur": 1,
   "emboss_angle": 135,
   "emboss_highlight": "#ffffff",
-  "emboss_shadow": "#216a99",
+  "emboss_shadow": "#11161d",
   "outline_outer_enabled": true,
-  "outline_outer_color": "#124366",
+  "outline_outer_color": "#0d1117",
   "outline_outer_width": 1,
   "outline_inner_enabled": true,
   "outline_inner_color": "#ffffff",
   "outline_inner_width": 1,
-  "glow_outer_enabled": true,
-  "glow_outer_color": "#81d4fa",
-  "glow_outer_radius": 6,
-  "glow_outer_intensity": 3,
+  "glow_outer_enabled": false,
+  "glow_outer_color": "#ffffff",
+  "glow_outer_radius": 0,
+  "glow_outer_intensity": 0,
   "glow_inner_enabled": true,
   "glow_inner_color": "#ffffff",
-  "glow_inner_radius": 3,
+  "glow_inner_radius": 2,
   "glow_inner_intensity": 6,
-  "text_opacity": 0.85,
+  "text_opacity": 1.0,
   "text_scale_x": 1.0,
   "letter_spacing": 0,
   "characters": "",
@@ -45,20 +45,32 @@
   "gradient_stops": [
     {
       "pos": 0.0,
-      "color": "#e1f5fe"
+      "color": "#ffffff"
     },
     {
-      "pos": 0.5,
-      "color": "#81d4fa"
+      "pos": 0.21646341463414634,
+      "color": "#788896"
+    },
+    {
+      "pos": 0.3902439024390244,
+      "color": "#0f141a"
+    },
+    {
+      "pos": 0.6585365853658537,
+      "color": "#e1e8ed"
+    },
+    {
+      "pos": 0.8536585365853658,
+      "color": "#485563"
     },
     {
       "pos": 1.0,
-      "color": "#29b6f6"
+      "color": "#1a232c"
     }
   ],
   "gradient_type": "linear",
   "gradient_angle": 90,
-  "pattern_enabled": true,
+  "pattern_enabled": false,
   "pattern_image_path": "C:/watchfaces/Misc/stone-4-1.jpg",
   "pattern_scale": 100,
   "pattern_offset_x": 0,

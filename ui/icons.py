@@ -1,79 +1,74 @@
 # -*- coding: utf-8 -*-
 """
-Каталог иконок и групп для левой колонки (rail).
+Каталог иконок для FX-сетки (ui/fx_grid.py).
 
-Иконки — временно текстовые (Unicode / буквы). Позже заменятся
-на графические (PNG/SVG) — интерфейс останется тем же:
-  RAIL_ICONS[effect_id] = (symbol, tooltip_key)
-  RAIL_GROUPS = [(group_id, [effect_id, ...]), ...]
+Иконки — Unicode-символы (монохромные), не эмодзи: корректно
+рендерятся на Windows/Linux/macOS одним и тем же системным шрифтом
+и легко перекрашиваются через text_color.
+
+Формат:
+  RAIL_ICONS[panel_id] = (symbol, tooltip_key)
+
+panel_id — id эффекта из effects/registry.py (PIPELINE + POST_COMPOSE_EFFECTS).
+Base-разделы (font, style, rotation, arc, opacity, background) сюда
+НЕ входят: они живут отдельно, в верхней части правой колонки
+(Sidebar), и строятся через ui/manual_sidebar.py.
 """
 
 # (symbol, tooltip_label_key)
 RAIL_ICONS = {
-    # --- Base (ручные секции) ---
-    "font":             ("Aa",  "font"),
-    "style_text":       ("◨",   "text_color"),
-
     # --- Fill ---
-    "color_fill":       ("■",   "text_color"),
     "gradient":         ("▤",   "gradient_fill"),
     "pattern":          ("▦",   "pattern_fill"),
-    "halftone":         ("⁙",   "halftone"),
 
     # --- Inner ---
     "outline_inner":    ("◉",   "outline_inner"),
     "glow_inner":       ("✦",   "glow_inner"),
-    "inner_shadow":     ("◐",   "inner_shadow"),
     "emboss":           ("⬓",   "emboss"),
+    "inner_shadow":     ("◐",   "inner_shadow"),
 
     # --- Outer ---
     "outline_outer":    ("◎",   "outline_outer"),
     "glow_outer":       ("✧",   "glow_outer"),
     "extrude":          ("⬒",   "extrude"),
+    "shadow":           ("☁",   "shadow"),
 
     # --- Geometry ---
     "skew":             ("⟋",   "skew"),
     "perspective":      ("⬔",   "perspective"),
-    "rotation":         ("↻",   "rotation"),
-    "arc":              ("⌒",   "arc_text"),
 
     # --- Post ---
-    "shadow":           ("☁",   "shadow"),
     "reflection":       ("⤓",   "reflection"),
+    "halftone":         ("⁙",   "halftone"),
     "glitch":           ("⚡",   "glitch"),
-
-    # --- Extra (глобальные, вне групп эффектов) ---
-    "opacity":          ("◑",   "opacity"),
-    "background":       ("▨",   "background"),
 }
 
 
-# Группы в порядке отображения.
-# first-group "base" — закреплён сверху, не сворачивается, не скроллится.
-# Остальные группы — сворачиваемые (клик по разделителю).
-RAIL_GROUPS = [
-    ("base",     ["font", "style_text"]),
-    ("fill",     ["color_fill", "gradient", "pattern", "halftone"]),
-    ("inner",    ["outline_inner", "glow_inner", "inner_shadow", "emboss"]),
-    ("outer",    ["outline_outer", "glow_outer", "extrude"]),
-    ("geometry", ["skew", "perspective", "rotation", "arc"]),
-    ("post",     ["shadow", "reflection", "glitch"]),
-    ("extra",    ["opacity", "background"]),
+# Группы FX-сетки в порядке отображения.
+# Визуально на экране группы НЕ разделяются — иконки идут одним
+# потоком, а этот список задаёт лишь порядок.
+#
+# i18n-ключи для tooltip: group_fill, group_inner, group_outer,
+# group_geometry, group_post.
+FX_GROUPS = [
+    ("group_fill",     ["gradient", "pattern"]),
+    ("group_inner",    ["outline_inner", "glow_inner", "emboss", "inner_shadow"]),
+    ("group_outer",    ["outline_outer", "glow_outer", "extrude", "shadow"]),
+    ("group_geometry", ["skew", "perspective"]),
+    ("group_post",     ["reflection", "halftone", "glitch"]),
 ]
 
 
-# id эффектов, у которых есть "включаемость" (f"{id}_enabled" в
-# settings). У остальных (font, style_text, rotation, arc, opacity,
-# background, color_fill) флага нет.
+# id эффектов, у которых есть "включаемость" (f"{id}_enabled" в settings).
 ENABLEABLE_IDS = {
-    "gradient", "pattern", "halftone",
-    "outline_inner", "glow_inner", "inner_shadow", "emboss",
-    "outline_outer", "glow_outer", "extrude",
+    "gradient", "pattern",
+    "outline_inner", "glow_inner", "emboss", "inner_shadow",
+    "outline_outer", "glow_outer", "extrude", "shadow",
     "skew", "perspective",
-    "shadow", "reflection", "glitch",
+    "reflection", "halftone", "glitch",
 }
 
 
-def get_icon(effect_id):
-    """Возвращает (symbol, tooltip_key) или ('?', effect_id) как fallback."""
-    return RAIL_ICONS.get(effect_id, ("?", effect_id))
+def get_icon(panel_id):
+    """Возвращает (symbol, tooltip_key) или ('?', panel_id) как fallback."""
+    return RAIL_ICONS.get(panel_id, ("?", panel_id))

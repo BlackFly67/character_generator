@@ -1,6 +1,26 @@
 # -*- coding: utf-8 -*-
 """
-Главное окно приложения
+Главное окно приложения.
+
+Раскладка (2 колонки):
+    ┌──────────────────────────────────────────┬──────────────────┐
+    │ Top: [Text][Icons] [Filename]            │                  │  ← только над preview
+    │      [.bin] [Generate] [↺][↷]            │                  │
+    ├──────────────────────────────────────────┤                  │
+    │ Chars: [_______________________] [Aa][📋][📂]│              │  ← тоже над preview
+    ├──────────────────────────────────────────┤                  │
+    │ Zoom: [🔍 —●] [100] %  [◀] 1/1 [▶]       │  Settings ⚙      │  ← Sidebar во всю высоту
+    ├──────────────────────────────────────────┤  🎨 Presets ↺    │
+    │                                          │                  │
+    │              Preview                     │  ┌────────────┐  │
+    │              (canvas)                    │  │ Base (50%) │  │
+    │                                          │  └────────────┘  │
+    │                                          │  ┌────────────┐  │
+    │                                          │  │ FX (50%)   │  │
+    │                                          │  └────────────┘  │
+    ├──────────────────────────────────────────┤                  │
+    │ [ ] Canvas width delta  [0] px —●        │                  │
+    └──────────────────────────────────────────┴──────────────────┘
 """
 
 import os
@@ -22,7 +42,6 @@ from render.text import render_text_characters
 from render.icons import render_icons, get_icon_mask, default_icon_font_size
 from render.lvgl import save_lvgl_v8_bin
 from ui.sidebar import Sidebar
-from ui.effect_rail import EffectRail
 from ui.preview import PreviewPanel
 from ui.dialogs import SettingsDialog, SystemFontPicker, StylePresetsDialog
 from ui.widgets import IntSliderRow, ColorPickerButton, DirectionSelector
@@ -40,183 +59,198 @@ class MainWindow:
             from i18n import I18n
             self.i18n = I18n(settings.language)
 
-        # Переменные состояния.
-        # FIX: text_font_size/icon_font_size больше не хранятся локально —
-        # они живут в settings, а settings.font_size (property) сам резолвит
-        # нужное поле по settings.icon_mode. Ручная синхронизация не нужна.
         self.preview_index = 0
         self.loaded_icon_paths = list(settings.icon_paths)
-        
-        # История для Undo/Redo (только изменения, идущие через
-        # Sidebar._on_change — цвета/эффекты/градиент/тень/поворот
-        # и т.п.; изменения characters_entry/icon_paths сюда
-        # намеренно не включены). См. _schedule_history_snapshot.
+
+        # История для Undo/Redo.
         self._history = []
         self._history_index = -1
         self._history_job = None
         self._applying_history = False
 
-        # Настройка окна
         self._setup_window()
-
-        # Создание интерфейса
         self._create_layout()
-
-        # Загрузка состояния
         self._apply_settings()
-
-        # Обновление превью
         self.preview.update()
-        
 
-        # Базовый снимок — состояние ПОСЛЕ загрузки настроек, чтобы
-        # Undo не улетал в пустой Settings(), а останавливался на
-        # состоянии "как открыли программу".
         self._history = [self.settings.to_dict()]
         self._history_index = 0
         self._update_undo_redo_buttons()
 
         self.root.bind_all("<Control-z>", self._undo)
         self.root.bind_all("<Control-y>", self._redo)
-        self.root.bind_all("<Control-Shift-Z>", self._redo)        
+        self.root.bind_all("<Control-Shift-Z>", self._redo)
 
-        # Обработчик закрытия
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
 
     def _setup_window(self):
         self.root.title(f"{APP_NAME} {APP_VERSION}")
-        self.root.geometry("1050x750")
-        self.root.minsize(950, 650)
+        self.root.geometry("1200x800")
+        self.root.minsize(1050, 700)
 
-        # 2 строки x 3 колонки, Blender-style:
-        #   row 0, columnspan=3 — верхний тулбар (undo/redo/generate/bin/
-        #     settings). Раньше жил внизу центральной колонки — поднят
-        #     наверх и растянут на всю ширину окна, т.к. это глобальные
-        #     действия, не привязанные к тому, что открыто в rail/сайдбаре.
-        #   row 1 — рельс иконок (лево) | превью (центр, тянется) |
-        #     стек панелей настроек (право).
-        self.root.grid_columnconfigure(0, weight=0)
-        self.root.grid_columnconfigure(1, weight=1)
-        self.root.grid_columnconfigure(2, weight=0)
+        # 2 колонки:
+        #   column 0 — центральная (topbar, chars, preview, canvas_width).
+        #   column 1 — правая (Sidebar во всю высоту).
+        self.root.grid_columnconfigure(0, weight=1)
+        self.root.grid_columnconfigure(1, weight=0)
+        # 4 строки:
+        #   row 0 — topbar (только column 0).
+        #   row 1 — chars row (только column 0).
+        #   row 2 — preview (column 0). Sidebar занимает row 0..3 в column 1.
+        #   row 3 — canvas_width_delta (column 0).
         self.root.grid_rowconfigure(0, weight=0)
-        self.root.grid_rowconfigure(1, weight=1)
+        self.root.grid_rowconfigure(1, weight=0)
+        self.root.grid_rowconfigure(2, weight=1)
+        self.root.grid_rowconfigure(3, weight=0)
 
     # ==================== LAYOUT ====================
 
     def _create_layout(self):
-        # Верхний тулбар — на всю ширину окна.
+        # Верхний тулбар — только над центральной колонкой.
         self._create_top_bar(self.root)
 
-        # Основная область (центр) — строим ДО рельса, т.к. рельс не
-        # зависит от неё, а порядок ниже важен только для Sidebar/rail.
+        # Строка "Characters to generate" — только над центральной.
+        self._create_characters_row(self.root)
+
+        # Центр — превью (тянется).
         content_frame = ctk.CTkFrame(self.root, fg_color="transparent")
-        content_frame.grid(row=1, column=1, sticky="nsew", padx=15, pady=15)
-        content_frame.grid_rowconfigure(1, weight=1)
+        content_frame.grid(row=2, column=0, sticky="nsew", padx=15, pady=(0, 5))
+        content_frame.grid_rowconfigure(0, weight=1)
         content_frame.grid_columnconfigure(0, weight=1)
 
-        self._create_input_panel(content_frame)
-
-        # Превью
         self.preview = PreviewPanel(content_frame, self.settings, self.i18n, self)
-        self.preview.pack(fill="both", expand=True, pady=(0, 10))
+        self.preview.pack(fill="both", expand=True)
         self.preview.add_callback(self._on_preview_change)
 
-        # Стек панелей настроек (право) — создаём ПЕРЕД рельсом.
-        # ВАЖНО: EffectRail стилизует свои иконки уже в конструкторе
-        # (is_active_fn/is_pinned_fn вызываются синхронно при построении
-        # первой же строки), поэтому self.sidebar должен существовать
-        # ДО создания EffectRail — позднее связывание лямбд спасает
-        # только вызовы ПОСЛЕ старта event-loop (клики, refresh()), а
-        # не обращения во время __init__. grid() ниже всё равно кладёт
-        # виджет в column=2 (право) независимо от порядка создания.
+        # Правая колонка — Sidebar во ВСЮ высоту окна (row 0..3).
         self.sidebar = Sidebar(self.root, self.settings, self.i18n)
-        self.sidebar.grid(row=1, column=2, sticky="nsew")
-
-        # Рельс иконок эффектов (лево). Rail — чистая навигация, вся
-        # правда о том, что активно/закреплено, лежит в self.sidebar
-        # (Sidebar.active_id / Sidebar.pinned_ids) — колбэки ниже просто
-        # проксируют клики в соответствующие методы Sidebar.
-        self.effect_rail = EffectRail(
-            self.root, self.settings, self.i18n,
-            on_select=lambda pid: self.sidebar.set_active(pid),
-            on_pin_toggle=lambda pid: self.sidebar.toggle_pin(pid),
-            on_collapse_others=lambda pid: self.sidebar.collapse_all_except(pid),
-            on_unpin_all=lambda: self.sidebar.unpin_all(),
-            is_active_fn=lambda pid: self.sidebar.active_id == pid,
-            is_pinned_fn=lambda pid: pid in self.sidebar.pinned_ids,
-        )
-        self.effect_rail.grid(row=1, column=0, sticky="nsew")
-
-        # Канал 1: реальное изменение settings -> превью + история.
+        self.sidebar.grid(row=0, column=1, rowspan=4, sticky="nsew", padx=(0, 8), pady=8)
         self.sidebar.add_change_callback(self._on_settings_change)
         self.sidebar.add_change_callback(self._schedule_history_snapshot)
-        # Канал 2: чисто UI-состояние (активная вкладка/пины) -> только
-        # перекрасить рельс, без истории и без перерисовки превью.
-        self.sidebar.add_layout_callback(self.effect_rail.refresh)
+        self.sidebar.set_settings_callback(self._open_settings)
 
-    # ==================== INPUT PANEL ====================
+    # ==================== TOP BAR ====================
 
-    def _create_input_panel(self, parent):
-        self.char_frame = ctk.CTkFrame(parent)
-        self.char_frame.pack(fill="x", pady=(0, 10))
+    def _create_top_bar(self, parent):
+        top_bar = ctk.CTkFrame(parent, fg_color="transparent")
+        top_bar.grid(row=0, column=0, sticky="ew", padx=15, pady=(10, 5))
+        top_bar.grid_columnconfigure(0, weight=0)
+        top_bar.grid_columnconfigure(1, weight=0)
+        top_bar.grid_columnconfigure(2, weight=1)
+        top_bar.grid_columnconfigure(3, weight=0)
+        top_bar.grid_columnconfigure(4, weight=0)
+        top_bar.grid_columnconfigure(5, weight=0)
+        top_bar.grid_columnconfigure(6, weight=0)
 
-        # --- Переключатель режимов ---
-        mode_row = ctk.CTkFrame(self.char_frame, fg_color="transparent")
-        mode_row.pack(fill="x", padx=15, pady=(10, 0))
-
+        # --- Text / Icons ---
         self.mode_text_btn = ctk.CTkButton(
-            mode_row, text="📝 " + self.i18n.tr("text_mode"),
-            width=110, height=26,
-            command=lambda: self._set_input_mode(False)
+            top_bar, text="📝 " + self.i18n.tr("text_mode"),
+            width=100, height=32,
+            command=lambda: self._set_input_mode(False),
         )
-        self.mode_text_btn.pack(side="left", padx=(0, 2))
+        self.mode_text_btn.grid(row=0, column=0, padx=(0, 4))
 
         self.mode_icon_btn = ctk.CTkButton(
-            mode_row, text="🖼 " + self.i18n.tr("icon_mode"),
-            width=110, height=26,
+            top_bar, text="🖼 " + self.i18n.tr("icon_mode"),
+            width=100, height=32,
             fg_color="transparent", border_width=1,
-            command=lambda: self._set_input_mode(True)
+            command=lambda: self._set_input_mode(True),
         )
-        self.mode_icon_btn.pack(side="left", padx=(0, 15))
+        self.mode_icon_btn.grid(row=0, column=1, sticky="w", padx=(0, 12))
 
-        # --- Шаблон имени файла ---
-        template_col = ctk.CTkFrame(mode_row, fg_color="transparent")
-        template_col.pack(side="left", fill="x", expand=True)
+        # --- Filename template ---
+        template_col = ctk.CTkFrame(top_bar, fg_color="transparent")
+        template_col.grid(row=0, column=2, sticky="ew")
 
-        template_row = ctk.CTkFrame(template_col, fg_color="transparent")
-        template_row.pack(fill="x")
+        ctk.CTkLabel(template_col, text=self.i18n.tr("filename_template") + ":",
+                     font=("Arial", 11)).pack(anchor="w")
 
-        ctk.CTkLabel(template_row, text=self.i18n.tr("filename_template") + ":",
-                    font=("Arial", 11)).pack(side="left")
-
-        self.filename_template_entry = ctk.CTkEntry(
-            template_row, font=("Arial", 11)
-        )
-        self.filename_template_entry.pack(side="left", fill="x", expand=True, padx=(8, 0))
+        self.filename_template_entry = ctk.CTkEntry(template_col, font=("Arial", 11))
+        self.filename_template_entry.pack(fill="x")
         self.filename_template_entry.insert(0, self.settings.filename_template)
-        self.filename_template_entry.bind("<KeyRelease>", self._on_filename_template_change)
+        self.filename_template_entry.bind(
+            "<KeyRelease>", self._on_filename_template_change,
+        )
 
-        ctk.CTkLabel(template_col, text=self.i18n.tr("filename_template_hint"),
-                    font=("Arial", 9), text_color="gray").pack(anchor="w", pady=(2, 0))
+        ctk.CTkLabel(
+            template_col, text=self.i18n.tr("filename_template_hint"),
+            font=("Arial", 9), text_color="gray",
+        ).pack(anchor="w", pady=(2, 0))
 
-        # --- Текстовый режим ---
-        self.text_input_frame = ctk.CTkFrame(self.char_frame, fg_color="transparent")
+        # --- .bin checkbox ---
+        self.create_bin_var = ctk.BooleanVar(value=self.settings.create_bin)
+        bin_check = ctk.CTkCheckBox(
+            top_bar, text=".bin",
+            variable=self.create_bin_var,
+            command=self._on_bin_toggle,
+            checkbox_height=18, checkbox_width=18,
+        )
+        bin_check.grid(row=0, column=3, padx=(12, 6))
 
-        header = ctk.CTkFrame(self.text_input_frame, fg_color="transparent")
-        header.pack(fill="x", padx=15, pady=(10, 5))
+        # --- Generate ---
+        self.generate_btn = ctk.CTkButton(
+            top_bar, text=self.i18n.tr("generate_images"),
+            command=self._on_generate,
+            height=44, font=("Arial", 14, "bold"),
+            fg_color="#1f538d", hover_color="#14375e",
+        )
+        self.generate_btn.grid(row=0, column=4, sticky="ew", padx=(6, 10))
 
-        ctk.CTkLabel(header, text=self.i18n.tr("characters_to_generate"),
-                    font=("Arial", 14, "bold")).pack(side="left")
+        # --- Undo / Redo ---
+        self.undo_btn = ctk.CTkButton(
+            top_bar, text="↶", width=40, height=44,
+            font=("Segoe UI Symbol", 18),
+            fg_color=("#dbdbdb", "#2b2b2b"),
+            text_color=("#1a1a1a", "#e0e0e0"),
+            hover_color=("#c7c7c7", "#3a3a3a"),
+            command=self._undo, state="disabled",
+        )
+        self.undo_btn.grid(row=0, column=5, padx=(0, 4))
 
-        actions = ctk.CTkFrame(header, fg_color="transparent")
-        actions.pack(side="right")
+        self.redo_btn = ctk.CTkButton(
+            top_bar, text="↷", width=40, height=44,
+            font=("Segoe UI Symbol", 18),
+            fg_color=("#dbdbdb", "#2b2b2b"),
+            text_color=("#1a1a1a", "#e0e0e0"),
+            hover_color=("#c7c7c7", "#3a3a3a"),
+            command=self._redo, state="disabled",
+        )
+        self.redo_btn.grid(row=0, column=6, padx=(0, 0))
 
+    # ==================== CHARACTERS ROW ====================
+
+    def _create_characters_row(self, parent):
+        row = ctk.CTkFrame(parent, fg_color="transparent")
+        row.grid(row=1, column=0, sticky="ew", padx=15, pady=(5, 5))
+        row.grid_columnconfigure(0, weight=0)
+        row.grid_columnconfigure(1, weight=1)
+        row.grid_columnconfigure(2, weight=0)
+
+        ctk.CTkLabel(
+            row, text=self.i18n.tr("characters_to_generate"),
+            font=("Arial", 14, "bold"),
+        ).grid(row=0, column=0, sticky="w", padx=(0, 10))
+
+        self.characters_entry = ctk.CTkEntry(row, height=36, font=("Arial", 13))
+        self.characters_entry.grid(row=0, column=1, sticky="ew")
+        self.characters_entry.bind("<KeyRelease>", self._on_characters_change)
+        self.characters_entry.bind("<Control-c>", lambda e: self._copy_selection())
+        self.characters_entry.bind("<Control-v>", lambda e: self._paste_clipboard())
+        self.characters_entry.bind("<Control-x>", lambda e: self._cut_selection())
+        self.characters_entry.bind("<Control-a>", lambda e: self._select_all())
+        self.characters_entry.bind("<Button-3>", self._show_context_menu)
+
+        actions = ctk.CTkFrame(row, fg_color="transparent")
+        actions.grid(row=0, column=2, padx=(10, 0))
+
+        # --- Case cycle ---
         self.case_button = ctk.CTkButton(
-            actions, text="Aa Ori", width=55, height=26,
-            command=self._cycle_case, font=("Arial", 11, "bold")
+            actions, text="Aa Ori", width=55, height=32,
+            command=self._cycle_case, font=("Arial", 11, "bold"),
         )
         self.case_button.pack(side="left", padx=2)
 
+        # --- Patterns (JSON) ---
         from constants import PATTERNS_FILE
         if os.path.exists(PATTERNS_FILE):
             try:
@@ -225,55 +259,38 @@ class MainWindow:
                     patterns = json.load(f)
                 if patterns:
                     pattern_btn = ctk.CTkButton(
-                        actions, text="📋 " + self.i18n.tr("select_pattern"),
-                        width=110, height=26,
-                        command=lambda: self._show_pattern_selector(patterns)
+                        actions, text="📋", width=40, height=32,
+                        command=lambda: self._show_pattern_selector(patterns),
                     )
                     pattern_btn.pack(side="left", padx=2)
             except Exception:
                 pass
 
         json_btn = ctk.CTkButton(
-            actions, text="📂 JSON", width=70, height=26,
-            command=self._load_pattern_file
+            actions, text="📂", width=40, height=32,
+            command=self._load_pattern_file,
         )
         json_btn.pack(side="left", padx=2)
 
-        self.characters_entry = ctk.CTkEntry(
-            self.text_input_frame, height=40, font=("Arial", 14)
-        )
-        self.characters_entry.pack(fill="x", padx=15, pady=(0, 15))
-        self.characters_entry.bind("<KeyRelease>", self._on_characters_change)
-        # ИСПРАВЛЕНО: event_generate("<<Copy>>"/"<<Cut>>"/"<<Paste>>") на
-        # CTkEntry не работает — виртуальные события полагаются на
-        # class-биндинги обычного tkinter.Entry, которых у составного
-        # CTkEntry нет. Реализуем clipboard-операции напрямую через
-        # _copy_selection/_cut_selection/_paste_clipboard, работая с
-        # внутренним _entry и возвращая "break", чтобы событие не
-        # всплывало дальше и не дублировалось.
-        self.characters_entry.bind("<Control-c>", lambda e: self._copy_selection())
-        self.characters_entry.bind("<Control-v>", lambda e: self._paste_clipboard())
-        self.characters_entry.bind("<Control-x>", lambda e: self._cut_selection())
-        self.characters_entry.bind("<Control-a>", lambda e: self._select_all())
-        self.characters_entry.bind("<Button-3>", self._show_context_menu)
+        self.text_input_frame = row
 
-        self.text_input_frame.pack(fill="x")
-
-        # --- Иконочный режим ---
-        self.icon_input_frame = ctk.CTkFrame(self.char_frame, fg_color="transparent")
+        # --- Иконочный режим (скрыт по умолчанию) ---
+        self.icon_input_frame = ctk.CTkFrame(parent, fg_color="transparent")
 
         icon_header = ctk.CTkFrame(self.icon_input_frame, fg_color="transparent")
-        icon_header.pack(fill="x", padx=15, pady=(10, 5))
+        icon_header.pack(fill="x", padx=15, pady=(5, 5))
 
-        ctk.CTkLabel(icon_header, text=self.i18n.tr("loaded_icons"),
-                    font=("Arial", 14, "bold")).pack(side="left")
+        ctk.CTkLabel(
+            icon_header, text=self.i18n.tr("loaded_icons"),
+            font=("Arial", 14, "bold"),
+        ).pack(side="left")
 
         icon_actions = ctk.CTkFrame(icon_header, fg_color="transparent")
         icon_actions.pack(side="right")
 
         load_btn = ctk.CTkButton(
             icon_actions, text="📁 " + self.i18n.tr("load_icons"),
-            width=120, height=26, command=self._load_icons
+            width=120, height=26, command=self._load_icons,
         )
         load_btn.pack(side="left", padx=2)
 
@@ -281,11 +298,13 @@ class MainWindow:
             icon_actions, text="🗑 " + self.i18n.tr("clear"),
             width=90, height=26,
             fg_color="#8B0000", hover_color="#5C0000",
-            command=self._clear_icons
+            command=self._clear_icons,
         )
         clear_btn.pack(side="left", padx=2)
 
-        self.icon_list_frame = ctk.CTkScrollableFrame(self.icon_input_frame, height=90)
+        self.icon_list_frame = ctk.CTkScrollableFrame(
+            self.icon_input_frame, height=90,
+        )
         self.icon_list_frame.pack(fill="x", padx=15, pady=(0, 15))
 
         try:
@@ -299,7 +318,6 @@ class MainWindow:
 
     def _on_filename_template_change(self, event):
         self.settings.filename_template = self.filename_template_entry.get()
-        # settings.save() — только по кнопке Generate
 
     # ==================== DND ====================
 
@@ -319,7 +337,7 @@ class MainWindow:
             hint = ctk.CTkLabel(
                 self.icon_input_frame,
                 text=self.i18n.tr("drag_drop_hint"),
-                font=("Arial", 10), text_color="gray"
+                font=("Arial", 10), text_color="gray",
             )
             hint.pack(anchor="w", padx=15, pady=(0, 10))
         except Exception:
@@ -335,81 +353,16 @@ class MainWindow:
         self._on_icons_drag_leave(event)
         try:
             raw_paths = self.root.tk.splitlist(event.data)
-            image_paths = [p for p in raw_paths if os.path.isfile(p) and
-                          p.lower().endswith(IMAGE_EXTENSIONS)]
+            image_paths = [
+                p for p in raw_paths
+                if os.path.isfile(p) and p.lower().endswith(IMAGE_EXTENSIONS)
+            ]
             if image_paths:
                 if not self.settings.icon_mode:
                     self._set_input_mode(True)
                 self._add_icon_paths(image_paths)
         except Exception:
             pass
-
-    # ==================== TOP BAR ====================
-    # ПЕРЕНЕСЕНО ИЗ НИЗА: раньше этот блок (undo/redo, генерация,
-    # чекбокс .bin, настройки) жил внизу центральной колонки и был
-    # виден только когда листаешь до конца превью. Это глобальные
-    # действия уровня всего приложения, не связанные с тем, какая
-    # панель эффекта сейчас открыта справа — вынесены в тулбар на всю
-    # ширину окна (row=0), сразу над рельсом/превью/стеком настроек.
-
-    def _create_top_bar(self, parent):
-        top_bar = ctk.CTkFrame(parent, fg_color="transparent")
-        top_bar.grid(row=0, column=0, columnspan=3, sticky="ew", padx=15, pady=(10, 5))
-        top_bar.grid_columnconfigure(0, weight=0)
-        top_bar.grid_columnconfigure(1, weight=1)
-        top_bar.grid_columnconfigure(2, weight=0)
-        top_bar.grid_columnconfigure(3, weight=0)
-        top_bar.grid_columnconfigure(4, weight=0)
-
-        self.create_bin_var = ctk.BooleanVar(value=self.settings.create_bin)
-        bin_check = ctk.CTkCheckBox(
-            top_bar,
-            text=self.i18n.tr("create_bin"),
-            variable=self.create_bin_var,
-            command=self._on_bin_toggle,
-            checkbox_height=18, checkbox_width=18
-        )
-        bin_check.grid(row=0, column=0, sticky="w", padx=(0, 10))
-
-        self.generate_btn = ctk.CTkButton(
-            top_bar,
-            text=self.i18n.tr("generate_images"),
-            command=self._on_generate,
-            height=44, font=("Arial", 15, "bold"),
-            fg_color="#1f538d", hover_color="#14375e"
-        )
-        self.generate_btn.grid(row=0, column=1, sticky="ew", padx=(0, 10))
-
-
-        self.undo_btn = ctk.CTkButton(
-            top_bar, text="↶", width=40, height=44,
-            font=("Segoe UI Symbol", 18),
-            fg_color=("#dbdbdb", "#2b2b2b"),
-            text_color=("#1a1a1a", "#e0e0e0"),
-            hover_color=("#c7c7c7", "#3a3a3a"),
-            command=self._undo, state="disabled",
-        )
-        self.undo_btn.grid(row=0, column=2, sticky="e", padx=(0, 4))
-
-        self.redo_btn = ctk.CTkButton(
-            top_bar, text="↷", width=40, height=44,
-            font=("Segoe UI Symbol", 18),
-            fg_color=("#dbdbdb", "#2b2b2b"),
-            text_color=("#1a1a1a", "#e0e0e0"),
-            hover_color=("#c7c7c7", "#3a3a3a"),
-            command=self._redo, state="disabled",
-        )
-        self.redo_btn.grid(row=0, column=3, sticky="e", padx=(0, 10))
-
-        settings_btn = ctk.CTkButton(
-            top_bar, text="⚙", width=50, height=44,
-            font=("Segoe UI Symbol", 20),
-            fg_color=("#dbdbdb", "#2b2b2b"),
-            text_color=("#1a1a1a", "#e0e0e0"),
-            hover_color=("#c7c7c7", "#3a3a3a"),
-            command=self._open_settings
-        )
-        settings_btn.grid(row=0, column=4, sticky="e")
 
     # ==================== SETTINGS ====================
 
@@ -430,22 +383,12 @@ class MainWindow:
         self.preview_index = 0
 
         self.sidebar._refresh_all_widgets()
-        # ДОБАВЛЕНО: _apply_settings вызывается и после SettingsDialog
-        # (смена языка/темы), и при первом запуске — settings могли
-        # прийти извне (загруженный config.json), рельс должен сразу
-        # показывать актуальные enabled-флаги, а не только те, что были
-        # на момент создания EffectRail в _create_layout.
-        self.effect_rail.refresh()
+        self.sidebar.refresh_fx_grid()
 
     def _on_settings_change(self):
         self.preview.update()
-        # Rail и Sidebar имеют НЕЗАВИСИМЫЕ BooleanVar на один и тот же
-        # settings.<id>_enabled (чекбокс на иконке рельса и чекбокс
-        # внутри панели параметров). Любое изменение с одной стороны
-        # должно быть видно на другой — обе стороны просто перечитывают
-        # settings, дорого это не стоит (несколько getattr + configure).
         self.sidebar.sync_enabled_vars()
-        self.effect_rail.refresh()
+        self.sidebar.refresh_fx_grid()
 
     def _on_preview_change(self):
         pass
@@ -459,47 +402,22 @@ class MainWindow:
     # ==================== INPUT MODE ====================
 
     def _set_input_mode(self, is_icon_mode, apply=False):
-        """
-        Переключает режим ввода (текст ↔ иконки).
-
-        FIX: settings.font_size теперь property — читает/пишет
-        text_font_size или icon_font_size в зависимости от
-        settings.icon_mode. Ручная синхронизация локальных копий
-        (self.text_font_size/self.icon_font_size) больше не нужна и
-        удалена, чтобы не было двух источников истины.
-        """
-        # 1. Переключаем режим — это ПЕРВОЕ, что нужно сделать.
-        #    Дальше settings.font_size уже пишет в нужное поле.
         self.settings.icon_mode = is_icon_mode
 
         if is_icon_mode:
-            self.text_input_frame.pack_forget()
-            self.icon_input_frame.pack(fill="x")
-
-            # Если для иконок размера ещё нет (первый вход и иконки уже
-            # загружены) — подберём дефолт по нативной иконке.
-            # Если иконок нет — оставим None, property вернёт
-            # text_font_size как fallback, чтобы UI не показывал 0.
+            self.text_input_frame.grid_remove()
+            self.icon_input_frame.grid(row=1, column=0, sticky="ew",
+                                       padx=15, pady=(5, 5))
             if self.settings.icon_font_size is None:
                 default = self._default_icon_font_size()
                 if default is not None:
                     self.settings.icon_font_size = default
         else:
-            self.icon_input_frame.pack_forget()
-            self.text_input_frame.pack(fill="x")
-
-            # На случай, если text_font_size почему-то пуст
+            self.icon_input_frame.grid_remove()
+            self.text_input_frame.grid()
             if self.settings.text_font_size is None:
                 self.settings.text_font_size = 64
 
-        # 2. Обновляем UI размера в сайдбаре (entry + slider)
-        # ИСПРАВЛЕНО: раньше проверялось hasattr(self.sidebar, 'font_size_entry'),
-        # но в Photoshop-style режиме этот атрибут ВСЕГДА существует
-        # (задан в Sidebar.__init__), просто может быть None или указывать
-        # на уже уничтоженный виджет (см. Sidebar._build_effect_section),
-        # если сейчас справа открыт не Base, а панель конкретного эффекта.
-        # hasattr в такой ситуации всегда True, и .delete()/.set() упали бы
-        # с TclError на уничтоженном виджете. Проверяем None явно.
         if getattr(self.sidebar, 'font_size_entry', None) is not None:
             self.sidebar.font_size_entry.delete(0, "end")
             self.sidebar.font_size_entry.insert(0, str(self.settings.font_size))
@@ -508,7 +426,6 @@ class MainWindow:
 
         self._update_mode_buttons()
         self.preview_index = 0
-        self.sidebar._refresh_all_widgets()
         self.preview.update()
 
     def _update_mode_buttons(self):
@@ -518,13 +435,21 @@ class MainWindow:
         inactive_border = ("#a0a0a0", "#5a5a5a")
 
         if self.settings.icon_mode:
-            self.mode_text_btn.configure(fg_color=inactive_fg, border_width=1,
-                                         text_color=inactive_text, border_color=inactive_border)
-            self.mode_icon_btn.configure(fg_color=active_fg, border_width=0, text_color="white")
+            self.mode_text_btn.configure(
+                fg_color=inactive_fg, border_width=1,
+                text_color=inactive_text, border_color=inactive_border,
+            )
+            self.mode_icon_btn.configure(
+                fg_color=active_fg, border_width=0, text_color="white",
+            )
         else:
-            self.mode_text_btn.configure(fg_color=active_fg, border_width=0, text_color="white")
-            self.mode_icon_btn.configure(fg_color=inactive_fg, border_width=1,
-                                         text_color=inactive_text, border_color=inactive_border)
+            self.mode_text_btn.configure(
+                fg_color=active_fg, border_width=0, text_color="white",
+            )
+            self.mode_icon_btn.configure(
+                fg_color=inactive_fg, border_width=1,
+                text_color=inactive_text, border_color=inactive_border,
+            )
 
     def _default_icon_font_size(self):
         if not self.loaded_icon_paths:
@@ -542,7 +467,7 @@ class MainWindow:
         paths = filedialog.askopenfilenames(
             title=self.i18n.tr("load_icons"),
             filetypes=[("Image files", "*.png *.bmp *.gif *.jpg *.jpeg *.webp"),
-                      ("All files", "*.*")]
+                       ("All files", "*.*")],
         )
         if paths:
             self._add_icon_paths(list(paths))
@@ -568,11 +493,7 @@ class MainWindow:
         if was_empty and self.settings.icon_mode:
             dim = self._default_icon_font_size()
             if dim:
-                # settings.font_size в режиме иконок пишет в icon_font_size
                 self.settings.font_size = dim
-                # См. пояснение в _set_input_mode: hasattr тут не годится,
-                # т.к. атрибут существует всегда, но может указывать на
-                # уничтоженный виджет, если сейчас открыта не Base-панель.
                 if getattr(self.sidebar, 'font_size_entry', None) is not None:
                     self.sidebar.font_size_entry.delete(0, "end")
                     self.sidebar.font_size_entry.insert(0, str(dim))
@@ -582,7 +503,7 @@ class MainWindow:
         dims_after = set(self._get_icon_dims(self.loaded_icon_paths))
         if len(dims_after) > 1 and len(dims_before) <= 1:
             messagebox.showinfo(self.i18n.tr("warning"),
-                               self.i18n.tr("warning_mixed_icon_sizes"))
+                                self.i18n.tr("warning_mixed_icon_sizes"))
 
         self.preview_index = 0
         self.preview.update()
@@ -623,8 +544,11 @@ class MainWindow:
             w.destroy()
 
         if not self.loaded_icon_paths:
-            ctk.CTkLabel(self.icon_list_frame, text=self.i18n.tr("no_icons_loaded"),
-                        text_color="gray", font=("Arial", 11)).pack(pady=10)
+            ctk.CTkLabel(
+                self.icon_list_frame,
+                text=self.i18n.tr("no_icons_loaded"),
+                text_color="gray", font=("Arial", 11),
+            ).pack(pady=10)
             return
 
         cols = 3
@@ -633,19 +557,21 @@ class MainWindow:
 
         for idx, path in enumerate(self.loaded_icon_paths):
             row, col = divmod(idx, cols)
-            chip = ctk.CTkFrame(self.icon_list_frame, fg_color=("#dbdbdb", "#3a3a3a"))
+            chip = ctk.CTkFrame(
+                self.icon_list_frame, fg_color=("#dbdbdb", "#3a3a3a"),
+            )
             chip.grid(row=row, column=col, sticky="ew", padx=3, pady=3)
 
             name = os.path.splitext(os.path.basename(path))[0]
-            ctk.CTkLabel(chip, text=name, anchor="w", font=("Arial", 10)).pack(
-                side="left", fill="x", expand=True, padx=(6, 2), pady=2
-            )
+            ctk.CTkLabel(
+                chip, text=name, anchor="w", font=("Arial", 10),
+            ).pack(side="left", fill="x", expand=True, padx=(6, 2), pady=2)
 
             ctk.CTkButton(
                 chip, text="✕", width=20, height=18,
                 fg_color="transparent",
                 hover_color=("#c7c7c7", "#4a4a4a"),
-                command=lambda p=path: self._remove_icon(p)
+                command=lambda p=path: self._remove_icon(p),
             ).pack(side="right", padx=2, pady=2)
 
     # ==================== CHARACTERS ====================
@@ -695,9 +621,6 @@ class MainWindow:
     def _show_context_menu(self, event):
         import tkinter as tk
         menu = tk.Menu(self.root, tearoff=0)
-        # ИЗМЕНЕНО: команды меню больше не полагаются на
-        # event_generate("<<Cut>>"/"<<Copy>>"/"<<Paste>>") — см. причину
-        # в бинде Ctrl-C/V/X выше. Используют те же новые методы.
         menu.add_command(label=self.i18n.tr("cut"), command=self._cut_selection)
         menu.add_command(label=self.i18n.tr("copy"), command=self._copy_selection)
         menu.add_command(label=self.i18n.tr("paste"), command=self._paste_clipboard)
@@ -708,21 +631,9 @@ class MainWindow:
         menu.post(event.x_root, event.y_root)
 
     def _entry_widget(self):
-        """Возвращает внутренний tkinter.Entry у CTkEntry.
-
-        CTkEntry — составной виджет; виртуальные события <<Copy>>,
-        <<Cut>>, <<Paste>> и методы selection_get()/selection_present()
-        у него работают нестабильно, потому что делегируют к
-        внутреннему _entry. Работаем с ним напрямую.
-        """
         return getattr(self.characters_entry, "_entry", self.characters_entry)
 
     def _has_selection(self):
-        """Проверяет наличие выделения через index('sel.first').
-
-        Надёжнее, чем selection_present() у CTkEntry: последний
-        иногда возвращает True при потере фокуса или наоборот.
-        """
         try:
             self._entry_widget().index("sel.first")
             return True
@@ -730,7 +641,6 @@ class MainWindow:
             return False
 
     def _copy_selection(self):
-        """Копирует выделенный текст characters_entry в буфер обмена."""
         entry = self._entry_widget()
         if not self._has_selection():
             return "break"
@@ -743,7 +653,6 @@ class MainWindow:
         return "break"
 
     def _cut_selection(self):
-        """Вырезает выделенный текст: копирует в буфер и удаляет из поля."""
         entry = self._entry_widget()
         if not self._has_selection():
             return "break"
@@ -758,13 +667,10 @@ class MainWindow:
         return "break"
 
     def _paste_clipboard(self):
-        """Вставляет текст из буфера обмена на место курсора,
-        предварительно заменяя выделение, если оно есть."""
         entry = self._entry_widget()
         try:
             text = self.root.clipboard_get()
         except Exception:
-            # Буфер пуст или содержит не текст — тихо выходим.
             return "break"
         if self._has_selection():
             entry.delete("sel.first", "sel.last")
@@ -773,19 +679,13 @@ class MainWindow:
         return "break"
 
     def _delete_selection(self):
-        """Удаляет выделенный текст в characters_entry, если он есть."""
         entry = self._entry_widget()
         if not self._has_selection():
             return
         entry.delete("sel.first", "sel.last")
-        # ИСПРАВЛЕНО: программное .delete() не порождает <KeyRelease>,
-        # поэтому settings.characters и превью не обновлялись после
-        # удаления через меню — синхронизируем вручную, как уже
-        # делает _cycle_case() после своих правок текста.
         self._on_characters_change(None)
 
     def _select_all(self):
-        """Выделяет весь текст в characters_entry."""
         self._entry_widget().select_range(0, "end")
         return "break"
 
@@ -794,7 +694,7 @@ class MainWindow:
     def _load_pattern_file(self):
         path = filedialog.askopenfilename(
             title=self.i18n.tr("select_pattern"),
-            filetypes=[("JSON files", "*.json"), ("All files", "*.*")]
+            filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
         )
         if path:
             try:
@@ -819,14 +719,18 @@ class MainWindow:
         top = ctk.CTkFrame(main, fg_color="transparent")
         top.pack(fill="x", pady=(0, 5))
 
-        ctk.CTkLabel(top, text=self.i18n.tr("available_patterns") + ":",
-                    font=("Arial", 14, "bold")).pack(side="left", anchor="w")
+        ctk.CTkLabel(
+            top, text=self.i18n.tr("available_patterns") + ":",
+            font=("Arial", 14, "bold"),
+        ).pack(side="left", anchor="w")
 
         lang_frame = ctk.CTkFrame(top, fg_color="transparent")
         lang_frame.pack(side="right")
 
-        ctk.CTkLabel(lang_frame, text=self.i18n.tr("language") + ":",
-                    font=("Arial", 12)).pack(side="left", padx=(5, 5))
+        ctk.CTkLabel(
+            lang_frame, text=self.i18n.tr("language") + ":",
+            font=("Arial", 12),
+        ).pack(side="left", padx=(5, 5))
 
         detected_langs = set()
         for p in patterns.values():
@@ -842,16 +746,20 @@ class MainWindow:
         scrollbar = ctk.CTkScrollbar(list_frame)
         scrollbar.pack(side="right", fill="y")
 
-        listbox = tk.Listbox(list_frame, yscrollcommand=scrollbar.set,
-                            height=10, font=("Arial", 12))
+        listbox = tk.Listbox(
+            list_frame, yscrollcommand=scrollbar.set,
+            height=10, font=("Arial", 12),
+        )
         listbox.pack(side="left", fill="both", expand=True)
         scrollbar.configure(command=listbox.yview)
 
         info_frame = ctk.CTkFrame(main)
         info_frame.pack(fill="x", pady=5)
 
-        ctk.CTkLabel(info_frame, text=self.i18n.tr("pattern_info"),
-                    font=("Arial", 12, "bold")).pack(anchor="w")
+        ctk.CTkLabel(
+            info_frame, text=self.i18n.tr("pattern_info"),
+            font=("Arial", 12, "bold"),
+        ).pack(anchor="w")
 
         info_text = tk.Text(info_frame, height=4, wrap="word", font=("Arial", 12))
         info_text.pack(fill="x")
@@ -864,7 +772,9 @@ class MainWindow:
             listbox.delete(0, "end")
             filtered_keys = []
             for key, pattern in patterns.items():
-                p_lang = str(pattern.get("lang", pattern.get("language", "all"))).strip().lower()
+                p_lang = str(
+                    pattern.get("lang", pattern.get("language", "all"))
+                ).strip().lower()
                 if selected_lang.lower() == "all" or p_lang == selected_lang.lower():
                     filtered_keys.append(key)
                     display = f"{pattern.get('name', key)} - {pattern.get('description', '')}"
@@ -873,9 +783,10 @@ class MainWindow:
             info_text.delete(1.0, "end")
             info_text.config(state="disabled")
 
-        lang_combo = ctk.CTkComboBox(lang_frame, values=combo_values,
-                                     width=100, state="readonly",
-                                     command=update_list)
+        lang_combo = ctk.CTkComboBox(
+            lang_frame, values=combo_values,
+            width=100, state="readonly", command=update_list,
+        )
         lang_combo.set("all")
         lang_combo.pack(side="left")
         update_list("all")
@@ -927,10 +838,14 @@ class MainWindow:
                 self.settings.save()
                 selector.destroy()
 
-        ctk.CTkButton(btn_frame, text=self.i18n.tr("load"),
-                     command=load_selected, font=("Arial", 12)).pack(side="left", padx=5)
-        ctk.CTkButton(btn_frame, text=self.i18n.tr("cancel"),
-                     command=selector.destroy, font=("Arial", 12)).pack(side="left", padx=5)
+        ctk.CTkButton(
+            btn_frame, text=self.i18n.tr("load"),
+            command=load_selected, font=("Arial", 12),
+        ).pack(side="left", padx=5)
+        ctk.CTkButton(
+            btn_frame, text=self.i18n.tr("cancel"),
+            command=selector.destroy, font=("Arial", 12),
+        ).pack(side="left", padx=5)
 
     # ==================== GENERATE ====================
 
@@ -940,23 +855,24 @@ class MainWindow:
         if self.settings.icon_mode:
             if not self.loaded_icon_paths:
                 messagebox.showwarning(self.i18n.tr("warning"),
-                                      self.i18n.tr("warning_no_icons"))
+                                       self.i18n.tr("warning_no_icons"))
                 return
         elif not raw:
             messagebox.showwarning(self.i18n.tr("warning"),
-                                  self.i18n.tr("warning_no_characters"))
+                                   self.i18n.tr("warning_no_characters"))
             return
 
         if not self.settings.icon_mode:
             chars = parse_characters(raw)
             if not chars:
                 messagebox.showerror(self.i18n.tr("error"),
-                                    self.i18n.tr("warning_no_valid"))
+                                     self.i18n.tr("warning_no_valid"))
                 return
 
         font_size = self.settings.font_size
         if font_size <= 0:
-            messagebox.showerror(self.i18n.tr("error"), "Font size must be a positive number.")
+            messagebox.showerror(self.i18n.tr("error"),
+                                 "Font size must be a positive number.")
             return
 
         from constants import FONT_SIZE_MAX
@@ -964,7 +880,6 @@ class MainWindow:
             font_size = FONT_SIZE_MAX
             self.settings.font_size = font_size
 
-        # Сохраняем всё состояние настроек на диск по кнопке Generate
         self.settings.save()
 
         progress_window = ctk.CTkToplevel(self.root)
@@ -996,28 +911,31 @@ class MainWindow:
                     count = render_icons(
                         icon_paths=list(self.loaded_icon_paths),
                         settings=self.settings,
-                        progress_callback=update_progress
+                        progress_callback=update_progress,
                     )
                 else:
                     chars = parse_characters(raw)
                     render_text_characters(
                         characters=chars,
                         settings=self.settings,
-                        progress_callback=update_progress
+                        progress_callback=update_progress,
                     )
                     count = len(chars)
 
                 progress_window.destroy()
 
-                output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "output")
+                output_dir = os.path.join(
+                    os.path.dirname(os.path.abspath(__file__)), "..", "output",
+                )
                 messagebox.showinfo(
                     self.i18n.tr("done"),
-                    self.i18n.tr("generated").format(count=count) + f"\n\nSaved to:\n{output_dir}"
+                    self.i18n.tr("generated").format(count=count)
+                    + f"\n\nSaved to:\n{output_dir}",
                 )
             except Exception as e:
                 progress_window.destroy()
                 messagebox.showerror(self.i18n.tr("error"),
-                                    f"{self.i18n.tr('generation_failed')}: {e}")
+                                     f"{self.i18n.tr('generation_failed')}: {e}")
 
         self.root.after(100, run_generation)
 
@@ -1027,14 +945,6 @@ class MainWindow:
     # ==================== UNDO / REDO ====================
 
     def _schedule_history_snapshot(self):
-        """
-        Вызывается через Sidebar._on_change при каждом изменении
-        стиля/эффектов. Debounce (SETTINGS_HISTORY_DEBOUNCE_MS) —
-        чтобы перетаскивание одного слайдера попало в ОДИН шаг
-        истории, а не в десятки промежуточных, как и в
-        ui/preview.py::PreviewPanel.update() (тот же паттерн, окно
-        просто шире).
-        """
         if self._applying_history:
             return
         if self._history_job is not None:
@@ -1043,19 +953,14 @@ class MainWindow:
             except Exception:
                 pass
         self._history_job = self.root.after(
-            SETTINGS_HISTORY_DEBOUNCE_MS, self._commit_history_snapshot
+            SETTINGS_HISTORY_DEBOUNCE_MS, self._commit_history_snapshot,
         )
 
     def _commit_history_snapshot(self):
         self._history_job = None
         snapshot = self.settings.to_dict()
         if snapshot == self._history[self._history_index]:
-            # Ничего реально не изменилось (например, значение вернули
-            # обратно за время debounce-окна) — не плодим пустые шаги.
             return
-        # Обрезаем "redo"-ветку — как в любом стандартном Undo-стеке:
-        # новое изменение после отката делает старые "будущие" шаги
-        # недостижимыми.
         self._history = self._history[:self._history_index + 1]
         self._history.append(snapshot)
         if len(self._history) > SETTINGS_HISTORY_MAX:
@@ -1078,23 +983,11 @@ class MainWindow:
         return "break"
 
     def _restore_history_snapshot(self, snapshot):
-        # _applying_history блокирует _schedule_history_snapshot на
-        # время применения снимка — иначе sidebar._refresh_all_widgets()
-        # ниже само по себе ничего не триггерит (см. комментарий в
-        # ui/auto_sidebar.py — создание виджетов не вызывает command=),
-        # но settings.from_dict() потенциально мог бы попасть под
-        # чей-то отложенный debounce-колбэк из предыдущего изменения.
         self._applying_history = True
         try:
             self.settings.from_dict(snapshot)
             self.sidebar._refresh_all_widgets()
-            # ДОБАВЛЕНО: Undo/Redo может разом переключить enabled-флаги
-            # сразу нескольких эффектов (например, откат к состоянию, где
-            # был включён glow, а сейчас — нет). sidebar._refresh_all_widgets()
-            # выше уже перечитает settings для ТЕКУЩЕЙ открытой панели, но
-            # рельс слева никак не подписан на settings — без явного
-            # refresh() его подсветка эффектов останется устаревшей.
-            self.effect_rail.refresh()
+            self.sidebar.refresh_fx_grid()
             self.preview.update()
             self._update_undo_redo_buttons()
         finally:
@@ -1102,14 +995,11 @@ class MainWindow:
 
     def _update_undo_redo_buttons(self):
         self.undo_btn.configure(
-            state="normal" if self._history_index > 0 else "disabled"
+            state="normal" if self._history_index > 0 else "disabled",
         )
         self.redo_btn.configure(
-            state="normal" if self._history_index < len(self._history) - 1 else "disabled"
+            state="normal" if self._history_index < len(self._history) - 1 else "disabled",
         )
-
-
-
 
     # ==================== CLOSE ====================
 

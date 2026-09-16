@@ -95,14 +95,39 @@ class PreviewPanel(ctk.CTkFrame):
     # ============================================================
 
     def _create_widgets(self):
-        # --- Строка 1: Preview + навигация + зум ---
-        header = ctk.CTkFrame(self, fg_color="transparent")
-        header.pack(fill="x", padx=15, pady=(10, 5))
+        # --- Верхняя панель: zoom (слева) + навигация (справа) ---
+        # Раньше здесь был заголовок "Preview" слева и zoom справа —
+        # теперь заголовок не нужен (FX-раскладка сама по себе даёт
+        # понять, что это превью), а zoom и навигация стоят в одной
+        # компактной строке НАД canvas.
+        toolbar = ctk.CTkFrame(self, fg_color="transparent")
+        toolbar.pack(fill="x", padx=15, pady=(10, 5))
 
-        ctk.CTkLabel(header, text=self.i18n.tr("preview"),
-                     font=("Arial", 14, "bold")).pack(side="left")
+        # --- Zoom (слева) ---
+        zoom_frame = ctk.CTkFrame(toolbar, fg_color="transparent")
+        zoom_frame.pack(side="left")
 
-        nav = ctk.CTkFrame(header, fg_color="transparent")
+        ctk.CTkLabel(zoom_frame, text="🔍",
+                     font=("Arial", 12)).pack(side="left", padx=(0, 4))
+
+        self.zoom_slider = ctk.CTkSlider(
+            zoom_frame, from_=10, to=1000,
+            number_of_steps=990, width=140,
+            command=self._on_zoom,
+        )
+        self.zoom_slider.set(100)
+        self.zoom_slider.pack(side="left")
+
+        self.zoom_entry = ctk.CTkEntry(zoom_frame, width=48)
+        self.zoom_entry.insert(0, "100")
+        self.zoom_entry.pack(side="left", padx=(6, 2))
+        self.zoom_entry.bind("<KeyRelease>", self._on_zoom_entry)
+
+        ctk.CTkLabel(zoom_frame, text="%",
+                     font=("Arial", 11)).pack(side="left")
+
+        # --- Навигация (справа) ---
+        nav = ctk.CTkFrame(toolbar, fg_color="transparent")
         nav.pack(side="right")
 
         ctk.CTkButton(nav, text="◀", width=32, height=26,
@@ -116,28 +141,6 @@ class PreviewPanel(ctk.CTkFrame):
         ctk.CTkButton(nav, text="▶", width=32, height=26,
                       font=("Arial", 12, "bold"),
                       command=self._next).pack(side="left", padx=(6, 0))
-
-        zoom_frame = ctk.CTkFrame(header, fg_color="transparent")
-        zoom_frame.pack(side="right", padx=(0, 14))
-
-        ctk.CTkLabel(zoom_frame, text="🔍",
-                     font=("Arial", 12)).pack(side="left", padx=(0, 4))
-
-        self.zoom_slider = ctk.CTkSlider(
-            zoom_frame, from_=10, to=1000,
-            number_of_steps=990, width=110,
-            command=self._on_zoom,
-        )
-        self.zoom_slider.set(100)
-        self.zoom_slider.pack(side="left")
-
-        self.zoom_entry = ctk.CTkEntry(zoom_frame, width=48)
-        self.zoom_entry.insert(0, "100")
-        self.zoom_entry.pack(side="left", padx=(4, 2))
-        self.zoom_entry.bind("<KeyRelease>", self._on_zoom_entry)
-
-        ctk.CTkLabel(zoom_frame, text="%",
-                     font=("Arial", 11)).pack(side="left")
 
         # --- Область превью (canvas + скроллбары) ---
         self.center_frame = ctk.CTkFrame(
@@ -182,7 +185,7 @@ class PreviewPanel(ctk.CTkFrame):
         self.canvas.bind("<Shift-MouseWheel>", self._on_wheel_shift)
         self.canvas.bind("<Control-MouseWheel>", self._on_wheel_ctrl)
 
-        # --- Строка 2: Ширина холста (delta) ---
+        # --- Строка ширины холста (delta) — под canvas ---
         canvas_row = ctk.CTkFrame(self, fg_color="transparent")
         canvas_row.pack(fill="x", padx=15, pady=(0, 10))
 
@@ -430,10 +433,6 @@ class PreviewPanel(ctk.CTkFrame):
         отрисованного превью оставалась тёмная рамка (цвет
         исходного canvas), хотя сам _draw_blueprint уже рисовал
         светлый фон.
-
-        _draw_blueprint использует ровно этот же bg_color
-        (#1a1a1a для dark, #e5e5e5 для light), поэтому canvas
-        должен использовать идентичный.
         """
         is_dark = ctk.get_appearance_mode() == "Dark"
         bg_color = "#1a1a1a" if is_dark else "#e5e5e5"
@@ -455,8 +454,7 @@ class PreviewPanel(ctk.CTkFrame):
         if self._cached_full_image is None:
             return
 
-        # Синхронизация фона canvas с текущей темой — до отрисовки
-        # (иначе вокруг картинки видна рамка старого цвета).
+        # Синхронизация фона canvas с текущей темой — до отрисовки.
         self._sync_canvas_bg()
 
         full = self._cached_full_image
