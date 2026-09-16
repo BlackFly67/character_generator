@@ -77,11 +77,13 @@ def build_single_effect_panel(parent, sidebar, settings, i18n, effect_cls):
     В отличие от _build_one_effect(), используемого build_effect_sections,
     здесь чекбокс "включено" не прячет/показывает body_frame — body_frame
     всегда виден, т.к. вся панель и так посвящена одному эффекту.
-    Чекбокс дублирует переключатель на самой иконке рельса (оба пишут
-    в один и тот же settings.<id>_enabled) — после переключения отсюда
-    вызывающая сторона (ui/sidebar.py) обязана дёрнуть EffectRail.refresh(),
-    иначе рельс не подсветится: см. MainWindow._on_settings_change,
-    который вызывается из sidebar._on_change().
+    Чекбокс — единственный toggle "вкл/выкл" для этого эффекта (в
+    Blender-style rail, ui/effect_rail.py, иконка сама по себе больше
+    НЕ переключает enabled — рельс теперь чистая навигация, см. его
+    докстринг). Sidebar (ui/sidebar.py) сохраняет возвращённую
+    "enabled_var" в self._enabled_vars[panel_id] и синхронизирует её
+    через sync_enabled_vars() после любых внешних изменений settings
+    (Undo/Redo, сброс, пресеты).
 
     Параметры эффекта строятся ТЕМИ ЖЕ builder-функциями
     (_build_param_row и её ветки) — дублирования логики контролов нет.

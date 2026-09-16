@@ -1,6 +1,6 @@
 {
   "language": "en",
-  "theme": "light",
+  "theme": "system",
   "text_color": "#ffffff",
   "background_color": null,
   "saved_background_color": "#000000",
@@ -58,8 +58,8 @@
   ],
   "gradient_type": "linear",
   "gradient_angle": 90,
-  "pattern_enabled": false,
-  "pattern_image_path": null,
+  "pattern_enabled": true,
+  "pattern_image_path": "C:/watchfaces/Misc/stone-4-1.jpg",
   "pattern_scale": 100,
   "pattern_offset_x": 0,
   "pattern_offset_y": 0,

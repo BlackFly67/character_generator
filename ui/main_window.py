@@ -88,50 +88,71 @@ class MainWindow:
         self.root.geometry("1050x750")
         self.root.minsize(950, 650)
 
-        # 3 колонки, Photoshop-style: рельс иконок (лево) | превью
-        # (центр, тянется) | панель настроек активного эффекта (право).
+        # 2 строки x 3 колонки, Blender-style:
+        #   row 0, columnspan=3 — верхний тулбар (undo/redo/generate/bin/
+        #     settings). Раньше жил внизу центральной колонки — поднят
+        #     наверх и растянут на всю ширину окна, т.к. это глобальные
+        #     действия, не привязанные к тому, что открыто в rail/сайдбаре.
+        #   row 1 — рельс иконок (лево) | превью (центр, тянется) |
+        #     стек панелей настроек (право).
         self.root.grid_columnconfigure(0, weight=0)
         self.root.grid_columnconfigure(1, weight=1)
         self.root.grid_columnconfigure(2, weight=0)
-        self.root.grid_rowconfigure(0, weight=1)
+        self.root.grid_rowconfigure(0, weight=0)
+        self.root.grid_rowconfigure(1, weight=1)
 
     # ==================== LAYOUT ====================
 
     def _create_layout(self):
-        # Рельс иконок эффектов (лево). on_select приходит из
-        # EffectRail при клике на иконку — просто просим Sidebar
-        # показать соответствующий раздел.
-        self.effect_rail = EffectRail(
-            self.root, self.settings, self.i18n,
-            on_select=self._on_effect_selected,
-        )
-        self.effect_rail.grid(row=0, column=0, sticky="nsew")
-        self.effect_rail.add_change_callback(self._on_settings_change)
-        self.effect_rail.add_change_callback(self._schedule_history_snapshot)
+        # Верхний тулбар — на всю ширину окна.
+        self._create_top_bar(self.root)
 
-        # Основная область (центр)
+        # Основная область (центр) — строим ДО рельса, т.к. рельс не
+        # зависит от неё, а порядок ниже важен только для Sidebar/rail.
         content_frame = ctk.CTkFrame(self.root, fg_color="transparent")
-        content_frame.grid(row=0, column=1, sticky="nsew", padx=15, pady=15)
+        content_frame.grid(row=1, column=1, sticky="nsew", padx=15, pady=15)
         content_frame.grid_rowconfigure(1, weight=1)
         content_frame.grid_columnconfigure(0, weight=1)
 
         self._create_input_panel(content_frame)
-        self._create_bottom_bar(content_frame)
 
         # Превью
         self.preview = PreviewPanel(content_frame, self.settings, self.i18n, self)
         self.preview.pack(fill="both", expand=True, pady=(0, 10))
         self.preview.add_callback(self._on_preview_change)
 
-        # Панель настроек активного раздела (право, Base по умолчанию)
+        # Стек панелей настроек (право) — создаём ПЕРЕД рельсом.
+        # ВАЖНО: EffectRail стилизует свои иконки уже в конструкторе
+        # (is_active_fn/is_pinned_fn вызываются синхронно при построении
+        # первой же строки), поэтому self.sidebar должен существовать
+        # ДО создания EffectRail — позднее связывание лямбд спасает
+        # только вызовы ПОСЛЕ старта event-loop (клики, refresh()), а
+        # не обращения во время __init__. grid() ниже всё равно кладёт
+        # виджет в column=2 (право) независимо от порядка создания.
         self.sidebar = Sidebar(self.root, self.settings, self.i18n)
-        self.sidebar.grid(row=0, column=2, sticky="nsew")
+        self.sidebar.grid(row=1, column=2, sticky="nsew")
+
+        # Рельс иконок эффектов (лево). Rail — чистая навигация, вся
+        # правда о том, что активно/закреплено, лежит в self.sidebar
+        # (Sidebar.active_id / Sidebar.pinned_ids) — колбэки ниже просто
+        # проксируют клики в соответствующие методы Sidebar.
+        self.effect_rail = EffectRail(
+            self.root, self.settings, self.i18n,
+            on_select=lambda pid: self.sidebar.set_active(pid),
+            on_pin_toggle=lambda pid: self.sidebar.toggle_pin(pid),
+            on_collapse_others=lambda pid: self.sidebar.collapse_all_except(pid),
+            on_unpin_all=lambda: self.sidebar.unpin_all(),
+            is_active_fn=lambda pid: self.sidebar.active_id == pid,
+            is_pinned_fn=lambda pid: pid in self.sidebar.pinned_ids,
+        )
+        self.effect_rail.grid(row=1, column=0, sticky="nsew")
+
+        # Канал 1: реальное изменение settings -> превью + история.
         self.sidebar.add_change_callback(self._on_settings_change)
         self.sidebar.add_change_callback(self._schedule_history_snapshot)
-
-    def _on_effect_selected(self, effect_id):
-        """Клик по иконке на рельсе — переключает панель справа."""
-        self.sidebar.select_effect(effect_id)
+        # Канал 2: чисто UI-состояние (активная вкладка/пины) -> только
+        # перекрасить рельс, без истории и без перерисовки превью.
+        self.sidebar.add_layout_callback(self.effect_rail.refresh)
 
     # ==================== INPUT PANEL ====================
 
@@ -323,20 +344,26 @@ class MainWindow:
         except Exception:
             pass
 
-    # ==================== BOTTOM BAR ====================
+    # ==================== TOP BAR ====================
+    # ПЕРЕНЕСЕНО ИЗ НИЗА: раньше этот блок (undo/redo, генерация,
+    # чекбокс .bin, настройки) жил внизу центральной колонки и был
+    # виден только когда листаешь до конца превью. Это глобальные
+    # действия уровня всего приложения, не связанные с тем, какая
+    # панель эффекта сейчас открыта справа — вынесены в тулбар на всю
+    # ширину окна (row=0), сразу над рельсом/превью/стеком настроек.
 
-    def _create_bottom_bar(self, parent):
-        bottom_bar = ctk.CTkFrame(parent, fg_color="transparent")
-        bottom_bar.pack(side="bottom", fill="x", pady=5)
-        bottom_bar.grid_columnconfigure(0, weight=0)
-        bottom_bar.grid_columnconfigure(1, weight=1)
-        bottom_bar.grid_columnconfigure(2, weight=0)
-        bottom_bar.grid_columnconfigure(3, weight=0)
-        bottom_bar.grid_columnconfigure(4, weight=0)
+    def _create_top_bar(self, parent):
+        top_bar = ctk.CTkFrame(parent, fg_color="transparent")
+        top_bar.grid(row=0, column=0, columnspan=3, sticky="ew", padx=15, pady=(10, 5))
+        top_bar.grid_columnconfigure(0, weight=0)
+        top_bar.grid_columnconfigure(1, weight=1)
+        top_bar.grid_columnconfigure(2, weight=0)
+        top_bar.grid_columnconfigure(3, weight=0)
+        top_bar.grid_columnconfigure(4, weight=0)
 
         self.create_bin_var = ctk.BooleanVar(value=self.settings.create_bin)
         bin_check = ctk.CTkCheckBox(
-            bottom_bar,
+            top_bar,
             text=self.i18n.tr("create_bin"),
             variable=self.create_bin_var,
             command=self._on_bin_toggle,
@@ -345,17 +372,17 @@ class MainWindow:
         bin_check.grid(row=0, column=0, sticky="w", padx=(0, 10))
 
         self.generate_btn = ctk.CTkButton(
-            bottom_bar,
+            top_bar,
             text=self.i18n.tr("generate_images"),
             command=self._on_generate,
-            height=50, font=("Arial", 16, "bold"),
+            height=44, font=("Arial", 15, "bold"),
             fg_color="#1f538d", hover_color="#14375e"
         )
         self.generate_btn.grid(row=0, column=1, sticky="ew", padx=(0, 10))
 
 
         self.undo_btn = ctk.CTkButton(
-            bottom_bar, text="↶", width=40, height=50,
+            top_bar, text="↶", width=40, height=44,
             font=("Segoe UI Symbol", 18),
             fg_color=("#dbdbdb", "#2b2b2b"),
             text_color=("#1a1a1a", "#e0e0e0"),
@@ -365,7 +392,7 @@ class MainWindow:
         self.undo_btn.grid(row=0, column=2, sticky="e", padx=(0, 4))
 
         self.redo_btn = ctk.CTkButton(
-            bottom_bar, text="↷", width=40, height=50,
+            top_bar, text="↷", width=40, height=44,
             font=("Segoe UI Symbol", 18),
             fg_color=("#dbdbdb", "#2b2b2b"),
             text_color=("#1a1a1a", "#e0e0e0"),
@@ -375,7 +402,7 @@ class MainWindow:
         self.redo_btn.grid(row=0, column=3, sticky="e", padx=(0, 10))
 
         settings_btn = ctk.CTkButton(
-            bottom_bar, text="⚙", width=50, height=50,
+            top_bar, text="⚙", width=50, height=44,
             font=("Segoe UI Symbol", 20),
             fg_color=("#dbdbdb", "#2b2b2b"),
             text_color=("#1a1a1a", "#e0e0e0"),
@@ -417,7 +444,7 @@ class MainWindow:
         # внутри панели параметров). Любое изменение с одной стороны
         # должно быть видно на другой — обе стороны просто перечитывают
         # settings, дорого это не стоит (несколько getattr + configure).
-        self.sidebar.sync_enabled_checkbox()
+        self.sidebar.sync_enabled_vars()
         self.effect_rail.refresh()
 
     def _on_preview_change(self):

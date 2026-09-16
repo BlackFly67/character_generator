@@ -174,7 +174,21 @@ DEFAULT_LANGUAGES = {
         "extrude": "3D Extrude",
         "extrude_depth": "Depth",
         "extrude_color_near": "Near color",
-        "extrude_color_far": "Far color"
+        "extrude_color_far": "Far color",
+        # --- Blender-style rail/панель (пины, стек, группы) ---
+        "open_panel": "Open",
+        "pin_panel": "Pin",
+        "unpin_panel": "Unpin",
+        "collapse_others": "Collapse others",
+        "unpin_all": "Unpin all",
+        "collapse_all_groups": "Collapse all groups",
+        "expand_all_groups": "Expand all groups",
+        "base_group": "Base",
+        "group_fill": "Fill",
+        "group_inner": "Inner",
+        "group_outer": "Outer",
+        "group_geometry": "Geometry",
+        "group_post": "Post",
     }
 }
 

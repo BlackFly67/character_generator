@@ -170,7 +170,20 @@
     "pattern_offset_x": "Смещение X",
     "pattern_offset_y": "Смещение Y",
     "pattern_angle": "Угол",
-    "warning_pattern_missing": "Файл текстуры не найден или повреждён — генерация без заливки узором."
+    "warning_pattern_missing": "Файл текстуры не найден или повреждён — генерация без заливки узором.",
+    "open_panel": "Открыть",
+    "pin_panel": "Закрепить",
+    "unpin_panel": "Открепить",
+    "collapse_others": "Свернуть остальные",
+    "unpin_all": "Открепить всё",
+    "collapse_all_groups": "Свернуть все группы",
+    "expand_all_groups": "Развернуть все группы",
+    "base_group": "База",
+    "group_fill": "Заливка",
+    "group_inner": "Внутренние",
+    "group_outer": "Внешние",
+    "group_geometry": "Геометрия",
+    "group_post": "Постобработка"
   },
   "en": {
     "app_title": "Character Image Generator",
@@ -343,7 +356,20 @@
     "pattern_offset_x": "Offset X",
     "pattern_offset_y": "Offset Y",
     "pattern_angle": "Angle",
-    "warning_pattern_missing": "Pattern texture file not found or invalid — generating without pattern fill."
+    "warning_pattern_missing": "Pattern texture file not found or invalid — generating without pattern fill.",
+    "open_panel": "Open",
+    "pin_panel": "Pin",
+    "unpin_panel": "Unpin",
+    "collapse_others": "Collapse others",
+    "unpin_all": "Unpin all",
+    "collapse_all_groups": "Collapse all groups",
+    "expand_all_groups": "Expand all groups",
+    "base_group": "Base",
+    "group_fill": "Fill",
+    "group_inner": "Inner",
+    "group_outer": "Outer",
+    "group_geometry": "Geometry",
+    "group_post": "Post"
   },
   "es": {
     "app_title": "Generador de imágenes de caracteres",
@@ -516,7 +542,20 @@
     "pattern_offset_x": "Desplazamiento X",
     "pattern_offset_y": "Desplazamiento Y",
     "pattern_angle": "Ángulo",
-    "warning_pattern_missing": "Archivo de textura no encontrado o inválido — generando sin relleno de patrón."
+    "warning_pattern_missing": "Archivo de textura no encontrado o inválido — generando sin relleno de patrón.",
+    "open_panel": "Abrir",
+    "pin_panel": "Fijar",
+    "unpin_panel": "Desfijar",
+    "collapse_others": "Contraer los demás",
+    "unpin_all": "Desfijar todo",
+    "collapse_all_groups": "Contraer todos los grupos",
+    "expand_all_groups": "Expandir todos los grupos",
+    "base_group": "Base",
+    "group_fill": "Relleno",
+    "group_inner": "Interior",
+    "group_outer": "Exterior",
+    "group_geometry": "Geometría",
+    "group_post": "Posprocesado"
   },
   "fr": {
     "app_title": "Générateur d'images de caractères",
@@ -689,7 +728,20 @@
     "pattern_offset_x": "Décalage X",
     "pattern_offset_y": "Décalage Y",
     "pattern_angle": "Angle",
-    "warning_pattern_missing": "Fichier de texture introuvable ou invalide — génération sans remplissage par motif."
+    "warning_pattern_missing": "Fichier de texture introuvable ou invalide — génération sans remplissage par motif.",
+    "open_panel": "Ouvrir",
+    "pin_panel": "Épingler",
+    "unpin_panel": "Désépingler",
+    "collapse_others": "Réduire les autres",
+    "unpin_all": "Tout désépingler",
+    "collapse_all_groups": "Réduire tous les groupes",
+    "expand_all_groups": "Développer tous les groupes",
+    "base_group": "Base",
+    "group_fill": "Remplissage",
+    "group_inner": "Intérieur",
+    "group_outer": "Extérieur",
+    "group_geometry": "Géométrie",
+    "group_post": "Post-traitement"
   },
   "de": {
     "app_title": "Zeichenbild-Generator",
@@ -862,6 +914,19 @@
     "pattern_offset_x": "Versatz X",
     "pattern_offset_y": "Versatz Y",
     "pattern_angle": "Winkel",
-    "warning_pattern_missing": "Texturdatei nicht gefunden oder ungültig — Generierung ohne Musterfüllung."
+    "warning_pattern_missing": "Texturdatei nicht gefunden oder ungültig — Generierung ohne Musterfüllung.",
+    "open_panel": "Öffnen",
+    "pin_panel": "Anheften",
+    "unpin_panel": "Loslösen",
+    "collapse_others": "Andere einklappen",
+    "unpin_all": "Alle loslösen",
+    "collapse_all_groups": "Alle Gruppen einklappen",
+    "expand_all_groups": "Alle Gruppen ausklappen",
+    "base_group": "Basis",
+    "group_fill": "Füllung",
+    "group_inner": "Innen",
+    "group_outer": "Außen",
+    "group_geometry": "Geometrie",
+    "group_post": "Nachbearbeitung"
   }
 }
