@@ -4,40 +4,27 @@
 
 Структура:
     ┌─────────────────────────────────┐
-    │ Settings    🎨 Presets   ↺  ⚙  │  header (фикс, не скроллится)
+    │ Settings    🎨 Presets   ↺  ⚙  │  header (фикс, блок)
     ├─────────────────────────────────┤
-    │ ┌─────────────────────────────┐ │
-    │ │ ▶ Font                      │ │  Base scroll (~30% высоты,
-    │ │ ▶ Style                     │ │   свой скроллбар)
-    │ │ ▶ Rotation                  │ │
-    │ │ ▶ Arc / circle text         │ │
-    │ │ ▶ Opacity                   │ │
-    │ │ ▶ Background                │ │
-    │ └─────────────────────────────┘ │
+    │ ▶ Font                          │  Base (прозрачный,
+    │ ▶ Style                         │   растягивается)
+    │ ▶ Rotation                      │
+    │ ▶ Arc / circle text             │
+    │ ▶ Opacity                       │
+    │ ▶ Background                    │
     ├─────────────────────────────────┤
-    │ ┌─────────────────────────────┐ │
-    │ │ Эффекты                     │ │  FX scroll (~70% высоты,
-    │ │ [icon] [icon] ...           │ │   свой скроллбар)
-    │ │ ▼ Pattern fill              │ │  ← активная панель
-    │ │   ...                        │ │
-    │ └─────────────────────────────┘ │
+    │ Эффекты                         │  FX (блок с фоном,
+    │ [icon] [icon] [icon] ...        │   мин. высота 180,
+    │ [icon] [icon] [icon] ...        │   не растягивается)
+    ├─────────────────────────────────┤
+    │ ▼ Pattern fill                  │  Active (прозрачный,
+    │   Choose texture ...            │   растягивается)
+    │   Scale ...                     │
     └─────────────────────────────────┘
 
-Sidebar — ctk.CTkFrame (НЕ ScrollableFrame): у него два независимых
-скролла — Base и FX. Соотношение 30/70 через grid_rowconfigure(weight).
-
-Sidebar — единственный источник истины для active_id (какая панель
-эффекта сейчас раскрыта). FXGrid (ui/fx_grid.py) спрашивает у него
-через is_active_fn и перерисовывается по вызову refresh_fx_grid().
-
-Sidebar._on_change() — вызывается из manual_sidebar и auto_sidebar
-при реальном изменении settings (эффект включили/выключили, подвинули
-слайдер) => MainWindow обновит превью и запишет шаг Undo/Redo.
-
-AutoHideScrollFrame (ui/widgets.py) — прячет свой скроллбар,
-когда контент помещается в видимую область. refresh_scrollbar()
-вызывается после операций, меняющих содержимое скролла
-(сворачивание Base-секции, смена активной панели эффекта).
+Sidebar — ctk.CTkFrame (НЕ ScrollableFrame): 4 grid-строки —
+header (фикс, weight=0), Base (weight=1), FX (weight=0, фикс. высота),
+Active (weight=1).
 """
 
 import customtkinter as ctk
@@ -49,8 +36,6 @@ from effects.registry import PIPELINE, POST_COMPOSE_EFFECTS
 from ui import manual_sidebar as ms
 
 
-# Base-секции — id, i18n-ключ заголовка, builder-функция.
-# Все сворачиваемые (▼ в заголовке). Порядок — как на экране.
 BASE_SECTIONS = [
     ("base.font",       "font",       ms.build_font_section),
     ("base.style",      "text_style", ms.build_style_text_part),
@@ -60,53 +45,50 @@ BASE_SECTIONS = [
     ("base.background", "background", ms.build_background_section),
 ]
 
-DEFAULT_ACTIVE_EFFECT = None   # None = ни одна панель эффекта не открыта
+DEFAULT_ACTIVE_EFFECT = None
+
+# Фон для блоков (header, FX).
+_BLOCK_BG = ("#d0d0d0", "#333333")
 
 
 class Sidebar(ctk.CTkFrame):
-    """Правая колонка: header + Base scroll + FX scroll."""
+    """Правая колонка: header + Base + FX + Active."""
 
     def __init__(self, parent, settings, i18n):
         super().__init__(parent, width=340, corner_radius=6)
 
         self.grid_propagate(False)
 
-        # Пропорция 30/70 между Base и FX scroll.
-        self.grid_rowconfigure(0, weight=0)  # header (фикс)
-        self.grid_rowconfigure(1, weight=3)  # base_scroll
-        self.grid_rowconfigure(2, weight=7)  # fx_scroll
+        # 4 строки:
+        #   0 — header (фикс),
+        #   1 — Base (растягивается),
+        #   2 — FX (мин. высота, не растягивается),
+        #   3 — Active (растягивается).
+        self.grid_rowconfigure(0, weight=0)
+        self.grid_rowconfigure(1, weight=1)
+        self.grid_rowconfigure(2, weight=0)
+        self.grid_rowconfigure(3, weight=1)
         self.grid_columnconfigure(0, weight=1)
 
         self.settings = settings
         self.i18n = i18n
         self._on_change_callbacks = []
 
-        # id активной панели эффекта (None — ни одна не открыта).
         self.active_id = DEFAULT_ACTIVE_EFFECT
-
-        # Сворачивание Base-секций: id -> bool (collapsed).
-        # По умолчанию все свёрнуты — пользователь разворачивает
-        # только нужную секцию.
         self._base_collapsed = {pid: True for pid, _, _ in BASE_SECTIONS}
-
-        # Сворачивание активной панели эффекта.
         self._active_collapsed = False
 
-        # panel_id -> BooleanVar (для синхронизации enabled-чекбоксов).
         self._enabled_vars = {}
         self._enabled_keys = {}
 
-        # Публичные ссылки для MainWindow.
         self._reset_base_refs()
         self.settings_label = None
         self.style_presets_button = None
-
-        # Колбэк на ⚙ (устанавливается из MainWindow).
         self._settings_callback = None
 
-        # Ссылки на скроллы и активную панель.
         self._base_scroll = None
         self._fx_scroll = None
+        self._active_scroll = None
         self._fx_grid = None
         self._active_panel_frame = None
 
@@ -124,11 +106,9 @@ class Sidebar(ctk.CTkFrame):
         self._on_change_callbacks.append(callback)
 
     def set_settings_callback(self, callback):
-        """Устанавливает колбэк для ⚙ (открыть SettingsDialog)."""
         self._settings_callback = callback
 
     def _refresh_all_widgets(self):
-        """Пересобрать всё содержимое (после сброса / смены языка)."""
         for widget in self.winfo_children():
             widget.destroy()
         self._create_sidebar()
@@ -138,17 +118,12 @@ class Sidebar(ctk.CTkFrame):
     # ============================================================
 
     def _known_effect_ids(self):
-        """Множество валидных id эффектов (без MANUAL_EFFECT_IDS)."""
         return {
             cls.id for cls in PIPELINE + POST_COMPOSE_EFFECTS
             if cls.id not in MANUAL_EFFECT_IDS
         }
 
     def set_active(self, panel_id):
-        """
-        Сделать panel_id активной панелью эффекта. Перерисовывает
-        ТОЛЬКО блок активной панели (Base и FXGrid не трогаются).
-        """
         if panel_id not in self._known_effect_ids():
             return
         self.active_id = panel_id
@@ -157,15 +132,10 @@ class Sidebar(ctk.CTkFrame):
         self.refresh_fx_grid()
 
     def refresh_fx_grid(self):
-        """Пересчитать цвета иконок FXGrid."""
         if self._fx_grid is not None:
             self._fx_grid.refresh()
 
     def sync_enabled_vars(self):
-        """
-        Перечитать settings для enabled-var активной панели. Нужно
-        после внешних изменений settings (Undo/Redo, сброс, пресеты).
-        """
         for panel_id, var in self._enabled_vars.items():
             key = self._enabled_keys.get(panel_id)
             if key:
@@ -176,15 +146,16 @@ class Sidebar(ctk.CTkFrame):
     # ============================================================
 
     def _create_sidebar(self):
-        # --- row 0: header (фикс, не скроллится) ---
-        header_frame = ctk.CTkFrame(self, fg_color="transparent")
-        header_frame.grid(row=0, column=0, sticky="ew", padx=0, pady=0)
+        # --- row 0: header (фикс, блок) ---
+        header_frame = ctk.CTkFrame(
+            self, fg_color=_BLOCK_BG, corner_radius=4,
+        )
+        header_frame.grid(row=0, column=0, sticky="ew", padx=6, pady=(6, 2))
 
         header = ms.build_header(header_frame, self, self.settings, self.i18n)
         self.settings_label = header["label"]
         self.style_presets_button = header["presets_button"]
 
-        # Кнопка ⚙ — в правом верхнем углу header.
         header_inner = header.get("frame")
         if header_inner is not None:
             settings_btn = ctk.CTkButton(
@@ -195,10 +166,6 @@ class Sidebar(ctk.CTkFrame):
                 hover_color=("#c7c7c7", "#3a3a3a"),
                 command=self._on_settings_clicked,
             )
-            # ⚙ должен оказаться крайней справа. reset_button и
-            # presets_button уже упакованы (оба side="right") внутри
-            # build_header — чтобы ⚙ встал ПРАВЕЕ них, вставляем его
-            # в очередь упаковки ПЕРЕД reset_button через before=.
             reset_button = header.get("reset_button")
             if reset_button is not None:
                 settings_btn.pack(side="right", padx=(4, 0), before=reset_button)
@@ -209,20 +176,24 @@ class Sidebar(ctk.CTkFrame):
         self._enabled_vars = {}
         self._enabled_keys = {}
 
-        # --- row 1: Base scroll (30%) — с авто-скрытием скроллбара ---
+        # --- row 1: Base scroll (прозрачный, растягивается) ---
         self._base_scroll = AutoHideScrollFrame(
             self, fg_color="transparent", corner_radius=0,
         )
-        self._base_scroll.grid(row=1, column=0, sticky="nsew", padx=6, pady=(0, 4))
+        self._base_scroll.grid(row=1, column=0, sticky="nsew",
+                                padx=6, pady=(2, 2))
 
         for panel_id, label_key, builder_fn in BASE_SECTIONS:
             self._render_base_section(panel_id, label_key, builder_fn)
 
-        # --- row 2: FX scroll (70%) — с авто-скрытием скроллбара ---
-        self._fx_scroll = AutoHideScrollFrame(
-            self, fg_color="transparent", corner_radius=0,
+        # --- row 2: FX scroll (блок, мин. высота 180) ---
+        self._fx_scroll = ctk.CTkFrame(
+            self, fg_color=_BLOCK_BG, corner_radius=4,
+            height=180,
         )
-        self._fx_scroll.grid(row=2, column=0, sticky="nsew", padx=6, pady=(4, 6))
+        self._fx_scroll.grid(row=2, column=0, sticky="ew",
+                              padx=6, pady=(2, 2))
+        
 
         self._fx_grid = FXGrid(
             self._fx_scroll, self.settings, self.i18n,
@@ -232,22 +203,24 @@ class Sidebar(ctk.CTkFrame):
         self._fx_grid.pack(fill="x", padx=4, pady=(4, 4))
         self._fx_grid.refresh()
 
-        # Активная панель эффекта — тоже в FX scroll, под FXGrid.
+        # --- row 3: Active scroll (прозрачный, растягивается) ---
+        self._active_scroll = AutoHideScrollFrame(
+            self, fg_color="transparent", corner_radius=0,
+        )
+        self._active_scroll.grid(row=3, column=0, sticky="nsew",
+                                  padx=6, pady=(2, 6))
+
         self._render_active_panel()
 
-        # Первый пересчёт скроллбаров — после полной сборки UI.
-        # after(150) — дать Tk время на расчёт геометрии после
-        # создания всех виджетов.
         self.after(150, self._base_scroll.refresh_scrollbar)
-        self.after(150, self._fx_scroll.refresh_scrollbar)
+
+        self.after(150, self._active_scroll.refresh_scrollbar)
 
     def _on_settings_clicked(self):
-        """Клик по ⚙ — вызвать колбэк, если он установлен."""
         if callable(self._settings_callback):
             self._settings_callback()
 
     def _on_fx_select(self, panel_id):
-        """Клик по иконке FX — сделать эффект активным."""
         self.set_active(panel_id)
 
     # ------------------------------------------------------------
@@ -255,10 +228,6 @@ class Sidebar(ctk.CTkFrame):
     # ------------------------------------------------------------
 
     def _render_base_section(self, panel_id, label_key, builder_fn):
-        """
-        Одна Base-секция: [▶ Font] + [body]. По клику на заголовок —
-        сворачивание/разворачивание body.
-        """
         collapsed = self._base_collapsed.get(panel_id, True)
 
         wrap = ctk.CTkFrame(self._base_scroll, fg_color="transparent")
@@ -270,7 +239,7 @@ class Sidebar(ctk.CTkFrame):
             anchor="w", height=26,
             font=("Arial", 12, "bold"),
             fg_color="transparent",
-            hover_color=("#d0d0d0", "#3a3a3a"),
+            hover_color=("#b8b8b8", "#444444"),
             text_color=("#1a1a1a", "#e0e0e0"),
             command=lambda pid=panel_id: self._toggle_base(pid),
         )
@@ -306,17 +275,10 @@ class Sidebar(ctk.CTkFrame):
         else:
             info["body"].pack(fill="x")
 
-        # Пересчитать скроллбар Base-скролла: контент изменился.
         if self._base_scroll is not None:
             self.after(80, self._base_scroll.refresh_scrollbar)
 
     def _reset_base_refs(self):
-        """
-        Публичные атрибуты, которые читает MainWindow. Существуют,
-        пока живы соответствующие Base-секции. После
-        _refresh_all_widgets() старые виджеты уничтожены — main_window
-        обязан проверять на None перед обращением.
-        """
         self.font_size_entry = None
         self.font_size_slider = None
         self.text_color_button = None
@@ -346,11 +308,10 @@ class Sidebar(ctk.CTkFrame):
             self.background_color_button = widgets.get("color_button")
 
     # ------------------------------------------------------------
-    #  Активная панель эффекта (внутри FX scroll)
+    #  Активная панель эффекта (в _active_scroll, row 3)
     # ------------------------------------------------------------
 
     def _render_active_panel(self):
-        """Перерисовать только блок активной панели (Base и FXGrid не трогаются)."""
         if self._active_panel_frame is not None:
             try:
                 self._active_panel_frame.destroy()
@@ -358,26 +319,22 @@ class Sidebar(ctk.CTkFrame):
                 pass
             self._active_panel_frame = None
 
-        # При смене активного эффекта старые BooleanVar (от уничтоженных
-        # чекбоксов) в _enabled_vars/_enabled_keys не нужны — открыта
-        # максимум ОДНА панель эффекта.
         self._enabled_vars = {}
         self._enabled_keys = {}
 
         if self.active_id is None:
-            # Активной панели нет — контент FX-скролла стал короче.
-            if self._fx_scroll is not None:
-                self.after(80, self._fx_scroll.refresh_scrollbar)
+            if self._active_scroll is not None:
+                self.after(80, self._active_scroll.refresh_scrollbar)
             return
 
         by_id = {cls.id: cls for cls in PIPELINE + POST_COMPOSE_EFFECTS}
         cls = by_id.get(self.active_id)
         if cls is None:
-            if self._fx_scroll is not None:
-                self.after(80, self._fx_scroll.refresh_scrollbar)
+            if self._active_scroll is not None:
+                self.after(80, self._active_scroll.refresh_scrollbar)
             return
 
-        wrap = ctk.CTkFrame(self._fx_scroll, fg_color="transparent")
+        wrap = ctk.CTkFrame(self._active_scroll, fg_color="transparent")
         wrap.pack(fill="x", padx=6, pady=(6, 10))
         self._active_panel_frame = wrap
 
@@ -388,7 +345,7 @@ class Sidebar(ctk.CTkFrame):
             anchor="w", height=26,
             font=("Arial", 12, "bold"),
             fg_color="transparent",
-            hover_color=("#d0d0d0", "#3a3a3a"),
+            hover_color=("#b8b8b8", "#444444"),
             text_color=("#1a1a1a", "#e0e0e0"),
             command=self._toggle_active,
         )
@@ -404,10 +361,8 @@ class Sidebar(ctk.CTkFrame):
         self._enabled_vars[self.active_id] = panel["enabled_var"]
         self._enabled_keys[self.active_id] = f"{self.active_id}_enabled"
 
-        # Пересчитать скроллбар FX-скролла: панель эффекта могла
-        # сильно увеличить контент.
-        if self._fx_scroll is not None:
-            self.after(80, self._fx_scroll.refresh_scrollbar)
+        if self._active_scroll is not None:
+            self.after(80, self._active_scroll.refresh_scrollbar)
 
     def _toggle_active(self):
         self._active_collapsed = not self._active_collapsed
