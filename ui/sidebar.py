@@ -64,7 +64,7 @@ class Sidebar(ctk.CTkFrame):
 
     def __init__(self, parent, settings, i18n):
         super().__init__(parent, width=340, corner_radius=6)
-        self.pack_propagate(False)
+
         self.grid_propagate(False)
 
         # Пропорция 50/50 между Base и FX scroll.

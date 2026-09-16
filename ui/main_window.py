@@ -123,8 +123,12 @@ class MainWindow:
         self.preview.add_callback(self._on_preview_change)
 
         # Правая колонка — Sidebar во ВСЮ высоту окна (row 0..3).
-        self.sidebar = Sidebar(self.root, self.settings, self.i18n)
-        self.sidebar.grid(row=0, column=1, rowspan=4, sticky="nsew", padx=(0, 8), pady=8)
+        sidebar_holder = ctk.CTkFrame(self.root, fg_color="transparent")
+        sidebar_holder.grid(row=0, column=1, rowspan=4, sticky="nsew", padx=(8, 8), pady=(8, 8))
+
+        self.sidebar = Sidebar(sidebar_holder, self.settings, self.i18n)
+        self.sidebar.pack(fill="both", expand=True)
+        
         self.sidebar.add_change_callback(self._on_settings_change)
         self.sidebar.add_change_callback(self._schedule_history_snapshot)
         self.sidebar.set_settings_callback(self._open_settings)
