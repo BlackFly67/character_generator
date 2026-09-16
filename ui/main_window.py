@@ -386,6 +386,16 @@ class MainWindow:
     def _apply_settings(self):
         ctk.set_appearance_mode(self.settings.theme)
 
+        # Сбросить кэш tinted-иконок: они перекрашиваются под тему,
+        # а тема только что могла смениться. Базовые (чёрные) иконки
+        # в кэше fx_icons_gen/effect_icon._BASE_CACHE — не сбрасываем,
+        # они от темы не зависят.
+        try:
+            from ui.effect_icon import clear_cache
+            clear_cache()
+        except ImportError:
+            pass
+
         self._set_input_mode(self.settings.icon_mode, apply=True)
 
         self.characters_entry.delete(0, "end")

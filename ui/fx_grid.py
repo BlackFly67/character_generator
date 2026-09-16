@@ -2,27 +2,20 @@
 """
 FX-сетка — поток иконок эффектов.
 
-Иконки эффектов живут внутри правой колонки настроек (Sidebar),
-между блоком Base-секций (Font / Style / Rotation / Arc / Opacity /
-Background) и активной панелью выбранного эффекта.
+Иконки — буква «A» с эффектом, рендерятся на лету через
+ui/effect_icon.py. Никаких подписей — название только в tooltip.
 
-    FX
-    ▤ ▦ ◉ ✦ ⬓ ◐
-    ◎ ✧ ⬒ ☁ ⟋ ⬔
-    ⤓ ⁙ ⚡
+Клик — on_select(panel_id). Sidebar переключает активную панель.
 
-Никаких групп, разделителей и заголовков — просто все иконки
-подряд, с переносом по 6 в ряд. Название эффекта — tooltip.
+Стилизация:
+    - обычная              — серый фон, без рамки;
+    - включённая           — серый фон + бирюзовая рамка 2px;
+    - активная             — серый фон + синяя рамка 2px;
+    - активная + включённая — серый фон + синяя рамка 3px.
 
-Клик по иконке — on_select(panel_id). Sidebar переключает активную
-панель эффекта.
-
-Стилизация иконок:
-    - серый   — panel_id не активен и не включён;
-    - зелёный — settings.<id>_enabled == True (только для ENABLEABLE_IDS);
-    - синий   — panel_id == current_active_id (открыт в правой панели).
-
-Приоритет: активен → синий; включён → зелёный; иначе → серый.
+Реализация: CTkFrame-контейнер (умеет border_width/border_color)
+с CTkLabel (картинка) внутри через place(). CTkLabel не поддерживает
+border_width — потому рамка на контейнере, а не на самой иконке.
 """
 
 import customtkinter as ctk
@@ -32,34 +25,22 @@ from ui.icons import (
 )
 
 
-# Цвета иконок
-_COLOR_ACTIVE_BG = "#1f538d"            # синий — активная панель
-_COLOR_ACTIVE_FG = "#ffffff"
+# Цвета
+_COLOR_IDLE_BG = ("#e8e8e8", "#3a3a3a")
+_COLOR_HOVER = ("#d0d0d0", "#4a4a4a")
 
-_COLOR_ENABLED_BG = ("#8fd19e", "#1e5631")   # зелёный — enabled
-_COLOR_ENABLED_FG = ("#0a2a12", "#eaffef")
+_BORDER_ACTIVE = "#1f538d"
+_BORDER_ENABLED = "#26a69a"
 
-_COLOR_IDLE_BG = ("#e0e0e0", "#2b2b2b")      # серый — обычный
-_COLOR_IDLE_FG = ("#1a1a1a", "#d0d0d0")
-
-# Размер иконки
-ICON_W = 40
-ICON_H = 32
-ICON_FONT_SIZE = 14
+# Размеры
+ICON_W = 52
+ICON_H = 40
+ICON_SIZE_PX = (32, 32)
 MAX_COLS = 5
 
 
 class FXGrid(ctk.CTkFrame):
-    """
-    Горизонтальная сетка иконок эффектов. Все иконки — в одном
-    потоке, перенос по MAX_COLS в ряд. Без разделителей и групп.
-
-    Публичный API:
-        - __init__(parent, settings, i18n, on_select, is_active_fn)
-        - refresh() — пересчитать цвета после изменения settings
-          или смены активной панели.
-        - refresh_labels() — пересобрать при смене языка.
-    """
+    """Горизонтальная сетка иконок эффектов."""
 
     def __init__(self, parent, settings, i18n,
                  on_select, is_active_fn):
@@ -70,8 +51,8 @@ class FXGrid(ctk.CTkFrame):
         self._on_select = on_select
         self._is_active_fn = is_active_fn
 
-        # panel_id -> CTkButton
-        self._buttons = {}
+        self._buttons = {}       # panel_id -> CTkFrame (контейнер)
+        self._icon_images = {}   # panel_id -> CTkImage
 
         self._build()
 
@@ -80,20 +61,14 @@ class FXGrid(ctk.CTkFrame):
     # ============================================================
 
     def _build(self):
-        # Заголовок "FX" сверху.
         ctk.CTkLabel(
             self, text=self.i18n.tr("effects"),
             font=("Arial", 15, "bold"), anchor="w",
         ).pack(anchor="w", padx=8, pady=(6, 4))
 
-        # Контейнер под иконки — grid, чтобы перенос был надёжным
-        # (pack плохо переносит строки внутри разных групп).
         grid_frame = ctk.CTkFrame(self, fg_color="transparent")
         grid_frame.pack(fill="x", padx=8, pady=(2, 4))
 
-        # Собираем все id эффектов из FX_GROUPS в один плоский список.
-        # Группировка в icons.py остаётся (для порядка), но визуально
-        # на экране группы не разделяются — общий поток.
         all_ids = []
         for _group_key, ids in FX_GROUPS:
             all_ids.extend(ids)
@@ -104,74 +79,90 @@ class FXGrid(ctk.CTkFrame):
             self._add_icon_grid(grid_frame, panel_id, r, c)
 
     def _add_icon_grid(self, parent, panel_id, row, col):
-        symbol, tooltip_key = get_icon(panel_id)
+        from ui.effect_icon import get_effect_icon
+        from ui.tooltip import Tooltip
 
-        btn = ctk.CTkButton(
-            parent, text=symbol,
-            width=ICON_W, height=ICON_H,
-            font=("Segoe UI Symbol", ICON_FONT_SIZE),
+        tooltip_key = get_icon(panel_id)
+
+        ctk_img = get_effect_icon(panel_id, size=ICON_SIZE_PX)
+
+        frame = ctk.CTkFrame(
+            parent,
             fg_color=_COLOR_IDLE_BG,
-            text_color=_COLOR_IDLE_FG,
-            hover_color=("#c7c7c7", "#3a3a3a"),
             corner_radius=4,
-            command=lambda pid=panel_id: self._click(pid),
+            width=ICON_W, height=ICON_H,
+            border_width=0,
         )
-        btn.grid(row=row, column=col, padx=2, pady=2, sticky="w")
-        self._buttons[panel_id] = btn
+        frame.grid(row=row, column=col, padx=2, pady=2, sticky="w")
+        frame.grid_propagate(False)
+        frame.pack_propagate(False)
 
-        self._attach_tooltip(btn, self.i18n.tr(tooltip_key))
+        lbl = ctk.CTkLabel(
+            frame, text="",
+            image=ctk_img, compound="center",
+            fg_color="transparent",
+        )
+        lbl.place(relx=0.5, rely=0.5, anchor="center")
 
-    def _attach_tooltip(self, widget, text):
-        """
-        Минималистичный tooltip: показываем через 400 мс после Enter,
-        скрываем на Leave. Использует CTkToplevel с overrideredirect.
-        """
-        state = {"after_id": None, "tip": None}
+        for w in (frame, lbl):
+            w.bind("<Button-1>", lambda e, pid=panel_id: self._click(pid))
+            w.bind("<Enter>", lambda e, pid=panel_id: self._on_hover(pid, True))
+            w.bind("<Leave>", lambda e, pid=panel_id: self._on_hover(pid, False))
+            w.configure(cursor="hand2")
 
-        def on_enter(event):
-            on_leave(event)
-            state["after_id"] = widget.after(400, show)
+        self._icon_images[panel_id] = ctk_img
+        self._buttons[panel_id] = frame
+        Tooltip(frame, self.i18n.tr(tooltip_key))
 
-        def on_leave(event):
-            if state["after_id"] is not None:
-                try:
-                    widget.after_cancel(state["after_id"])
-                except Exception:
-                    pass
-                state["after_id"] = None
-            if state["tip"] is not None:
-                try:
-                    state["tip"].destroy()
-                except Exception:
-                    pass
-                state["tip"] = None
+        self._apply_button_color(panel_id)
 
-        def show():
-            state["after_id"] = None
-            try:
-                x = widget.winfo_rootx() + widget.winfo_width() + 6
-                y = widget.winfo_rooty() + 4
-            except Exception:
-                return
-            tw = ctk.CTkToplevel()
-            tw.overrideredirect(True)
-            tw.geometry(f"+{x}+{y}")
-            tw.attributes("-topmost", True)
-            frame = ctk.CTkFrame(
-                tw, fg_color=("#ffffff", "#2b2b2b"),
-                corner_radius=4, border_width=1,
-                border_color=("#c0c0c0", "#555555"),
+    # ============================================================
+    #  Hover / цвета
+    # ============================================================
+
+    def _on_hover(self, panel_id, entering):
+        frame = self._buttons.get(panel_id)
+        if frame is None:
+            return
+        if entering:
+            frame.configure(fg_color=_COLOR_HOVER)
+        else:
+            self._apply_button_color(panel_id)
+
+    def _apply_button_color(self, panel_id):
+        frame = self._buttons.get(panel_id)
+        if frame is None:
+            return
+
+        is_active = bool(self._is_active_fn(panel_id))
+        is_enabled = (
+            panel_id in ENABLEABLE_IDS
+            and bool(getattr(self.settings, f"{panel_id}_enabled", False))
+        )
+
+        if is_active and is_enabled:
+            frame.configure(
+                fg_color=_COLOR_IDLE_BG,
+                border_width=3,
+                border_color=_BORDER_ACTIVE,
             )
-            frame.pack()
-            ctk.CTkLabel(
-                frame, text=text, font=("Arial", 11),
-                text_color=("#1a1a1a", "#e0e0e0"),
-            ).pack(padx=8, pady=4)
-            state["tip"] = tw
-
-        widget.bind("<Enter>", on_enter, add="+")
-        widget.bind("<Leave>", on_leave, add="+")
-        widget.bind("<ButtonPress>", on_leave, add="+")
+        elif is_active:
+            frame.configure(
+                fg_color=_COLOR_IDLE_BG,
+                border_width=2,
+                border_color=_BORDER_ACTIVE,
+            )
+        elif is_enabled:
+            frame.configure(
+                fg_color=_COLOR_IDLE_BG,
+                border_width=2,
+                border_color=_BORDER_ENABLED,
+            )
+        else:
+            frame.configure(
+                fg_color=_COLOR_IDLE_BG,
+                border_width=0,
+            )
 
     # ============================================================
     #  Callbacks
@@ -186,40 +177,13 @@ class FXGrid(ctk.CTkFrame):
     # ============================================================
 
     def refresh(self):
-        """
-        Пересчитать цвета всех иконок по текущему состоянию settings
-        и по активной панели (спрашивает у is_active_fn).
-        """
-        for panel_id, btn in self._buttons.items():
-            is_active = bool(self._is_active_fn(panel_id))
-            is_enabled = (
-                panel_id in ENABLEABLE_IDS
-                and bool(getattr(self.settings, f"{panel_id}_enabled", False))
-            )
-
-            if is_active:
-                btn.configure(
-                    fg_color=_COLOR_ACTIVE_BG,
-                    text_color=_COLOR_ACTIVE_FG,
-                )
-            elif is_enabled:
-                btn.configure(
-                    fg_color=_COLOR_ENABLED_BG,
-                    text_color=_COLOR_ENABLED_FG,
-                )
-            else:
-                btn.configure(
-                    fg_color=_COLOR_IDLE_BG,
-                    text_color=_COLOR_IDLE_FG,
-                )
+        for panel_id in self._buttons:
+            self._apply_button_color(panel_id)
 
     def refresh_labels(self):
-        """
-        Пересобрать tooltip-тексты при смене языка. Проще всего
-        пересоздать FXGrid целиком — вызывается редко.
-        """
         for w in self.winfo_children():
             w.destroy()
         self._buttons = {}
+        self._icon_images = {}
         self._build()
         self.refresh()

@@ -7,6 +7,7 @@
 - Зум, скролл колесом, панорама зажатой ЛКМ.
 - Debounce рендера (40 мс).
 - Строка ширины холста под окном превью.
+- Авто-скрытие скроллбаров: видны только когда картинка не влезает.
 """
 
 import hashlib
@@ -22,7 +23,6 @@ from render.composer import (
 )
 
 
-# Явный список полей settings, влияющих на изображение превью.
 SIGNATURE_KEYS = [
     "font_path", "font_size", "text_color", "text_opacity", "text_scale_x",
     "letter_spacing", "text_alignment", "transparent_text",
@@ -67,23 +67,21 @@ class PreviewPanel(ctk.CTkFrame):
         self.current_index = 0
         self._callbacks = []
 
-        # Кэш реального изображения (до зума)
         self._cached_full_image = None
         self._cached_signature = None
         self._cached_is_transparent_bg = False
 
-        # Для canvas-вьюпорта
         self._display_photo = None
         self._canvas_img_id = None
         self._drag_start = None
         self._display_size = (0, 0)
 
-        # Debounce рендера
         self._render_job = None
-
-        # Текущий применённый цвет фона canvas (для дешёвой проверки
-        # "нужно ли перекрашивать" в _draw_zoomed).
         self._canvas_bg_applied = None
+
+        # Флаги видимости скроллбаров.
+        self._vbar_visible = True
+        self._hbar_visible = True
 
         self._create_widgets()
 
@@ -96,14 +94,9 @@ class PreviewPanel(ctk.CTkFrame):
 
     def _create_widgets(self):
         # --- Верхняя панель: zoom (слева) + навигация (справа) ---
-        # Раньше здесь был заголовок "Preview" слева и zoom справа —
-        # теперь заголовок не нужен (FX-раскладка сама по себе даёт
-        # понять, что это превью), а zoom и навигация стоят в одной
-        # компактной строке НАД canvas.
         toolbar = ctk.CTkFrame(self, fg_color="transparent")
         toolbar.pack(fill="x", padx=15, pady=(10, 5))
 
-        # --- Zoom (слева) ---
         zoom_frame = ctk.CTkFrame(toolbar, fg_color="transparent")
         zoom_frame.pack(side="left")
 
@@ -126,7 +119,6 @@ class PreviewPanel(ctk.CTkFrame):
         ctk.CTkLabel(zoom_frame, text="%",
                      font=("Arial", 11)).pack(side="left")
 
-        # --- Навигация (справа) ---
         nav = ctk.CTkFrame(toolbar, fg_color="transparent")
         nav.pack(side="right")
 
@@ -184,6 +176,11 @@ class PreviewPanel(ctk.CTkFrame):
         self.canvas.bind("<Button-5>", self._on_wheel_linux_down)
         self.canvas.bind("<Shift-MouseWheel>", self._on_wheel_shift)
         self.canvas.bind("<Control-MouseWheel>", self._on_wheel_ctrl)
+
+        # Ресайз canvas → пересчёт видимости скроллбаров.
+        self.canvas.bind("<Configure>",
+                          lambda e: self.after(50, self._sync_scrollbars),
+                          add="+")
 
         # --- Строка ширины холста (delta) — под canvas ---
         canvas_row = ctk.CTkFrame(self, fg_color="transparent")
@@ -343,11 +340,6 @@ class PreviewPanel(ctk.CTkFrame):
     # ============================================================
 
     def update(self):
-        """
-        Debounce: откладываем пересчёт на 40 мс. При быстрых вызовах
-        (движение окна, набор текста, перетаскивание слайдера) делается
-        только один финальный рендер вместо десятков промежуточных.
-        """
         if self._render_job is not None:
             try:
                 self.after_cancel(self._render_job)
@@ -356,15 +348,12 @@ class PreviewPanel(ctk.CTkFrame):
         self._render_job = self.after(40, self._render_preview_now)
 
     def _render_preview_now(self):
-        """Отрабатывает отложенный рендер."""
         self._render_job = None
-
         try:
             if not self.winfo_exists():
                 return
         except Exception:
             return
-
         try:
             self._render_preview()
         except Exception as e:
@@ -422,18 +411,6 @@ class PreviewPanel(ctk.CTkFrame):
         self._draw_zoomed()
 
     def _sync_canvas_bg(self):
-        """
-        Синхронизирует цвет фона внешнего tk.Canvas (и center_frame)
-        с текущей темой приложения.
-
-        FIX: tk.Canvas не поддерживает пары цветов CTk и НЕ следует
-        за ctk.set_appearance_mode() автоматически — цвет фона,
-        заданный в момент создания, остаётся прежним при смене темы.
-        Из-за этого при переключении на светлую тему вокруг
-        отрисованного превью оставалась тёмная рамка (цвет
-        исходного canvas), хотя сам _draw_blueprint уже рисовал
-        светлый фон.
-        """
         is_dark = ctk.get_appearance_mode() == "Dark"
         bg_color = "#1a1a1a" if is_dark else "#e5e5e5"
 
@@ -454,7 +431,6 @@ class PreviewPanel(ctk.CTkFrame):
         if self._cached_full_image is None:
             return
 
-        # Синхронизация фона canvas с текущей темой — до отрисовки.
         self._sync_canvas_bg()
 
         full = self._cached_full_image
@@ -483,6 +459,44 @@ class PreviewPanel(ctk.CTkFrame):
             0, 0, anchor="nw", image=self._display_photo
         )
         self.canvas.configure(scrollregion=(0, 0, framed.width, framed.height))
+
+        # Пересчитать видимость скроллбаров.
+        self.after(50, self._sync_scrollbars)
+
+    def _sync_scrollbars(self):
+        """
+        Показать/скрыть vbar/hbar по размеру картинки vs canvas.
+        Скроллбар виден только когда реально есть что скроллить.
+        """
+        if not self._display_size or self._display_size[0] <= 1:
+            return
+
+        try:
+            canvas_w = self.canvas.winfo_width()
+            canvas_h = self.canvas.winfo_height()
+        except Exception:
+            return
+
+        if canvas_w <= 1 or canvas_h <= 1:
+            return
+
+        disp_w, disp_h = self._display_size
+        need_h = disp_w > canvas_w + 2
+        need_v = disp_h > canvas_h + 2
+
+        if need_h and not self._hbar_visible:
+            self.hbar.grid()
+            self._hbar_visible = True
+        elif not need_h and self._hbar_visible:
+            self.hbar.grid_remove()
+            self._hbar_visible = False
+
+        if need_v and not self._vbar_visible:
+            self.vbar.grid()
+            self._vbar_visible = True
+        elif not need_v and self._vbar_visible:
+            self.vbar.grid_remove()
+            self._vbar_visible = False
 
     def _draw_blueprint(self, img, real_w, real_h):
         is_dark = ctk.get_appearance_mode() == "Dark"

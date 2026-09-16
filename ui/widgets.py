@@ -172,3 +172,85 @@ class DirectionSelector(ctk.CTkFrame):
     
     def set(self, value):
         self._variable.set(value)
+        
+class AutoHideScrollFrame(ctk.CTkScrollableFrame):
+    """
+    CTkScrollableFrame, который автоматически прячет вертикальный
+    скроллбар, когда контент помещается в видимую область.
+
+    ВАЖНО: в CTk 5.2.x внутренний canvas НЕ использует create_window
+    для контента — контент кладётся place-ом во внутренний фрейм
+    (self). Поэтому canvas.bbox("all") возвращает размер VIEW, а не
+    контента. Реальную высоту контента берём через
+    self.winfo_reqheight().
+    """
+
+    def __init__(self, master, **kwargs):
+        super().__init__(master, **kwargs)
+        self._scrollbar_visible = False
+        sb = self._get_scrollbar()
+        if sb is not None:
+            try:
+                sb.grid_remove()
+            except Exception:
+                pass
+
+        self.after(150, self.refresh_scrollbar)
+        self.bind(
+            "<Configure>",
+            lambda e: self.after(50, self.refresh_scrollbar),
+            add="+",
+        )
+
+    def _get_canvas(self):
+        return getattr(self, "_parent_canvas", None)
+
+    def _get_scrollbar(self):
+        return getattr(self, "_scrollbar", None)
+
+    def refresh_scrollbar(self):
+        """Показать/скрыть скроллбар по реальной высоте содержимого."""
+        canvas = self._get_canvas()
+        sb = self._get_scrollbar()
+        if canvas is None or sb is None:
+            return
+
+        try:
+            # Суммируем высоты видимых детей с учётом pady.
+            content_h = 0
+            for w in self.winfo_children():
+                if not w.winfo_ismapped():
+                    continue
+                content_h += w.winfo_reqheight()
+                if w.winfo_manager() == "pack":
+                    try:
+                        pady = w.pack_info().get("pady", 0)
+                        if isinstance(pady, (tuple, list)):
+                            content_h += sum(pady)
+                        else:
+                            content_h += 2 * int(pady)
+                    except Exception:
+                        pass
+            view_h = canvas.winfo_height()
+        except Exception:
+            return
+
+        # Ждём, пока геометрия устаканится.
+        if view_h <= 1:
+            self.after(100, self.refresh_scrollbar)
+            return
+
+        need = content_h > view_h + 2
+
+        if need and not self._scrollbar_visible:
+            try:
+                sb.grid()
+            except Exception:
+                pass
+            self._scrollbar_visible = True
+        elif not need and self._scrollbar_visible:
+            try:
+                sb.grid_remove()
+            except Exception:
+                pass
+            self._scrollbar_visible = False

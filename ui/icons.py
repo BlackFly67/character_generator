@@ -2,54 +2,52 @@
 """
 Каталог иконок для FX-сетки (ui/fx_grid.py).
 
-Иконки — Unicode-символы (монохромные), не эмодзи: корректно
-рендерятся на Windows/Linux/macOS одним и тем же системным шрифтом
-и легко перекрашиваются через text_color.
+Иконки теперь рендерятся НА ЛЕТУ через ui/effect_icon.py —
+буква «A» с эффектом, без статических PNG. Этот модуль больше
+НЕ хранит Unicode-символы для отрисовки — они стали не нужны.
 
-Формат:
-  RAIL_ICONS[panel_id] = (symbol, tooltip_key)
+Здесь остались только:
+  - RAIL_ICONS[panel_id] → tooltip_key (i18n-ключ названия эффекта);
+  - FX_GROUPS — порядок эффектов в сетке (по стадиям);
+  - ENABLEABLE_IDS — множество эффектов, у которых есть флаг
+    "включён" (f"{id}_enabled" в settings).
 
-panel_id — id эффекта из effects/registry.py (PIPELINE + POST_COMPOSE_EFFECTS).
-Base-разделы (font, style, rotation, arc, opacity, background) сюда
-НЕ входят: они живут отдельно, в верхней части правой колонки
-(Sidebar), и строятся через ui/manual_sidebar.py.
+get_icon(panel_id) возвращает строку (tooltip_key), чтобы
+вызывающий код не распаковывал кортеж.
 """
 
-# (symbol, tooltip_label_key)
+# panel_id -> tooltip_key (i18n)
 RAIL_ICONS = {
     # --- Fill ---
-    "gradient":         ("▤",   "gradient_fill"),
-    "pattern":          ("▦",   "pattern_fill"),
+    "gradient":         "gradient_fill",
+    "pattern":          "pattern_fill",
 
     # --- Inner ---
-    "outline_inner":    ("◉",   "outline_inner"),
-    "glow_inner":       ("✦",   "glow_inner"),
-    "emboss":           ("⬓",   "emboss"),
-    "inner_shadow":     ("◐",   "inner_shadow"),
+    "outline_inner":    "outline_inner",
+    "glow_inner":       "glow_inner",
+    "emboss":           "emboss",
+    "inner_shadow":     "inner_shadow",
 
     # --- Outer ---
-    "outline_outer":    ("◎",   "outline_outer"),
-    "glow_outer":       ("✧",   "glow_outer"),
-    "extrude":          ("⬒",   "extrude"),
-    "shadow":           ("☁",   "shadow"),
+    "outline_outer":    "outline_outer",
+    "glow_outer":       "glow_outer",
+    "extrude":          "extrude",
+    "shadow":           "shadow",
 
     # --- Geometry ---
-    "skew":             ("⟋",   "skew"),
-    "perspective":      ("⬔",   "perspective"),
+    "skew":             "skew",
+    "perspective":      "perspective",
 
     # --- Post ---
-    "reflection":       ("⤓",   "reflection"),
-    "halftone":         ("⁙",   "halftone"),
-    "glitch":           ("⚡",   "glitch"),
+    "reflection":       "reflection",
+    "halftone":         "halftone",
+    "glitch":           "glitch",
 }
 
 
 # Группы FX-сетки в порядке отображения.
 # Визуально на экране группы НЕ разделяются — иконки идут одним
 # потоком, а этот список задаёт лишь порядок.
-#
-# i18n-ключи для tooltip: group_fill, group_inner, group_outer,
-# group_geometry, group_post.
 FX_GROUPS = [
     ("group_fill",     ["gradient", "pattern"]),
     ("group_inner",    ["outline_inner", "glow_inner", "emboss", "inner_shadow"]),
@@ -70,5 +68,9 @@ ENABLEABLE_IDS = {
 
 
 def get_icon(panel_id):
-    """Возвращает (symbol, tooltip_key) или ('?', panel_id) как fallback."""
-    return RAIL_ICONS.get(panel_id, ("?", panel_id))
+    """
+    Возвращает tooltip_key (i18n) для panel_id.
+    Если panel_id нет в RAIL_ICONS — возвращает сам panel_id как
+    fallback (i18n.tr вернёт его как есть).
+    """
+    return RAIL_ICONS.get(panel_id, panel_id)
