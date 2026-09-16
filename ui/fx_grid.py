@@ -8,14 +8,20 @@ ui/effect_icon.py. Никаких подписей — название толь
 Клик — on_select(panel_id). Sidebar переключает активную панель.
 
 Стилизация:
-    - обычная              — серый фон, без рамки;
-    - включённая           — серый фон + бирюзовая рамка 2px;
-    - активная             — серый фон + синяя рамка 2px;
-    - активная + включённая — серый фон + синяя рамка 3px.
+    - обычная        — фон idle, рамка _BORDER_IDLE 1px;
+    - hover          — фон _COLOR_HOVER, рамка как была;
+    - активная       — фон _COLOR_HOVER, рамка _BORDER_IDLE;
+    - включённая     — фон idle, рамка _BORDER_ENABLED 1px;
+    - актив+включена — фон _COLOR_HOVER, рамка _BORDER_ENABLED.
 
-Реализация: CTkFrame-контейнер (умеет border_width/border_color)
-с CTkLabel (картинка) внутри через place(). CTkLabel не поддерживает
-border_width — потому рамка на контейнере, а не на самой иконке.
+Раскладка: 5 равных колонок (grid weight=1, uniform), кнопки
+растягиваются по ширине ячейки (sticky="ew") — правого отступа
+не остаётся.
+
+Реализация кнопки: CTkFrame-контейнер (умеет border_width/
+border_color) с CTkLabel (картинка) внутри через place().
+CTkLabel не поддерживает border_width — потому рамка на
+контейнере, а не на самой иконке.
 """
 
 import customtkinter as ctk
@@ -27,24 +33,15 @@ from ui.icons import (
 
 # Цвета FX-кнопок (тема CTk, тёмная и светлая пары).
 
-# Обычный фон — чуть светлее фона Sidebar.
 _COLOR_IDLE_BG = ("#ececec", "#2f2f2f")
-# Hover — светлее фона кнопки.
 _COLOR_HOVER = tuple(ctk.ThemeManager.theme["CTkButton"]["hover_color"])
-# Активная кнопка (открыта панель) — использует hover-цвет,
-# чтобы читалось как «эта сейчас выбрана».
 _COLOR_ACTIVE_BG = _COLOR_HOVER
 
-# Рамки:
-#   обычная       — заметная, светлее фона
-#   включённая    — ПОЧТИ белая (эффект работает)
-_BORDER_IDLE = ("#b0b0b0", "#5a5a5a")       # тёмная тема: светлее фона
-_BORDER_ENABLED = ("#777777", "#b8b8b8")    # тёмная тема: не белая, а серая
-
+_BORDER_IDLE = ("#b0b0b0", "#5a5a5a")
+_BORDER_ENABLED = ("#777777", "#b8b8b8")
 
 
 # Размеры
-ICON_W = 56
 ICON_H = 32
 ICON_SIZE_PX = (28, 28)
 MAX_COLS = 5
@@ -62,8 +59,8 @@ class FXGrid(ctk.CTkFrame):
         self._on_select = on_select
         self._is_active_fn = is_active_fn
 
-        self._buttons = {}       # panel_id -> CTkFrame (контейнер)
-        self._icon_images = {}   # panel_id -> CTkImage
+        self._buttons = {}
+        self._icon_images = {}
 
         self._build()
 
@@ -79,6 +76,11 @@ class FXGrid(ctk.CTkFrame):
 
         grid_frame = ctk.CTkFrame(self, fg_color="transparent")
         grid_frame.pack(fill="x", padx=0, pady=(2, 4))
+
+        # 5 равных колонок — кнопки растягиваются на всю ширину,
+        # правого отступа не остаётся.
+        for c in range(MAX_COLS):
+            grid_frame.grid_columnconfigure(c, weight=1, uniform="fx")
 
         all_ids = []
         for _group_key, ids in FX_GROUPS:
@@ -101,12 +103,11 @@ class FXGrid(ctk.CTkFrame):
             parent,
             fg_color=_COLOR_IDLE_BG,
             corner_radius=4,
-            width=ICON_W, height=ICON_H,
+            height=ICON_H,
             border_width=0,
         )
-        frame.grid(row=row, column=col, padx=2, pady=2, sticky="w")
+        frame.grid(row=row, column=col, padx=1, pady=2, sticky="ew")
         frame.grid_propagate(False)
-        frame.pack_propagate(False)
 
         lbl = ctk.CTkLabel(
             frame, text="",
@@ -151,10 +152,7 @@ class FXGrid(ctk.CTkFrame):
             and bool(getattr(self.settings, f"{panel_id}_enabled", False))
         )
 
-        # Фон: активная — как hover, обычная — idle.
-        fg = _COLOR_HOVER if is_active else _COLOR_IDLE_BG
-
-        # Рамка: всегда одной толщины, меняется только цвет.
+        fg = _COLOR_ACTIVE_BG if is_active else _COLOR_IDLE_BG
         border_color = _BORDER_ENABLED if is_enabled else _BORDER_IDLE
 
         frame.configure(
