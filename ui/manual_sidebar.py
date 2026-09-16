@@ -653,3 +653,40 @@ def build_background_section(parent, sidebar, settings, i18n):
     ).pack(anchor="w", padx=10, pady=2)
 
     return widgets
+    
+# ============================================================
+#  Каталог ручных панелей для SettingsPanel
+# ============================================================
+#
+# Каждый entry: id -> {"builder": fn, "label_key": str}
+# builder(parent, sidebar, settings, i18n) — как build_*_section.
+# label_key — для заголовка панели (совпадает с i18n-ключом).
+#
+# sidebar здесь — это SettingsPanel (нужен для sidebar._on_change()).
+
+MANUAL_PANELS = {
+    "font": {
+        "builder": build_font_section,
+        "label_key": "font",
+    },
+    "style_text": {
+        "builder": build_style_text_part,
+        "label_key": "text_style",
+    },
+    "rotation": {
+        "builder": build_rotation_section,
+        "label_key": "rotation",
+    },
+    "arc": {
+        "builder": build_arc_section,
+        "label_key": "arc_text",
+    },
+    "opacity": {
+        "builder": build_opacity_section,
+        "label_key": "opacity",
+    },
+    "background": {
+        "builder": build_background_section,
+        "label_key": "background",
+    },
+}    

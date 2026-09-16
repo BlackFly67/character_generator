@@ -136,6 +136,9 @@
     "C:/watchfaces/Misc/weathericon/out_400/e998330.png",
     "C:/watchfaces/Misc/weathericon/out_400/f95cb78.png"
   ],
+  "icon_preserve_color": false,
+  "icon_recolor_mode": "none",
+  "icon_tint_blend_mode": "multiply",
   "create_bin": false,
   "canvas_width_enabled": false,
   "canvas_width": 0

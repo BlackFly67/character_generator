@@ -569,3 +569,31 @@ def _build_seed_row(parent, sidebar, settings,
 
     entry.bind("<KeyRelease>", on_entry)
     widgets_out[param.key] = (entry, dice_btn)
+    
+def build_single_effect(parent, sidebar, settings, i18n, effect_id):
+    """
+    Строит UI для ОДНОГО эффекта по его id. Обёртка над
+    _build_one_effect.
+
+    Используется в SettingsPanel: правая панель показывает настройки
+    только одного эффекта, а не всех сразу.
+
+    Возвращает dict виджетов (section/body_frame/widgets) или None,
+    если effect_id не найден.
+
+    Пропускает эффекты из MANUAL_EFFECT_IDS — у них своя фабрика
+    в manual_sidebar.MANUAL_PANELS, вызывающий код должен
+    маршрутизировать их отдельно.
+    """
+    if effect_id in MANUAL_EFFECT_IDS:
+        return None
+
+    all_effects = PIPELINE + POST_COMPOSE_EFFECTS
+    by_id = {cls.id: cls for cls in all_effects}
+    cls = by_id.get(effect_id)
+    if cls is None:
+        return None
+
+    eff = cls()
+    return _build_one_effect(parent, sidebar, settings, i18n, eff)    
+    

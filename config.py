@@ -87,6 +87,9 @@ class Settings:
         self.create_bin = False
         self.canvas_width_enabled = False
         self.icon_mode = False
+        self.icon_preserve_color = False
+        self.icon_recolor_mode = "none"
+        self.icon_tint_blend_mode = "multiply"
 
         # Числовые параметры
         self.shadow_distance = DEFAULT_SHADOW_DISTANCE
@@ -284,6 +287,9 @@ class Settings:
             "filename_template": self.filename_template,
             "icon_mode": self.icon_mode,
             "icon_paths": self.icon_paths,
+            "icon_preserve_color": getattr(self, "icon_preserve_color", False),
+            "icon_recolor_mode": getattr(self, "icon_recolor_mode", "none"),
+            "icon_tint_blend_mode": getattr(self, "icon_tint_blend_mode", "multiply"),
             "create_bin": self.create_bin,
             "canvas_width_enabled": self.canvas_width_enabled,
             "canvas_width": self.canvas_width_delta
@@ -359,6 +365,9 @@ class Settings:
         self.create_bin = data.get("create_bin", False)
         self.canvas_width_enabled = data.get("canvas_width_enabled", False)
         self.icon_mode = data.get("icon_mode", False)
+        self.icon_preserve_color = data.get("icon_preserve_color", False)
+        self.icon_recolor_mode = data.get("icon_recolor_mode", "none")
+        self.icon_tint_blend_mode = data.get("icon_tint_blend_mode", "multiply")
 
         # Числовые параметры
         self.shadow_distance = data.get("shadow_distance", DEFAULT_SHADOW_DISTANCE)
