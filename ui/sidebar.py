@@ -69,8 +69,8 @@ class Sidebar(ctk.CTkFrame):
 
         # Пропорция 50/50 между Base и FX scroll.
         self.grid_rowconfigure(0, weight=0)  # header (фикс)
-        self.grid_rowconfigure(1, weight=1)  # base_scroll
-        self.grid_rowconfigure(2, weight=1)  # fx_scroll
+        self.grid_rowconfigure(1, weight=4)  # base_scroll
+        self.grid_rowconfigure(2, weight=6)  # fx_scroll
         self.grid_columnconfigure(0, weight=1)
 
         self.settings = settings
