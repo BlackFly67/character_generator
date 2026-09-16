@@ -25,17 +25,28 @@ from ui.icons import (
 )
 
 
-# Цвета
-_COLOR_IDLE_BG = ("#e8e8e8", "#3a3a3a")
-_COLOR_HOVER = ("#d0d0d0", "#4a4a4a")
+# Цвета FX-кнопок (тема CTk, тёмная и светлая пары).
 
-_BORDER_ACTIVE = "#1f538d"
-_BORDER_ENABLED = "#26a69a"
+# Обычный фон — чуть светлее фона Sidebar.
+_COLOR_IDLE_BG = ("#ececec", "#2f2f2f")
+# Hover — светлее фона кнопки.
+_COLOR_HOVER = tuple(ctk.ThemeManager.theme["CTkButton"]["hover_color"])
+# Активная кнопка (открыта панель) — использует hover-цвет,
+# чтобы читалось как «эта сейчас выбрана».
+_COLOR_ACTIVE_BG = _COLOR_HOVER
+
+# Рамки:
+#   обычная       — заметная, светлее фона
+#   включённая    — ПОЧТИ белая (эффект работает)
+_BORDER_IDLE = ("#b0b0b0", "#5a5a5a")       # тёмная тема: светлее фона
+_BORDER_ENABLED = ("#777777", "#b8b8b8")    # тёмная тема: не белая, а серая
+
+
 
 # Размеры
-ICON_W = 52
-ICON_H = 40
-ICON_SIZE_PX = (32, 32)
+ICON_W = 56
+ICON_H = 32
+ICON_SIZE_PX = (28, 28)
 MAX_COLS = 5
 
 
@@ -67,7 +78,7 @@ class FXGrid(ctk.CTkFrame):
         ).pack(anchor="w", padx=8, pady=(6, 4))
 
         grid_frame = ctk.CTkFrame(self, fg_color="transparent")
-        grid_frame.pack(fill="x", padx=8, pady=(2, 4))
+        grid_frame.pack(fill="x", padx=0, pady=(2, 4))
 
         all_ids = []
         for _group_key, ids in FX_GROUPS:
@@ -140,29 +151,17 @@ class FXGrid(ctk.CTkFrame):
             and bool(getattr(self.settings, f"{panel_id}_enabled", False))
         )
 
-        if is_active and is_enabled:
-            frame.configure(
-                fg_color=_COLOR_IDLE_BG,
-                border_width=3,
-                border_color=_BORDER_ACTIVE,
-            )
-        elif is_active:
-            frame.configure(
-                fg_color=_COLOR_IDLE_BG,
-                border_width=2,
-                border_color=_BORDER_ACTIVE,
-            )
-        elif is_enabled:
-            frame.configure(
-                fg_color=_COLOR_IDLE_BG,
-                border_width=2,
-                border_color=_BORDER_ENABLED,
-            )
-        else:
-            frame.configure(
-                fg_color=_COLOR_IDLE_BG,
-                border_width=0,
-            )
+        # Фон: активная — как hover, обычная — idle.
+        fg = _COLOR_HOVER if is_active else _COLOR_IDLE_BG
+
+        # Рамка: всегда одной толщины, меняется только цвет.
+        border_color = _BORDER_ENABLED if is_enabled else _BORDER_IDLE
+
+        frame.configure(
+            fg_color=fg,
+            border_width=1,
+            border_color=border_color,
+        )
 
     # ============================================================
     #  Callbacks
