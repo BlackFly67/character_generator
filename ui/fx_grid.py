@@ -33,7 +33,7 @@ from ui.icons import (
 
 # Цвета FX-кнопок (тема CTk, тёмная и светлая пары).
 
-_COLOR_IDLE_BG = ("#ececec", "#2f2f2f")
+_COLOR_IDLE_BG = ("#ececec", "#4a4a4a")
 _COLOR_HOVER = tuple(ctk.ThemeManager.theme["CTkButton"]["hover_color"])
 _COLOR_ACTIVE_BG = _COLOR_HOVER
 
