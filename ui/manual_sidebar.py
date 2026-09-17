@@ -33,7 +33,7 @@ import customtkinter as ctk
 from tkinter import filedialog, messagebox
 
 from constants import FONT_SIZE_MIN, FONT_SIZE_MAX
-
+from ui.widgets import WheelSlider
 
 # ============================================================
 #  1. HEADER — заголовок с reset / presets
@@ -150,7 +150,7 @@ def build_font_section(parent, sidebar, settings, i18n):
         command=lambda: None,
     ).pack(side="right", padx=(5, 0))
 
-    size_slider = ctk.CTkSlider(
+    size_slider = WheelSlider(
         size_row, from_=FONT_SIZE_MIN, to=FONT_SIZE_MAX,
         number_of_steps=FONT_SIZE_MAX - FONT_SIZE_MIN,
     )
@@ -204,7 +204,7 @@ def build_font_section(parent, sidebar, settings, i18n):
     scale_entry.pack(side="right", padx=(5, 0))
     widgets["scale_entry"] = scale_entry
 
-    scale_slider = ctk.CTkSlider(scale_section, from_=-50, to=50, number_of_steps=100)
+    scale_slider = WheelSlider(scale_section, from_=-50, to=50, number_of_steps=100)
     scale_slider.pack(side="left", padx=5, fill="x", expand=True)
     scale_slider.set(scale_init)
     widgets["scale_slider"] = scale_slider
@@ -240,7 +240,7 @@ def build_font_section(parent, sidebar, settings, i18n):
     spacing_entry.pack(side="right", padx=(5, 0))
     widgets["spacing_entry"] = spacing_entry
 
-    spacing_slider = ctk.CTkSlider(spacing_section, from_=-20, to=20, number_of_steps=40)
+    spacing_slider = WheelSlider(spacing_section, from_=-20, to=20, number_of_steps=40)
     spacing_slider.pack(side="left", padx=5, fill="x", expand=True)
     spacing_slider.set(settings.letter_spacing)
     widgets["spacing_slider"] = spacing_slider
@@ -383,7 +383,7 @@ def build_rotation_section(parent, sidebar, settings, i18n):
     slider_frame = ctk.CTkFrame(rotation_section, fg_color="transparent")
     slider_frame.pack(fill="x", padx=10, pady=2)
 
-    rotation_slider = ctk.CTkSlider(
+    rotation_slider = WheelSlider(
         slider_frame, from_=-180, to=180, number_of_steps=360,
     )
     rotation_slider.pack(fill="x", padx=5, pady=2)
@@ -459,7 +459,7 @@ def build_arc_section(parent, sidebar, settings, i18n):
     radius_entry.pack(side="right", padx=(5, 0))
     widgets["radius_entry"] = radius_entry
 
-    radius_slider = ctk.CTkSlider(radius_flow, from_=1, to=2000, number_of_steps=1990)
+    radius_slider = WheelSlider(radius_flow, from_=1, to=2000, number_of_steps=1990)
     radius_slider.pack(side="left", padx=5, fill="x", expand=True)
     radius_slider.set(settings.arc_radius)
     widgets["radius_slider"] = radius_slider
@@ -495,7 +495,7 @@ def build_arc_section(parent, sidebar, settings, i18n):
     angle_entry.pack(side="right", padx=(5, 0))
     widgets["angle_entry"] = angle_entry
 
-    angle_slider = ctk.CTkSlider(angle_flow, from_=0, to=360, number_of_steps=360)
+    angle_slider = WheelSlider(angle_flow, from_=0, to=360, number_of_steps=360)
     angle_slider.pack(side="left", padx=5, fill="x", expand=True)
     angle_slider.set(settings.arc_start_angle)
     widgets["angle_slider"] = angle_slider
@@ -572,7 +572,7 @@ def build_opacity_section(parent, sidebar, settings, i18n):
     slider_frame = ctk.CTkFrame(opacity_section, fg_color="transparent")
     slider_frame.pack(fill="x", padx=10, pady=2)
 
-    opacity_slider = ctk.CTkSlider(slider_frame, from_=0, to=100, number_of_steps=100)
+    opacity_slider = WheelSlider(slider_frame, from_=0, to=100, number_of_steps=100)
     opacity_slider.pack(fill="x", padx=5, pady=2)
     opacity_slider.set(init_val)
     widgets["slider"] = opacity_slider

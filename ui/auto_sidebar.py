@@ -27,7 +27,7 @@ from effects.core import (
 )
 from effects.registry import PIPELINE, POST_COMPOSE_EFFECTS
 from constants import BLEND_MODES
-
+from ui.widgets import WheelSlider
 
 # Эффекты, для которых UI строится ВРУЧНУЮ в sidebar.py / manual_sidebar.py
 MANUAL_EFFECT_IDS = {
@@ -253,7 +253,7 @@ def _build_int_float_row(parent, sidebar, settings,
     mx = param.max_val if param.max_val is not None else 100
     steps = max(1, (mx - mn) // max(1, param.step))
 
-    slider = ctk.CTkSlider(row, from_=mn, to=mx, number_of_steps=steps)
+    slider = WheelSlider(row, from_=mn, to=mx, number_of_steps=steps)
     slider.pack(side="left", padx=5, fill="x", expand=True)
     slider.set(current)
 

@@ -21,7 +21,7 @@ from utils import parse_characters, create_checkerboard_background
 from render.composer import (
     CharSpec, compose_full, compute_batch_geometry,
 )
-
+from ui.widgets import WheelSlider
 
 SIGNATURE_KEYS = [
     "font_path", "font_size", "text_color", "text_opacity", "text_scale_x",
@@ -103,7 +103,7 @@ class PreviewPanel(ctk.CTkFrame):
         ctk.CTkLabel(zoom_frame, text="🔍",
                      font=("Arial", 12)).pack(side="left", padx=(0, 4))
 
-        self.zoom_slider = ctk.CTkSlider(
+        self.zoom_slider = WheelSlider(
             zoom_frame, from_=10, to=1000,
             number_of_steps=990, width=140,
             command=self._on_zoom,
@@ -209,7 +209,7 @@ class PreviewPanel(ctk.CTkFrame):
         ctk.CTkLabel(canvas_row, text="px",
                      font=("Arial", 10)).pack(side="left")
 
-        self.canvas_width_slider = ctk.CTkSlider(
+        self.canvas_width_slider = WheelSlider(
             canvas_row, from_=-1000, to=1000, number_of_steps=2000,
             width=140,
         )

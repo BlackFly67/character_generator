@@ -27,7 +27,7 @@ class IntSliderRow(ctk.CTkFrame):
         self.label.pack(side="left")
         
         # Слайдер
-        self.slider = ctk.CTkSlider(
+        self.slider = WheelSlider(
             self, from_=min_val, to=max_val,
             number_of_steps=int((max_val - min_val) / step) if step > 0 else 100,
             command=self._on_slider
@@ -254,3 +254,70 @@ class AutoHideScrollFrame(ctk.CTkScrollableFrame):
             except Exception:
                 pass
             self._scrollbar_visible = False
+            
+class WheelSlider(ctk.CTkSlider):
+    """
+    CTkSlider, который реагирует на колесо мыши при наведении.
+
+    Поведение:
+        - навёл курсор → прокрутил колесо → значение ±step;
+        - без Shift — шаг 1 (как у CTkSlider по умолчанию);
+        - событие НЕ всплывает дальше (return "break"),
+          чтобы скролл не уходил родительскому ScrollableFrame.
+
+    Используется вместо ctk.CTkSlider везде, где нужно колесо.
+    """
+
+    def __init__(self, master, *args, wheel_step=1, **kwargs):
+        super().__init__(master, *args, **kwargs)
+        self._wheel_step = wheel_step
+
+        # Windows/macOS — <MouseWheel>, Linux — <Button-4>/<Button-5>.
+        self.bind("<MouseWheel>", self._on_wheel, add="+")
+        self.bind("<Button-4>", self._on_wheel_linux_up, add="+")
+        self.bind("<Button-5>", self._on_wheel_linux_down, add="+")
+
+    def _delta_to_sign(self, event):
+        if event.delta > 0:
+            return +1
+        if event.delta < 0:
+            return -1
+        return 0
+
+    def _apply(self, sign):
+        if sign == 0:
+            return "break"
+        try:
+            cur = float(self.get())
+        except Exception:
+            return "break"
+        new = cur + sign * self._wheel_step
+
+        # Ограничение по min/max из параметров слайдера.
+        lo = self.cget("from_")
+        hi = self.cget("to")
+        if new < lo:
+            new = lo
+        elif new > hi:
+            new = hi
+        if new == cur:
+            return "break"
+
+        self.set(new)
+        # CTkSlider не вызывает command при .set() — дёргаем вручную.
+        cmd = self.cget("command")
+        if cmd is not None:
+            try:
+                cmd(new)
+            except Exception:
+                pass
+        return "break"
+
+    def _on_wheel(self, event):
+        return self._apply(self._delta_to_sign(event))
+
+    def _on_wheel_linux_up(self, event):
+        return self._apply(+1)
+
+    def _on_wheel_linux_down(self, event):
+        return self._apply(-1)
