@@ -5,16 +5,21 @@
 Каждая иконка — буква «A» с одним включённым эффектом, отрендеренная
 через compose_full прямо в памяти (без сохранения PNG).
 
-ВАЖНО: иконки НЕ перекрашиваются (никакого tint). Эффекты вроде
-градиента, свечения, emboss, extrude видны только в цвете —
-монохромный силуэт их «съедает». Контраст с фоном кнопки
-обеспечивается светлым/тёмным фоном самой кнопки, а не перекраской.
+Сами цвета пресетов (градиент/свечение/emboss/extrude и т.п.) НЕ
+перекрашиваются под тему — это цвета конкретного эффекта, они полезны
+как визуальная подсказка "что это за эффект". Но ДВЕ вещи от темы
+зависят: (1) насыщенность приглушена общим множителем ICON_SATURATION,
+чтобы плитки не выбивались из синей темы приложения "конфетти"-цветами;
+(2) базовый цвет буквы для пресетов, не перекрашивающих text_color сами
+(outline_inner/outer, skew, perspective), берётся по текущей теме —
+тёмный на светлом фоне, светлый на тёмном (см. _TEXT_COLOR_BY_MODE).
 
-Кэш: dict[panel_id, PIL.Image] для базового изображения.
+Кэш: dict[(panel_id, тема), PIL.Image] для базового изображения,
+dict[(panel_id, size, тема), ctk.CTkImage] для готовых для UI.
 """
 
 import os
-from PIL import Image
+from PIL import Image, ImageEnhance
 import customtkinter as ctk
 
 from config import Settings
@@ -26,6 +31,39 @@ from render.composer import CharSpec, compose_full
 ICON_RENDER_SIZE = 80      # рендерим крупно (для качества при HiDPI)
 ICON_CONTENT = 64          # буква вписана в 64×64
 ICON_UI_SIZE = (40, 40)    # отображается в кнопке (32×32)
+
+# ИСПРАВЛЕНО: раньше пресеты рисовали буквы в "конфетти"-насыщенных
+# цветах (#e94b3c красный, #f0c400 жёлтый и т.д.) на все 100% —
+# рядом с монохромно-синей темой приложения это выглядело как
+# чужеродная мозаика. Само различие цветов между эффектами полезно
+# (сразу видно, что за эффект), поэтому цвета не убираем совсем —
+# просто снижаем насыщенность так, чтобы плитки читались как часть
+# приложения, а не отдельный виджет поверх него. 1.0 = без изменений,
+# 0.0 = оттенки серого.
+ICON_SATURATION = 0.55
+
+# Цвет буквы для тех пресетов, что НЕ перекрашивают текст сами
+# (outline_inner/outer, skew, perspective — см. PRESETS ниже, они не
+# трогают text_color). ИСПРАВЛЕНО: раньше это был один хардкод
+# "#1a1a1a" всегда, независимо от темы — main_window.py._apply_settings()
+# вызывал clear_cache() при смене темы с комментарием "иконки
+# перекрашиваются под тему", но фактически НИЧЕГО не перерендеривалось
+# по-другому: light_image и dark_image в get_effect_icon() указывали
+# на ОДИН И ТОТ ЖЕ объект PIL.Image. Проверено побайтовым сравнением
+# пикселей до/после смены темы — результат был идентичен. Теперь
+# базовый цвет буквы реально зависит от текущей темы (тёмный на
+# светлой, светлый на тёмной — как везде в приложении, см. паттерн
+# text_color=("#1a1a1a", "#e0e0e0") в других модулях), а кэш учитывает
+# режим темы в ключе, так что clear_cache() при смене темы наконец-то
+# на что-то влияет.
+_TEXT_COLOR_BY_MODE = {"light": "#1a1a1a", "dark": "#e0e0e0"}
+
+
+def _current_mode():
+    try:
+        return "dark" if ctk.get_appearance_mode() == "Dark" else "light"
+    except Exception:
+        return "light"
 
 
 # ============================================================
@@ -148,9 +186,13 @@ _BASE_CACHE = {}    # panel_id -> PIL.Image (RGBA, ICON_RENDER_SIZE²)
 _CTK_CACHE = {}     # (panel_id, size) -> ctk.CTkImage
 
 
-def _make_settings(text_color="#1a1a1a"):
+def _make_settings(text_color=None):
     """
     Создать Settings для рендера иконки.
+
+    text_color=None => берём цвет по текущей теме (_current_mode()),
+    а не хардкод "#1a1a1a" — см. комментарий у _TEXT_COLOR_BY_MODE
+    про то, какой баг это чинит.
 
     font_path берём из get_default_font() и, если он пуст/невалиден,
     пробуем типичные системные TTF.
@@ -158,7 +200,7 @@ def _make_settings(text_color="#1a1a1a"):
     s = Settings()
     s.reset()
 
-    s.text_color = text_color
+    s.text_color = text_color or _TEXT_COLOR_BY_MODE[_current_mode()]
     s.transparent_background = True
     s.background_color = None
     s.transparent_text = False
@@ -183,16 +225,34 @@ def _make_settings(text_color="#1a1a1a"):
     return s
 
 
-def _render_base(panel_id, text_color="#1a1a1a"):
-    """Рендерит базовое изображение иконки (кэшируется)."""
-    if panel_id in _BASE_CACHE:
-        return _BASE_CACHE[panel_id]
+def _apply_saturation(img_rgba, factor):
+    """Снижает насыщенность RGBA-изображения, сохраняя альфа-канал."""
+    if factor == 1.0:
+        return img_rgba
+    r, g, b, a = img_rgba.split()
+    rgb = ImageEnhance.Color(Image.merge("RGB", (r, g, b))).enhance(factor)
+    r2, g2, b2 = rgb.split()
+    return Image.merge("RGBA", (r2, g2, b2, a))
+
+
+def _render_base(panel_id):
+    """
+    Рендерит базовое изображение иконки (кэшируется по (panel_id, тема)
+    — ИСПРАВЛЕНО: раньше кэш был только по panel_id, а text_color внутри
+    всегда был хардкод "#1a1a1a" — сколько бы раз ни сменили тему,
+    результат оставался тем же самым объектом. Теперь при смене темы
+    (_current_mode() меняется) рендерится и кэшируется отдельная версия.
+    """
+    mode = _current_mode()
+    cache_key = (panel_id, mode)
+    if cache_key in _BASE_CACHE:
+        return _BASE_CACHE[cache_key]
 
     preset_fn = PRESETS.get(panel_id)
     if preset_fn is None:
         return None
 
-    s = _make_settings(text_color)
+    s = _make_settings()
     preset_fn(s)
 
     spec = CharSpec(text="Tt", index=1)
@@ -217,7 +277,13 @@ def _render_base(panel_id, text_color="#1a1a1a"):
         (ICON_RENDER_SIZE - img.height) // 2,
     ))
 
-    _BASE_CACHE[panel_id] = canvas
+    # Часть варианта "B+D" из обсуждения стилизации: приглушаем
+    # насыщенность пресетовых цветов, чтобы плитки не выглядели
+    # конфетти на фоне синей темы приложения, но эффекты оставались
+    # различимы по цвету.
+    canvas = _apply_saturation(canvas, ICON_SATURATION)
+
+    _BASE_CACHE[cache_key] = canvas
     return canvas
 
 
@@ -225,9 +291,12 @@ def get_effect_icon(panel_id, size=ICON_UI_SIZE):
     """
     Возвращает ctk.CTkImage с цветной иконкой эффекта.
 
-    Никакого tint — эффекты видны в цвете.
+    Никакого tint поверх цветов эффекта — но базовый цвет буквы (для
+    пресетов, не перекрашивающих text_color сами) и сама насыщенность
+    зависят от темы/настроек — см. _render_base().
     """
-    key = (panel_id, size)
+    mode = _current_mode()
+    key = (panel_id, size, mode)
     if key in _CTK_CACHE:
         return _CTK_CACHE[key]
 
@@ -248,5 +317,6 @@ def get_effect_icon(panel_id, size=ICON_UI_SIZE):
 
 
 def clear_cache():
-    """Сбросить кэш CTkImage (при смене размера или темы)."""
+    """Сбросить кэш CTkImage И базовых рендеров (смена размера/темы)."""
     _CTK_CACHE.clear()
+    _BASE_CACHE.clear()
