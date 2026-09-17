@@ -7,7 +7,9 @@ ui/effect_icon.py. Никаких подписей — название толь
 
 Клик — on_select(panel_id). Sidebar переключает активную панель.
 
-Стилизация:
+Стилизация (см. ui/theme.py — единая палитра с остальным UI). Фон и
+рамка — два НЕЗАВИСИМЫХ канала: фон сигналит "сейчас под курсором или
+открыто", рамка сигналит "включено":
     - обычная        — фон idle, рамка _BORDER_IDLE 1px;
     - hover          — фон _COLOR_HOVER, рамка как была;
     - активная       — фон _COLOR_HOVER, рамка _BORDER_IDLE;
@@ -19,9 +21,9 @@ ui/effect_icon.py. Никаких подписей — название толь
 не остаётся.
 
 Реализация кнопки: CTkFrame-контейнер (умеет border_width/
-border_color) с CTkLabel (картинка) внутри через place().
-CTkLabel не поддерживает border_width — потому рамка на
-контейнере, а не на самой иконке.
+border_color) с CTkLabel (картинка) внутри через place(). CTkLabel
+не поддерживает border_width — потому рамка на контейнере, а не на
+самой иконке.
 """
 
 import customtkinter as ctk
@@ -29,21 +31,23 @@ import customtkinter as ctk
 from ui.icons import (
     RAIL_ICONS, FX_GROUPS, ENABLEABLE_IDS, get_icon,
 )
+from ui.theme import (
+    BLOCK_ITEM_BG, HOVER_BG, ACCENT_BLUE_LIGHT, BORDER_IDLE,
+    TILE_CORNER_RADIUS,
+)
 
 
-# Цвета FX-кнопок (тема CTk, тёмная и светлая пары).
+_COLOR_IDLE_BG = BLOCK_ITEM_BG
+_COLOR_HOVER = HOVER_BG
 
-_COLOR_IDLE_BG = ("#ececec", "#4a4a4a")
-_COLOR_HOVER = tuple(ctk.ThemeManager.theme["CTkButton"]["hover_color"])
-_COLOR_ACTIVE_BG = _COLOR_HOVER
-
-_BORDER_IDLE = ("#b0b0b0", "#5a5a5a")
-_BORDER_ENABLED = ("#777777", "#b8b8b8")
-
+_BORDER_IDLE = BORDER_IDLE
+_BORDER_ENABLED = ACCENT_BLUE_LIGHT
+_BORDER_WIDTH = 1
 
 # Размеры
-ICON_H = 32
-ICON_SIZE_PX = (28, 28)
+ICON_W = 52
+ICON_H = 40
+ICON_SIZE_PX = (32, 32)
 MAX_COLS = 5
 
 
@@ -59,8 +63,8 @@ class FXGrid(ctk.CTkFrame):
         self._on_select = on_select
         self._is_active_fn = is_active_fn
 
-        self._buttons = {}
-        self._icon_images = {}
+        self._buttons = {}       # panel_id -> CTkFrame (контейнер)
+        self._icon_images = {}   # panel_id -> CTkImage
 
         self._build()
 
@@ -75,12 +79,15 @@ class FXGrid(ctk.CTkFrame):
         ).pack(anchor="w", padx=8, pady=(6, 4))
 
         grid_frame = ctk.CTkFrame(self, fg_color="transparent")
-        grid_frame.pack(fill="x", padx=0, pady=(2, 4))
+        grid_frame.pack(fill="x", padx=8, pady=(2, 4))
 
-        # 5 равных колонок — кнопки растягиваются на всю ширину,
-        # правого отступа не остаётся.
+        # 5 равных колонок: uniform-группа заставляет grid держать
+        # ОДИНАКОВУЮ ширину для всех колонок (иначе колонка с более
+        # широким контентом в какой-то строке была бы шире остальных),
+        # weight=1 — растягивать их при увеличении окна, а не оставлять
+        # лишнее место с одного края.
         for c in range(MAX_COLS):
-            grid_frame.grid_columnconfigure(c, weight=1, uniform="fx")
+            grid_frame.grid_columnconfigure(c, weight=1, uniform="fx_col")
 
         all_ids = []
         for _group_key, ids in FX_GROUPS:
@@ -102,12 +109,18 @@ class FXGrid(ctk.CTkFrame):
         frame = ctk.CTkFrame(
             parent,
             fg_color=_COLOR_IDLE_BG,
-            corner_radius=4,
-            height=ICON_H,
-            border_width=0,
+            corner_radius=TILE_CORNER_RADIUS,
+            width=ICON_W, height=ICON_H,
+            border_width=_BORDER_WIDTH,
+            border_color=_BORDER_IDLE,
         )
-        frame.grid(row=row, column=col, padx=1, pady=2, sticky="ew")
+        # sticky="ew": плитка растягивается на всю ширину своей ячейки
+        # (все ячейки одинаковой ширины благодаря uniform-группе выше)
+        # — без этого справа от последней колонки/между плитками
+        # оставался неиспользуемый зазор.
+        frame.grid(row=row, column=col, padx=2, pady=2, sticky="ew")
         frame.grid_propagate(False)
+        frame.pack_propagate(False)
 
         lbl = ctk.CTkLabel(
             frame, text="",
@@ -133,6 +146,12 @@ class FXGrid(ctk.CTkFrame):
     # ============================================================
 
     def _on_hover(self, panel_id, entering):
+        """
+        Hover меняет ТОЛЬКО фон, никогда не трогает рамку — рамка
+        целиком отражает "включено/не включено" и не должна мигать
+        при простом наведении мыши (см. матрицу состояний в докстринге
+        модуля: "hover — ... рамка как была").
+        """
         frame = self._buttons.get(panel_id)
         if frame is None:
             return
@@ -142,6 +161,18 @@ class FXGrid(ctk.CTkFrame):
             self._apply_button_color(panel_id)
 
     def _apply_button_color(self, panel_id):
+        """
+        Два независимых канала:
+          - фон:  _COLOR_HOVER, если плитка активна (открыта справа) —
+                  иначе _COLOR_IDLE_BG. Истинный hover мыши (см.
+                  _on_hover выше) временно перекрывает этот фон тем же
+                  _COLOR_HOVER и не проходит через эту функцию, пока
+                  курсор не уйдёт.
+          - рамка: цвет = _BORDER_ENABLED, если эффект включён в
+                  settings, иначе нейтральный _BORDER_IDLE — ширина
+                  всегда одна и та же (_BORDER_WIDTH), рамка не
+                  используется для сигнала "активна".
+        """
         frame = self._buttons.get(panel_id)
         if frame is None:
             return
@@ -152,12 +183,12 @@ class FXGrid(ctk.CTkFrame):
             and bool(getattr(self.settings, f"{panel_id}_enabled", False))
         )
 
-        fg = _COLOR_ACTIVE_BG if is_active else _COLOR_IDLE_BG
+        bg = _COLOR_HOVER if is_active else _COLOR_IDLE_BG
         border_color = _BORDER_ENABLED if is_enabled else _BORDER_IDLE
 
         frame.configure(
-            fg_color=fg,
-            border_width=1,
+            fg_color=bg,
+            border_width=_BORDER_WIDTH,
             border_color=border_color,
         )
 

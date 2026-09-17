@@ -1,0 +1,219 @@
+diff --git a/ui/fx_grid.py b/ui/fx_grid.py
+index 9c0f3f2..277c4ed 100644
+--- a/ui/fx_grid.py
++++ b/ui/fx_grid.py
+@@ -7,15 +7,23 @@ ui/effect_icon.py. Никаких подписей — название толь
+ 
+ Клик — on_select(panel_id). Sidebar переключает активную панель.
+ 
+-Стилизация:
+-    - обычная              — серый фон, без рамки;
+-    - включённая           — серый фон + бирюзовая рамка 2px;
+-    - активная             — серый фон + синяя рамка 2px;
+-    - активная + включённая — серый фон + синяя рамка 3px.
+-
+-Реализация: CTkFrame-контейнер (умеет border_width/border_color)
+-с CTkLabel (картинка) внутри через place(). CTkLabel не поддерживает
+-border_width — потому рамка на контейнере, а не на самой иконке.
++Стилизация (см. ui/theme.py — единая палитра с остальным UI). Фон и
++рамка — два НЕЗАВИСИМЫХ канала: фон сигналит "сейчас под курсором или
++открыто", рамка сигналит "включено":
++    - обычная        — фон idle, рамка _BORDER_IDLE 1px;
++    - hover          — фон _COLOR_HOVER, рамка как была;
++    - активная       — фон _COLOR_HOVER, рамка _BORDER_IDLE;
++    - включённая     — фон idle, рамка _BORDER_ENABLED 1px;
++    - актив+включена — фон _COLOR_HOVER, рамка _BORDER_ENABLED.
++
++Раскладка: 5 равных колонок (grid weight=1, uniform), кнопки
++растягиваются по ширине ячейки (sticky="ew") — правого отступа
++не остаётся.
++
++Реализация кнопки: CTkFrame-контейнер (умеет border_width/
++border_color) с CTkLabel (картинка) внутри через place(). CTkLabel
++не поддерживает border_width — потому рамка на контейнере, а не на
++самой иконке.
+ """
+ 
+ import customtkinter as ctk
+@@ -23,14 +31,18 @@ import customtkinter as ctk
+ from ui.icons import (
+     RAIL_ICONS, FX_GROUPS, ENABLEABLE_IDS, get_icon,
+ )
++from ui.theme import (
++    BLOCK_ITEM_BG, HOVER_BG, ACCENT_BLUE_LIGHT, BORDER_IDLE,
++    TILE_CORNER_RADIUS,
++)
+ 
+ 
+-# Цвета
+-_COLOR_IDLE_BG = ("#e8e8e8", "#3a3a3a")
+-_COLOR_HOVER = ("#d0d0d0", "#4a4a4a")
++_COLOR_IDLE_BG = BLOCK_ITEM_BG
++_COLOR_HOVER = HOVER_BG
+ 
+-_BORDER_ACTIVE = "#1f538d"
+-_BORDER_ENABLED = "#26a69a"
++_BORDER_IDLE = BORDER_IDLE
++_BORDER_ENABLED = ACCENT_BLUE_LIGHT
++_BORDER_WIDTH = 1
+ 
+ # Размеры
+ ICON_W = 52
+@@ -69,6 +81,14 @@ class FXGrid(ctk.CTkFrame):
+         grid_frame = ctk.CTkFrame(self, fg_color="transparent")
+         grid_frame.pack(fill="x", padx=8, pady=(2, 4))
+ 
++        # 5 равных колонок: uniform-группа заставляет grid держать
++        # ОДИНАКОВУЮ ширину для всех колонок (иначе колонка с более
++        # широким контентом в какой-то строке была бы шире остальных),
++        # weight=1 — растягивать их при увеличении окна, а не оставлять
++        # лишнее место с одного края.
++        for c in range(MAX_COLS):
++            grid_frame.grid_columnconfigure(c, weight=1, uniform="fx_col")
++
+         all_ids = []
+         for _group_key, ids in FX_GROUPS:
+             all_ids.extend(ids)
+@@ -89,11 +109,16 @@ class FXGrid(ctk.CTkFrame):
+         frame = ctk.CTkFrame(
+             parent,
+             fg_color=_COLOR_IDLE_BG,
+-            corner_radius=4,
++            corner_radius=TILE_CORNER_RADIUS,
+             width=ICON_W, height=ICON_H,
+-            border_width=0,
++            border_width=_BORDER_WIDTH,
++            border_color=_BORDER_IDLE,
+         )
+-        frame.grid(row=row, column=col, padx=2, pady=2, sticky="w")
++        # sticky="ew": плитка растягивается на всю ширину своей ячейки
++        # (все ячейки одинаковой ширины благодаря uniform-группе выше)
++        # — без этого справа от последней колонки/между плитками
++        # оставался неиспользуемый зазор.
++        frame.grid(row=row, column=col, padx=2, pady=2, sticky="ew")
+         frame.grid_propagate(False)
+         frame.pack_propagate(False)
+ 
+@@ -121,6 +146,12 @@ class FXGrid(ctk.CTkFrame):
+     # ============================================================
+ 
+     def _on_hover(self, panel_id, entering):
++        """
++        Hover меняет ТОЛЬКО фон, никогда не трогает рамку — рамка
++        целиком отражает "включено/не включено" и не должна мигать
++        при простом наведении мыши (см. матрицу состояний в докстринге
++        модуля: "hover — ... рамка как была").
++        """
+         frame = self._buttons.get(panel_id)
+         if frame is None:
+             return
+@@ -130,6 +161,18 @@ class FXGrid(ctk.CTkFrame):
+             self._apply_button_color(panel_id)
+ 
+     def _apply_button_color(self, panel_id):
++        """
++        Два независимых канала:
++          - фон:  _COLOR_HOVER, если плитка активна (открыта справа) —
++                  иначе _COLOR_IDLE_BG. Истинный hover мыши (см.
++                  _on_hover выше) временно перекрывает этот фон тем же
++                  _COLOR_HOVER и не проходит через эту функцию, пока
++                  курсор не уйдёт.
++          - рамка: цвет = _BORDER_ENABLED, если эффект включён в
++                  settings, иначе нейтральный _BORDER_IDLE — ширина
++                  всегда одна и та же (_BORDER_WIDTH), рамка не
++                  используется для сигнала "активна".
++        """
+         frame = self._buttons.get(panel_id)
+         if frame is None:
+             return
+@@ -140,29 +183,14 @@ class FXGrid(ctk.CTkFrame):
+             and bool(getattr(self.settings, f"{panel_id}_enabled", False))
+         )
+ 
+-        if is_active and is_enabled:
+-            frame.configure(
+-                fg_color=_COLOR_IDLE_BG,
+-                border_width=3,
+-                border_color=_BORDER_ACTIVE,
+-            )
+-        elif is_active:
+-            frame.configure(
+-                fg_color=_COLOR_IDLE_BG,
+-                border_width=2,
+-                border_color=_BORDER_ACTIVE,
+-            )
+-        elif is_enabled:
+-            frame.configure(
+-                fg_color=_COLOR_IDLE_BG,
+-                border_width=2,
+-                border_color=_BORDER_ENABLED,
+-            )
+-        else:
+-            frame.configure(
+-                fg_color=_COLOR_IDLE_BG,
+-                border_width=0,
+-            )
++        bg = _COLOR_HOVER if is_active else _COLOR_IDLE_BG
++        border_color = _BORDER_ENABLED if is_enabled else _BORDER_IDLE
++
++        frame.configure(
++            fg_color=bg,
++            border_width=_BORDER_WIDTH,
++            border_color=border_color,
++        )
+ 
+     # ============================================================
+     #  Callbacks
+diff --git a/ui/theme.py b/ui/theme.py
+new file mode 100644
+index 0000000..f99f3e5
+--- /dev/null
++++ b/ui/theme.py
+@@ -0,0 +1,47 @@
++# -*- coding: utf-8 -*-
++"""
++Общие цветовые токены UI.
++
++Раньше "фон блока" (_BLOCK_BG) был локальной константой в ui/sidebar.py,
++а ui/fx_grid.py определял свой собственный, БЛИЗКИЙ, но не совпадающий
++оттенок серого для фона плиток (_COLOR_IDLE_BG). Из-за этого плитки FX
++визуально не сливались с фоном своего же контейнера — два соседних,
++но чуть разных серых пятна. Прямой импорт из ui.sidebar в ui.fx_grid
++невозможен (sidebar.py сам импортирует FXGrid — цикл), поэтому общие
++токены вынесены в отдельный "листовой" модуль без зависимостей от
++других ui/* модулей.
++
++Один акцентный цвет — ACCENT_BLUE (тот же, что в ctk theme "blue" и
++на кнопке "Пресеты стиля"). Раньше у "включённого" эффекта в FX-сетке
++был ОТДЕЛЬНЫЙ акцент — бирюза (#26a69a), никак не связанный с общей
++темой. ACCENT_BLUE_LIGHT — более светлый оттенок ТОГО ЖЕ синего для
++состояния "включён, но не активен" — чтобы на плитках был один
++акцентный цвет, а не три конкурирующих (синий + бирюза + сам разноцветный
++глиф эффекта).
++"""
++
++# Фон "блочных" секций (header, FX-контейнер) — светлая/тёмная тема.
++BLOCK_BG = ("#d0d0d0", "#333333")
++
++# Фон элементов ВНУТРИ блока, которые должны сливаться с ним
++# (например, плитки FX в состоянии покоя) — тот же тон, что BLOCK_BG.
++BLOCK_ITEM_BG = BLOCK_BG
++
++# Акцент "активен" (открыт справа) — совпадает с акцентом ctk theme "blue".
++ACCENT_BLUE = "#1f538d"
++
++# Акцент "включён, но сейчас не активен" — светлее того же синего,
++# а не отдельный несвязанный оттенок (было "#26a69a", бирюза).
++ACCENT_BLUE_LIGHT = "#5b9bd5"
++
++# Наведение — на тон темнее/светлее BLOCK_ITEM_BG, не отдельная палитра.
++HOVER_BG = ("#c2c2c2", "#454545")
++
++# Нейтральная рамка для состояний "обычная"/"активная" (без enabled) —
++# на тон заметнее фона плитки, но не цветная/акцентная. Акцентный цвет
++# рамки (ACCENT_BLUE_LIGHT) зарезервирован строго за "включено".
++BORDER_IDLE = ("#b5b5b5", "#4a4a4a")
++
++# Единое скругление для "плиточных" кнопок — совпадает с обычными
++# CTkButton приложения (было 4 у FX-плиток при ~6-8 у остальных кнопок).
++TILE_CORNER_RADIUS = 8

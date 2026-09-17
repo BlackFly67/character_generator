@@ -34,6 +34,7 @@ from ui.fx_grid import FXGrid
 from ui.widgets import AutoHideScrollFrame
 from effects.registry import PIPELINE, POST_COMPOSE_EFFECTS
 from ui import manual_sidebar as ms
+from ui.theme import BLOCK_BG
 
 
 BASE_SECTIONS = [
@@ -46,9 +47,6 @@ BASE_SECTIONS = [
 ]
 
 DEFAULT_ACTIVE_EFFECT = None
-
-# Фон для блоков (header, FX).
-_BLOCK_BG = ("#d0d0d0", "#333333")
 
 
 class Sidebar(ctk.CTkFrame):
@@ -148,7 +146,7 @@ class Sidebar(ctk.CTkFrame):
     def _create_sidebar(self):
         # --- row 0: header (фикс, блок) ---
         header_frame = ctk.CTkFrame(
-            self, fg_color=_BLOCK_BG, corner_radius=4,
+            self, fg_color=BLOCK_BG, corner_radius=4,
         )
         header_frame.grid(row=0, column=0, sticky="ew", padx=6, pady=(6, 2))
 
@@ -188,7 +186,7 @@ class Sidebar(ctk.CTkFrame):
 
         # --- row 2: FX scroll (блок, мин. высота 180) ---
         self._fx_scroll = ctk.CTkFrame(
-            self, fg_color=_BLOCK_BG, corner_radius=4,
+            self, fg_color=BLOCK_BG, corner_radius=4,
             height=180,
         )
         self._fx_scroll.grid(row=2, column=0, sticky="ew",
