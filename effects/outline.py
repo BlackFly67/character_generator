@@ -140,37 +140,22 @@ def _dilate_mask_circular(mask, radius):
 
 
 def _erode_mask_circular(mask, radius):
-    """
-    Эрозия (сжатие) L-маски по кругу с anti-aliasing на границе —
-    аналог _dilate_mask_circular, но со "смягчением снизу" вместо
-    "смягчения сверху": чем меньше вес offset'а (чем ближе он к
-    границе диска), тем меньше он способен утянуть итоговое значение
-    вниз (к 0).
-
-    Используется для внутренней обводки вместо PIL
-    ImageFilter.MinFilter (та же проблема квадратного структурирующего
-    элемента и отсутствия anti-aliasing на границе, что и у дилатации
-    выше — здесь менее заметна на тонких штрихах, но на толстых/жирных
-    шрифтах с большим width давала такую же "квадратность"/"лесенку"
-    углов контура).
-    """
+    """Круговая эрозия с ЖЁСТКИМ порогом (без anti-aliasing)."""
     if radius <= 0:
         return mask
     r = int(math.ceil(radius)) + 1
     arr = np.asarray(mask, dtype=np.uint8)
     h, w = arr.shape
-    # Паддинг максимумом (255) снаружи — иначе край холста считался бы
-    # "пустотой" и эрозия съедала бы контент даже там, где реального
-    # фона нет (символ мог быть обрезан по краю холста).
     padded = np.full((h + 2 * r, w + 2 * r), 255, dtype=np.uint8)
     padded[r:r + h, r:r + w] = arr
 
     out = np.full((h, w), 255, dtype=np.uint8)
     for dy, dx, weight in _circular_offsets_aa(radius):
         shifted = padded[r + dy:r + dy + h, r + dx:r + dx + w]
-        floor = int(round((1.0 - weight) * 255))
-        loosened = np.maximum(shifted, floor)
-        np.minimum(out, loosened, out=out)
+        # Бинарная эрозия: смещение входит в результат только если
+        # оно "внутри круга" (weight > 0.5), а не с весом.
+        if weight > 0.5:
+            np.minimum(out, shifted, out=out)
 
     return Image.fromarray(out, mode="L")
 
@@ -212,12 +197,9 @@ def apply_inner_outline(image, mask, color, width):
     padded_mask.paste(mask, (pad, pad))
 
     outline_rgb = get_color_rgb(color)
-    # ИСПРАВЛЕНО: раньше здесь была
-    #   kernel_size = int(width * 2) + 1
-    #   shrunk_alpha = padded_mask.filter(ImageFilter.MinFilter(size=kernel_size))
-    # — та же проблема квадратного структурирующего элемента и
-    # отсутствия anti-aliasing на границе, что и в apply_outer_outline
-    # (см. _erode_mask_circular).
+
+    # Круговая эрозия вместо MinFilter — иначе на width >= 5
+    # углы контура "квадратятся" (прямоугольное ядро).
     shrunk_alpha = _erode_mask_circular(padded_mask, width)
     outline_mask = ImageChops.subtract(padded_mask, shrunk_alpha)
 
