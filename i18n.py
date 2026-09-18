@@ -144,6 +144,8 @@ DEFAULT_LANGUAGES = {
         "style_preset_imported": "Style preset imported!",
         "text_mode": "Text",
         "icon_mode": "Icons",
+        "icon_section": "Icon",
+        
         "loaded_icons": "Loaded Icons",
         "load_icons": "Load Icons",
         "clear": "Clear",
