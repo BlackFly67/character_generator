@@ -191,6 +191,8 @@ STYLE_PRESET_KEYS = [
     "glitch_enabled", "glitch_rgb_shift", "glitch_slice_intensity", "glitch_seed",
     "extrude_enabled", "extrude_depth", "extrude_angle",
     "extrude_color_near", "extrude_color_far", "extrude_blend_mode",
+    "skew_enabled", "skew_x", "skew_y",
+    "perspective_enabled", "perspective_x", "perspective_y",
 ]
 
 # ==================== НАСТРОЙКИ ПО УМОЛЧАНИЮ ====================

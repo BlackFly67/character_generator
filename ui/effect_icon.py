@@ -116,6 +116,10 @@ def _p_extrude(s):
 
 def _p_emboss(s):
     s.emboss_enabled = True
+    # ИСПРАВЛЕНО: синхронизировано с новым дефолтным углом (225° =
+    # "сверху-слева"), чтобы иконка-превью эффекта в FX-сетке
+    # визуально соответствовала докстрингу "классического" тиснения.
+    s.emboss_angle = 225    
     s.emboss_depth = 3
     s.emboss_highlight = "#ffffff"
     s.emboss_shadow = "#000000"

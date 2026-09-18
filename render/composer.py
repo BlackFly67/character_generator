@@ -662,7 +662,16 @@ def compose_full(spec: CharSpec, settings,
     else:
         bg = settings.background_color
         if isinstance(bg, str) and bg.startswith("#"):
-            bg = tuple(int(bg.lstrip("#")[i:i+2], 16) for i in (0, 2, 4)) + (255,)
+            # ИСПРАВЛЕНО: раньше альфа всегда хардкодилась как 255,
+            # хотя utils.safe_color явно допускает background_color в
+            # формате "#RRGGBBAA" (len == 9) — 4-й байт (альфа)
+            # игнорировался, и полупрозрачный фон рендерился как
+            # полностью непрозрачный.
+            h = bg.lstrip("#")
+            if len(h) == 8:
+                bg = tuple(int(h[i:i+2], 16) for i in (0, 2, 4, 6))
+            else:
+                bg = tuple(int(h[i:i+2], 16) for i in (0, 2, 4)) + (255,)
         elif isinstance(bg, str):
             bg = (255, 255, 255, 255) if bg == "white" else (0, 0, 0, 255)
         final_img = Image.new("RGBA", (cw, ch), bg)

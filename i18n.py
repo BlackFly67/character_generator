@@ -212,9 +212,16 @@ class I18n:
                         # Обновляем встроенные переводы из файла
                         for lang in DEFAULT_LANGUAGES:
                             if lang in data:
-                                for key in DEFAULT_LANGUAGES[lang]:
-                                    if key in data[lang]:
-                                        DEFAULT_LANGUAGES[lang][key] = data[lang][key]
+                                # ИСПРАВЛЕНО: раньше цикл шёл по ключам
+                                # ХАРДКОД-словаря (DEFAULT_LANGUAGES[lang]),
+                                # поэтому НОВЫЕ ключи, добавленные в
+                                # languages.json для уже известного
+                                # языка (например "en"), никогда не
+                                # подхватывались — их просто не было
+                                # среди ключей, по которым итерировались.
+                                # Итерируем по ключам ФАЙЛА.
+                                for key in data[lang]:
+                                    DEFAULT_LANGUAGES[lang][key] = data[lang][key]
                         # Добавляем новые языки
                         for lang in data:
                             if lang not in DEFAULT_LANGUAGES:

@@ -86,7 +86,15 @@ def apply_reflection(final_img, content_layer, paste_x, paste_y, background_colo
         new_canvas = Image.new("RGBA", (new_w, new_h), (0, 0, 0, 0))
     else:
         if isinstance(background_color, str) and background_color.startswith('#'):
-            bg_col = tuple(int(background_color.lstrip('#')[i:i+2], 16) for i in (0, 2, 4)) + (255,)
+            # ИСПРАВЛЕНО: та же потеря альфа-канала, что и в
+            # render/composer.py — "#RRGGBBAA" усечённо читался как
+            # "#RRGGBB" + 255, полупрозрачный фон становился
+            # непрозрачным на холсте отражения.
+            _h = background_color.lstrip('#')
+            if len(_h) == 8:
+                bg_col = tuple(int(_h[i:i+2], 16) for i in (0, 2, 4, 6))
+            else:
+                bg_col = tuple(int(_h[i:i+2], 16) for i in (0, 2, 4)) + (255,)
         elif isinstance(background_color, str):
             bg_col = (255, 255, 255, 255) if background_color == "white" else (0, 0, 0, 255)
         else:

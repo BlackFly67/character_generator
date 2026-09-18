@@ -42,7 +42,7 @@ class Emboss(EffectBase):
         ParamSpec("blur",       "emboss_blur",         CTRL_INT,      1, 0, 10),
         # label_key переиспользует уже переведённый "gradient_angle",
         # чтобы не тащить новую строку во все языковые файлы.
-        ParamSpec("angle",      "gradient_angle",      CTRL_INT,      135, 0, 360),
+        ParamSpec("angle",      "gradient_angle",      CTRL_INT,      225, 0, 360),
         ParamSpec("highlight",  "highlight_color",     CTRL_COLOR,    "#ffffff"),
         ParamSpec("shadow",     "shadow_color_emboss", CTRL_COLOR,    "#000000"),
     ]
