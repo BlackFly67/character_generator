@@ -47,7 +47,7 @@ _BORDER_WIDTH = 1
 # Размеры
 ICON_W = 52
 ICON_H = 40
-ICON_SIZE_PX = (32, 32)
+ICON_SIZE_PX = (38, 38)
 MAX_COLS = 5
 
 

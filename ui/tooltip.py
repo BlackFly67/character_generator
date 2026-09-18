@@ -25,7 +25,7 @@ class Tooltip:
     Скрывается при Leave, клике или уничтожении виджета.
     """
 
-    def __init__(self, widget, text, delay_ms=400):
+    def __init__(self, widget, text, delay_ms=180):
         self.widget = widget
         self.text = text
         self.delay_ms = delay_ms
