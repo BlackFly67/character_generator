@@ -34,6 +34,7 @@ from tkinter import filedialog, messagebox
 
 from constants import FONT_SIZE_MIN, FONT_SIZE_MAX
 from ui.widgets import WheelSlider
+from ui.theme import BORDER_IDLE
 
 # ============================================================
 #  1. HEADER — заголовок с reset / presets
@@ -308,7 +309,13 @@ def build_style_text_part(parent, sidebar, settings, i18n):
 
     ctk.CTkLabel(color_flow, text=i18n.tr("text_color") + ":").pack(side="left")
 
-    text_color_button = ctk.CTkButton(color_flow, text="", width=40, height=24)
+    text_color_button = ctk.CTkButton(
+        color_flow, text="", width=40, height=24,
+        # ИСПРАВЛЕНО: та же проблема, что у цветовых свотчей в
+        # auto_sidebar.py/ColorPickerButton — без рамки белый/светлый
+        # text_color визуально пропадает на светлой теме.
+        border_width=1, border_color=BORDER_IDLE,
+    )
     text_color_button.pack(side="right", padx=5)
     text_color_button.configure(fg_color=settings.text_color)
     widgets["text_color_button"] = text_color_button
@@ -616,7 +623,11 @@ def build_background_section(parent, sidebar, settings, i18n):
 
     ctk.CTkLabel(bg_flow, text=i18n.tr("background") + ":").pack(side="left")
 
-    bg_color_button = ctk.CTkButton(bg_flow, text="", width=40, height=24)
+    bg_color_button = ctk.CTkButton(
+        bg_flow, text="", width=40, height=24,
+        # ИСПРАВЛЕНО: см. тот же фикс у text_color_button выше.
+        border_width=1, border_color=BORDER_IDLE,
+    )
     bg_color_button.pack(side="right", padx=5)
     bg_color_button.configure(fg_color=settings.background_color or "#ffffff")
     if settings.transparent_background:
