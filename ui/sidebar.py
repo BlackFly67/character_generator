@@ -181,8 +181,20 @@ class Sidebar(ctk.CTkFrame):
         self._base_scroll.grid(row=1, column=0, sticky="nsew",
                                 padx=6, pady=(2, 2))
 
+        # Секцию "arc" строим отдельно — она должна скрываться
+        # в режиме иконок. Остальные Base-секции — как есть.
         for panel_id, label_key, builder_fn in BASE_SECTIONS:
+            if panel_id == "base.arc":
+                continue
             self._render_base_section(panel_id, label_key, builder_fn)
+
+        # arc — рендерим и сохраняем ссылки, чтобы можно было
+        # упаковать/распаковать по режиму.
+        self._render_base_section(
+            "base.arc", "arc_text", ms.build_arc_section
+        )
+        # Синхронизируем видимость arc с текущим режимом.
+        self._sync_arc_visibility()
 
         # --- row 2: FX scroll (блок, мин. высота 180) ---
         self._fx_scroll = ctk.CTkFrame(
@@ -231,9 +243,15 @@ class Sidebar(ctk.CTkFrame):
         wrap = ctk.CTkFrame(self._base_scroll, fg_color="transparent")
         wrap.pack(fill="x", padx=6, pady=(2, 4))
 
+        # Динамический label_key: для base.font в режиме иконок
+        # показываем "Icon", иначе — "Font".
+        effective_key = label_key
+        if panel_id == "base.font" and self.settings.icon_mode:
+            effective_key = "icon_section"
+
         header_btn = ctk.CTkButton(
             wrap,
-            text=("▶ " if collapsed else "▼ ") + self.i18n.tr(label_key),
+            text=("▶ " if collapsed else "▼ ") + self.i18n.tr(effective_key),
             anchor="w", height=26,
             font=("Arial", 12, "bold"),
             fg_color="transparent",
@@ -255,6 +273,7 @@ class Sidebar(ctk.CTkFrame):
         self._base_bodies[panel_id] = {
             "wrap": wrap, "header": header_btn, "body": body,
             "label_key": label_key,
+            "widgets": widgets,   # ← для _sync_font_section_content
         }
 
     def _toggle_base(self, panel_id):
@@ -265,8 +284,12 @@ class Sidebar(ctk.CTkFrame):
         self._base_collapsed[panel_id] = collapsed
 
         arrow = "▶" if collapsed else "▼"
+        # Динамический ключ для base.font (Font / Icon).
+        label_key = info["label_key"]
+        if panel_id == "base.font" and self.settings.icon_mode:
+            label_key = "icon_section"
         info["header"].configure(
-            text=f"{arrow} {self.i18n.tr(info['label_key'])}"
+            text=f"{arrow} {self.i18n.tr(label_key)}"
         )
         if collapsed:
             info["body"].pack_forget()
@@ -304,6 +327,72 @@ class Sidebar(ctk.CTkFrame):
             self.opacity_slider = widgets.get("slider")
         elif panel_id == "base.background":
             self.background_color_button = widgets.get("color_button")
+
+    # ------------------------------------------------------------
+    #  Синхронизация секций, зависящих от режима (icon_mode)
+    # ------------------------------------------------------------
+
+    def _sync_arc_visibility(self):
+        """
+        Показать/скрыть секцию 'base.arc' по текущему режиму.
+
+        Восстанавливаем ПОЗИЦИЮ через pack(before=...), иначе
+        при repack секция уедет в конец Base-скролла (после
+        background), ломая порядок.
+        """
+        arc_info = self._base_bodies.get("base.arc")
+        if arc_info is None:
+            return
+        wrap = arc_info["wrap"]
+        if self.settings.icon_mode:
+            wrap.pack_forget()
+        else:
+            # Восстанавливаем ПЕРЕД следующей секцией (opacity),
+            # иначе arc уедет в конец Base-скролла.
+            next_info = self._base_bodies.get("base.opacity")
+            next_wrap = next_info["wrap"] if next_info is not None else None
+            if next_wrap is not None:
+                wrap.pack(fill="x", padx=6, pady=(2, 4), before=next_wrap)
+            else:
+                wrap.pack(fill="x", padx=6, pady=(2, 4))
+
+    def _sync_font_section_content(self):
+        """
+        Переключить содержимое секции 'base.font' при смене
+        settings.icon_mode. Виджеты уже построены — только
+        pack/pack_forget групп.
+        """
+        info = self._base_bodies.get("base.font")
+        if info is None:
+            return
+        from ui.manual_sidebar import _apply_font_section_mode
+        widgets = info.get("widgets")
+        if widgets is None:
+            return
+        _apply_font_section_mode(self.settings, widgets)
+
+    def _sync_mode_dependent_sections(self):
+        """
+        Показать/скрыть секции, зависящие от режима (icon_mode):
+          - 'base.arc' — только в текстовом режиме;
+          - 'base.font' — переключает содержимое (текст / иконки).
+        Вызывать после смены settings.icon_mode.
+        """
+        # arc: скрываем в режиме иконок.
+        self._sync_arc_visibility()
+
+        # font: переключить отображение содержимого.
+        self._sync_font_section_content()
+
+        # Обновить заголовок секции base.font: "Font" / "Icon".
+        font_info = self._base_bodies.get("base.font")
+        if font_info is not None:
+            collapsed = self._base_collapsed.get("base.font", True)
+            arrow = "▶" if collapsed else "▼"
+            key = "icon_section" if self.settings.icon_mode else "font"
+            font_info["header"].configure(
+                text=f"{arrow} {self.i18n.tr(key)}"
+            )
 
     # ------------------------------------------------------------
     #  Активная панель эффекта (в _active_scroll, row 3)

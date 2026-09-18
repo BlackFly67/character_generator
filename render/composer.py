@@ -166,23 +166,38 @@ def get_icon_mask(path, target_max_dim=None):
 
     w, h = mask.size
     if target_max_dim is not None and target_max_dim > 0:
-        s = target_max_dim / max(w, h)
-        nw, nh = max(1, int(round(w * s))), max(1, int(round(h * s)))
-        mask = mask.resize((nw, nh), Image.Resampling.LANCZOS)
-        return mask, nw, nh
+        m = max(w, h)
+        # Уменьшаем ТОЛЬКО если оригинал больше целевого размера.
+        # Иначе (иконка уже меньше) — оставляем как есть, не
+        # растягиваем и не ресайзим «в ноль».
+        if m > target_max_dim:
+            s = target_max_dim / m
+            nw = max(1, int(w * s))
+            nh = max(1, int(h * s))
+            mask = mask.resize((nw, nh), Image.Resampling.LANCZOS)
+            return mask, nw, nh
     return mask, w, h
+
+_ICON_SAFE_PAD = 1              # совпадает с safe_pad в compute_batch_geometry
+_ICON_ROTATION_MARGIN = 2       # совпадает с "+2" в формуле rot_w/rot_h
 
 
 def default_icon_font_size(icon_paths):
-    """Для UI: какой font_size даёт нативный размер иконки."""
-    from constants import ICON_CANVAS_BASELINE_OVERHEAD
+    """
+    Для UI: какой font_size даёт нативный размер иконки.
+
+    Иконки не нуждаются в компенсации safe_pad / rotation_margin,
+    потому что compute_batch_geometry для них НЕ добавляет паддинги
+    (см. icon_path-ветку внутри неё). Холст и иконка совпадают
+    ровно: font_size == max(iw, ih).
+    """
     if not icon_paths:
         return None
     try:
         _, iw, ih = get_icon_mask(icon_paths[0])
     except Exception:
         return None
-    return max(1, max(iw, ih) - ICON_CANVAS_BASELINE_OVERHEAD)
+    return max(1, max(iw, ih))
 
 
 # ============================================================
@@ -356,7 +371,11 @@ def measure_arc_metrics(text, settings):
 
 
 def measure_icon_metrics(icon_path, settings):
-    mask, iw, ih = get_icon_mask(icon_path, settings.font_size)
+    # Иконку НЕ масштабируем по font_size: default_icon_font_size
+    # уже подобран так, что font_size == native-размер, а
+    # compute_batch_geometry для иконок не добавляет паддингов
+    # (см. icon_path-ветку). Иконка остаётся ровно нативного размера.
+    mask, iw, ih = get_icon_mask(icon_path)
     return {
         "font": None,
         "icon_mask": mask,
@@ -378,9 +397,20 @@ def compute_batch_geometry(specs, settings) -> BatchGeometry:
     Холст получается по МАКСИМАЛЬНЫМ метрикам — все символы вставляются
     в один и тот же размер, узкая буква («.») центрируется в слоте
     широкой («М»), базовая линия общая.
+
+    Для ИКОНОК (все spec.icon_path) safe_pad и +2 поворотного margin
+    НЕ добавляются: font_size для иконок уже равен native-размеру,
+    и холст должен совпадать с иконкой ровно (100 -> 100). Паддинги
+    нужны только для текста, где PIL-шрифты дают мягкие края глифа.
     """
     outer = _calc_outer_effects_width(settings)
-    safe_pad = 1
+    # Для иконок outer-эффекты по умолчанию тоже дают outer=0 (нет
+    # outline_outer/glow_outer/shadow/glitch/extrude), так что холст
+    # остаётся ровно по размеру иконки. Если пользователь включит
+    # outer-эффект — холст честно расширится, это ожидаемо.
+    is_icons_only = len(specs) > 0 and all(s.icon_path is not None for s in specs)
+    safe_pad = 0 if is_icons_only else 1
+    rotation_margin = 0 if is_icons_only else 2
     eff_x = settings.text_scale_x if settings.text_scale_x > 0 else 1.0
 
     max_cw = 1
@@ -414,9 +444,9 @@ def compute_batch_geometry(specs, settings) -> BatchGeometry:
 
     angle_rad = math.radians(settings.rotation_angle)
     rot_w = int(math.ceil(abs(base_w * math.cos(angle_rad))
-                          + abs(base_h * math.sin(angle_rad)))) + 2
+                          + abs(base_h * math.sin(angle_rad)))) + rotation_margin
     rot_h = int(math.ceil(abs(base_w * math.sin(angle_rad))
-                          + abs(base_h * math.cos(angle_rad)))) + 2
+                          + abs(base_h * math.cos(angle_rad)))) + rotation_margin
     rot_w, rot_h = max(1, rot_w), max(1, rot_h)
 
     if settings.skew_enabled and (settings.skew_x != 0 or settings.skew_y != 0):

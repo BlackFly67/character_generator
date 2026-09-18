@@ -157,8 +157,7 @@ PATTERNS_FILE = "patterns.json"
 # Текст для превью
 PREVIEW_TEXT = "АаБбРр149"
 
-# Константы для иконок
-ICON_CANVAS_BASELINE_OVERHEAD = 4
+
 
 # Undo/Redo настроек (см. ui/main_window.py)
 SETTINGS_HISTORY_MAX = 50
@@ -218,7 +217,7 @@ DEFAULT_CONFIG = {
     "emboss_enabled": False,
     "emboss_depth": 4,
     "emboss_blur": 1,
-    "emboss_angle": 45,
+    "emboss_angle": 135,
     "emboss_highlight": "#ffffff",
     "emboss_shadow": "#000000",
     "outline_outer_enabled": False,

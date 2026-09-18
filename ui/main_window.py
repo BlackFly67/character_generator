@@ -1,33 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-Главное окно приложения.
-
-Раскладка (2 колонки):
-    ┌──────────────────────────────────────────┬──────────────────┐
-    │ Top: [Text][Icons] [Filename]            │                  │  ← только над preview
-    │      [.bin] [Generate] [↺][↷]            │                  │
-    ├──────────────────────────────────────────┤                  │
-    │ Chars: [_______________________] [Aa][📋][📂]│              │  ← тоже над preview
-    ├──────────────────────────────────────────┤                  │
-    │ Zoom: [🔍 —●] [100] %  [◀] 1/1 [▶]       │  Settings ⚙      │  ← Sidebar во всю высоту
-    │                                          │  🎨 Presets ↺    │
-    │              Preview                     │  ┌────────────┐  │
-    │              (canvas)                    │  │ Base (50%) │  │
-    │        [ ] Canvas width delta [0]px —●   │  └────────────┘  │
-    │        (строка внутри PreviewPanel)      │  ┌────────────┐  │
-    │                                          │  │ FX (50%)   │  │
-    │                                          │  └────────────┘  │
-    └──────────────────────────────────────────┴──────────────────┘
-
-ИСПРАВЛЕНО: раньше схема показывала отдельную "row 3 — canvas_width_delta"
-под превью, и _setup_window() резервировал под неё
-grid_rowconfigure(3, weight=0) — но ни один виджет НИКОГДА не кладётся
-в row=3 (canvas_width_delta живёт внутри ui/preview.py::PreviewPanel,
-упакован pack()-ом в её собственный низ, т.е. фактически в row=2).
-grid_rowconfigure(3, ...) — мёртвая, ничем не используемая настройка
-сетки; схема и комментарии приведены в соответствие с тем, что реально
-происходит, чтобы не вводить в заблуждение при дальнейшей поддержке.
-"""
 
 import os
 import sys
@@ -37,15 +8,18 @@ from PIL import Image, ImageTk
 import numpy as np
 
 from config import Settings
+
 from constants import (
     APP_VERSION, APP_NAME, CONFIG_FILE, DEFAULT_FILENAME_TEMPLATE,
-    PREVIEW_TEXT, ICON_CANVAS_BASELINE_OVERHEAD, IMAGE_EXTENSIONS,
+    PREVIEW_TEXT, IMAGE_EXTENSIONS,
     SETTINGS_HISTORY_MAX, SETTINGS_HISTORY_DEBOUNCE_MS
 )
+from render.composer import default_icon_font_size as _shared_default_icon_font_size
+
 from fonts import load_font_safe, SYSTEM_FONTS
 from utils import parse_characters, format_filename, get_color_rgb
 from render.text import render_text_characters
-from render.icons import render_icons, get_icon_mask, default_icon_font_size
+from render.icons import render_icons, get_icon_mask
 from render.lvgl import save_lvgl_v8_bin
 from ui.sidebar import Sidebar
 from ui.preview import PreviewPanel
@@ -440,10 +414,18 @@ class MainWindow:
     def _set_input_mode(self, is_icon_mode, apply=False):
         self.settings.icon_mode = is_icon_mode
 
+        # Секции Sidebar'а, зависящие от режима (arc скрыт
+        # в иконках; содержимое font переключается), синхронизируем
+        # без полной пересборки.
+        try:
+            self.sidebar._sync_mode_dependent_sections()
+        except AttributeError:
+            pass
+
         if is_icon_mode:
             self.text_input_frame.grid_remove()
             self.icon_input_frame.grid(row=1, column=0, sticky="ew",
-                                       padx=15, pady=(5, 5))
+                                    padx=15, pady=(5, 5))
             if self.settings.icon_font_size is None:
                 default = self._default_icon_font_size()
                 if default is not None:
@@ -486,16 +468,14 @@ class MainWindow:
                 fg_color=inactive_fg, border_width=1,
                 text_color=inactive_text, border_color=inactive_border,
             )
-
     def _default_icon_font_size(self):
-        if not self.loaded_icon_paths:
-            return None
-        try:
-            _, iw, ih = get_icon_mask(self.loaded_icon_paths[0])
-            native_max = max(iw, ih)
-            return max(1, native_max - ICON_CANVAS_BASELINE_OVERHEAD)
-        except Exception:
-            return None
+        # ИСПРАВЛЕНО: раньше здесь была ВТОРАЯ, независимая копия той же
+        # формулы (с той же магической константой ICON_CANVAS_BASELINE_
+        # OVERHEAD=4), которую пришлось бы обновлять синхронно с
+        # render/composer.py::default_icon_font_size(). Используем ту же
+        # единственную функцию, чтобы поле Size и реальный расчёт холста
+        # больше не могли разойтись.
+        return _shared_default_icon_font_size(self.loaded_icon_paths)
 
     # ==================== ICONS ====================
 
@@ -860,6 +840,19 @@ class MainWindow:
                     if "```" in new_chars and "```" not in current:
                         current = "```".join(current.split())
                         new_text = current + "```" + new_chars
+                    elif "```" in current and "```" not in new_chars:
+                        # ИСПРАВЛЕНО: обратный случай к ветке выше —
+                        # текущая строка уже в "```"-формате, а новый
+                        # паттерн обычный (пробельный). Раньше это
+                        # попадало в else и склеивалось пробелом, из-за
+                        # чего parse_characters (переключающийся на
+                        # "```"-режим при наличии "```" где угодно в
+                        # строке) склеивал все пробельные слова нового
+                        # паттерна в один "символ". Приводим новый
+                        # паттерн к тому же "```"-формату перед склейкой.
+                        new_chars_joined = "```".join(new_chars.split())
+                        new_text = current + "```" + new_chars_joined                        
+                        
                     elif "```" in new_chars:
                         new_text = current + "```" + new_chars
                     else:

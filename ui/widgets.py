@@ -5,7 +5,6 @@
 
 import customtkinter as ctk
 from tkinter import colorchooser
-from ui.theme import BORDER_IDLE
 
 
 class IntSliderRow(ctk.CTkFrame):
@@ -113,18 +112,7 @@ class ColorPickerButton(ctk.CTkButton):
         
         super().__init__(
             parent, text="", width=width, height=height,
-            command=self._on_click, fg_color=initial_color if initial_color and initial_color != "transparent" else "gray",
-            # ИСПРАВЛЕНО: раньше кнопка не имела своей рамки вообще —
-            # видимость держалась ТОЛЬКО на случайном контрасте между
-            # текущим цветом заливки и фоном панели. Белый/светлый цвет
-            # на светлой теме (или чёрный/тёмный на тёмной) визуально
-            # растворялся в фоне и не читался как кликабельная кнопка
-            # (см. скриншот светлой темы: белый свотч на светло-сером
-            # фоне панели почти не виден). BORDER_IDLE — тот же
-            # нейтральный токен, что и у плиток FX (ui/theme.py) —
-            # гарантирует видимую границу независимо от выбранного цвета
-            # и текущей темы.
-            border_width=1, border_color=BORDER_IDLE,
+            command=self._on_click, fg_color=initial_color if initial_color and initial_color != "transparent" else "gray"
         )
     
     def _on_click(self):

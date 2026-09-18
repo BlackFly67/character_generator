@@ -28,7 +28,6 @@ from effects.core import (
 from effects.registry import PIPELINE, POST_COMPOSE_EFFECTS
 from constants import BLEND_MODES
 from ui.widgets import WheelSlider
-from ui.theme import BORDER_IDLE
 
 # Эффекты, для которых UI строится ВРУЧНУЮ в sidebar.py / manual_sidebar.py
 MANUAL_EFFECT_IDS = {
@@ -232,15 +231,7 @@ def _build_color_row(parent, sidebar, settings, i18n,
             btn.configure(fg_color=color)
             sidebar._on_change()
 
-    btn = ctk.CTkButton(
-        row, text="", width=40, height=24, command=pick,
-        # ИСПРАВЛЕНО: без рамки кнопка-свотч видна только за счёт
-        # случайного контраста между её fg_color (текущий выбранный
-        # цвет эффекта) и фоном панели — белый цвет на светлой теме
-        # (или тёмный на тёмной) визуально пропадает. См. тот же фикс
-        # и его обоснование в ui/widgets.py::ColorPickerButton.
-        border_width=1, border_color=BORDER_IDLE,
-    )
+    btn = ctk.CTkButton(row, text="", width=40, height=24, command=pick)
     btn.pack(side="right", padx=5)
     btn.configure(fg_color=current)
     widgets_out[param.key] = btn

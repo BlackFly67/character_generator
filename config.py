@@ -199,6 +199,7 @@ class Settings:
             # фона терялся при перезапуске приложения после включения
             # "прозрачного фона" — см. from_dict ниже.
             "saved_background_color": getattr(self, "saved_background_color", "#000000"),
+            "saved_text_color": getattr(self, "saved_text_color", DEFAULT_TEXT_COLOR),
             "transparent_background": self.transparent_background,
             "transparent_text": self.transparent_text,
             "cutout_mode": self.cutout_mode,
@@ -320,7 +321,11 @@ class Settings:
 
         # Цвета
         self.text_color = safe_color(data.get("text_color", DEFAULT_TEXT_COLOR), DEFAULT_TEXT_COLOR)
-        self.saved_text_color = self.text_color if self.text_color != "transparent" else DEFAULT_TEXT_COLOR
+        smart_default_text = self.text_color if self.text_color != "transparent" else DEFAULT_TEXT_COLOR
+        self.saved_text_color = safe_color(
+            data.get("saved_text_color") or smart_default_text,
+            DEFAULT_TEXT_COLOR,
+        )
         self.background_color = safe_color(data.get("background_color", None), None)
         # FIX: раньше saved_background_color вообще не восстанавливался
         # из конфига (в отличие от saved_text_color выше), из-за чего

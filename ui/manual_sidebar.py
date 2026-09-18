@@ -34,7 +34,6 @@ from tkinter import filedialog, messagebox
 
 from constants import FONT_SIZE_MIN, FONT_SIZE_MAX
 from ui.widgets import WheelSlider
-from ui.theme import BORDER_IDLE
 
 # ============================================================
 #  1. HEADER — заголовок с reset / presets
@@ -109,8 +108,10 @@ def build_font_section(parent, sidebar, settings, i18n):
     font_section.pack(fill="x", padx=10, pady=5)
     widgets["frame"] = font_section
 
+    # --- Группа "выбор шрифта" (скрывается в режиме иконок) ---
     font_choice_frame = ctk.CTkFrame(font_section, fg_color="transparent")
     font_choice_frame.pack(fill="x", padx=10, pady=2)
+    widgets["font_choice_frame"] = font_choice_frame
 
     font_name = (os.path.basename(settings.font_path)
                  if settings.font_path else i18n.tr("no_font"))
@@ -133,6 +134,10 @@ def build_font_section(parent, sidebar, settings, i18n):
 
     font_props_frame = ctk.CTkFrame(font_section, fg_color="transparent")
     font_props_frame.pack(fill="x", padx=10, pady=2)
+    widgets["font_props_frame"] = font_props_frame
+    # font_choice_frame стоит ПЕРЕД font_props_frame — запоминаем
+    # «соседа снизу» для восстановления позиции при repack.
+    widgets["font_choice_before"] = font_props_frame
 
     size_row = ctk.CTkFrame(font_props_frame, fg_color="transparent")
     size_row.pack(fill="x", pady=2)
@@ -232,6 +237,9 @@ def build_font_section(parent, sidebar, settings, i18n):
 
     spacing_section = ctk.CTkFrame(font_section, fg_color="transparent")
     spacing_section.pack(fill="x", padx=10, pady=2)
+    widgets["spacing_section"] = spacing_section
+    # spacing_section идёт последней — before=None (кладём в конец).
+    widgets["spacing_before"] = None
 
     ctk.CTkLabel(spacing_section, text=i18n.tr("letter_spacing") + " (px):",
                  font=("Arial", 11)).pack(side="left")
@@ -266,7 +274,49 @@ def build_font_section(parent, sidebar, settings, i18n):
     spacing_entry.bind("<KeyRelease>", on_spacing_entry)
     spacing_slider.configure(command=on_spacing_slider)
 
+    # Запомнить начальную видимость (по текущему режиму).
+    _apply_font_section_mode(settings, widgets)
+
     return widgets
+
+
+def _apply_font_section_mode(settings, widgets):
+    """
+    Показать/скрыть группы виджетов секции 'font' в зависимости
+    от settings.icon_mode.
+
+    В текстовом режиме видны: выбор шрифта + size/align/scale/spacing.
+    В режиме иконок — только size/align/scale (compression),
+    без выбора шрифта и без letter_spacing.
+
+    ВАЖНО: при восстановлении используем pack(before=...), чтобы
+    группы вернулись НА СВОИ МЕСТА, а не в конец родителя.
+    """
+    font_choice = widgets.get("font_choice_frame")
+    font_choice_before = widgets.get("font_choice_before")
+    spacing = widgets.get("spacing_section")
+    spacing_before = widgets.get("spacing_before")
+
+    if settings.icon_mode:
+        if font_choice is not None:
+            font_choice.pack_forget()
+        if spacing is not None:
+            spacing.pack_forget()
+    else:
+        # font_choice_frame — ПЕРЕД font_props_frame.
+        if font_choice is not None:
+            if font_choice_before is not None:
+                font_choice.pack(fill="x", padx=10, pady=2,
+                                 before=font_choice_before)
+            else:
+                font_choice.pack(fill="x", padx=10, pady=2)
+        # spacing_section — последняя; before=None (в конец).
+        if spacing is not None:
+            if spacing_before is not None:
+                spacing.pack(fill="x", padx=10, pady=2,
+                             before=spacing_before)
+            else:
+                spacing.pack(fill="x", padx=10, pady=2)
 
 
 def _open_system_font_picker(sidebar, i18n, font_label):
@@ -309,13 +359,7 @@ def build_style_text_part(parent, sidebar, settings, i18n):
 
     ctk.CTkLabel(color_flow, text=i18n.tr("text_color") + ":").pack(side="left")
 
-    text_color_button = ctk.CTkButton(
-        color_flow, text="", width=40, height=24,
-        # ИСПРАВЛЕНО: та же проблема, что у цветовых свотчей в
-        # auto_sidebar.py/ColorPickerButton — без рамки белый/светлый
-        # text_color визуально пропадает на светлой теме.
-        border_width=1, border_color=BORDER_IDLE,
-    )
+    text_color_button = ctk.CTkButton(color_flow, text="", width=40, height=24)
     text_color_button.pack(side="right", padx=5)
     text_color_button.configure(fg_color=settings.text_color)
     widgets["text_color_button"] = text_color_button
@@ -623,11 +667,7 @@ def build_background_section(parent, sidebar, settings, i18n):
 
     ctk.CTkLabel(bg_flow, text=i18n.tr("background") + ":").pack(side="left")
 
-    bg_color_button = ctk.CTkButton(
-        bg_flow, text="", width=40, height=24,
-        # ИСПРАВЛЕНО: см. тот же фикс у text_color_button выше.
-        border_width=1, border_color=BORDER_IDLE,
-    )
+    bg_color_button = ctk.CTkButton(bg_flow, text="", width=40, height=24)
     bg_color_button.pack(side="right", padx=5)
     bg_color_button.configure(fg_color=settings.background_color or "#ffffff")
     if settings.transparent_background:
@@ -672,7 +712,8 @@ def build_background_section(parent, sidebar, settings, i18n):
     ).pack(anchor="w", padx=10, pady=2)
 
     return widgets
-    
+
+
 # ============================================================
 #  Каталог ручных панелей для SettingsPanel
 # ============================================================

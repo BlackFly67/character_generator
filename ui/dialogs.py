@@ -13,7 +13,7 @@ from fonts import SYSTEM_FONTS, tk_style_from_font_style
 from constants import STYLE_PRESETS_FILE, STYLE_PRESET_KEYS
 from utils import create_checkerboard_background, get_color_rgba
 from ui.widgets import ColorPickerButton
-
+from config import Settings
 
 def ask_color(parent, initial_color, title, i18n):
     """
@@ -427,7 +427,9 @@ class StylePresetsDialog(ctk.CTkToplevel):
         if not style_dict:
             return
         
-        for key, value in style_dict.items():
+        defaults = Settings()
+        for key in STYLE_PRESET_KEYS:
+            value = style_dict[key] if key in style_dict else getattr(defaults, key, None)
             if hasattr(self.settings, key):
                 setattr(self.settings, key, value)
         
