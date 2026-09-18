@@ -149,12 +149,7 @@ def build_font_section(parent, sidebar, settings, i18n):
     size_entry.pack(side="left", padx=5)
     widgets["size_entry"] = size_entry
 
-    ctk.CTkButton(
-        size_row, text="⟲", width=28, height=28,
-        font=("Segoe UI Symbol", 14),
-        state="disabled",
-        command=lambda: None,
-    ).pack(side="right", padx=(5, 0))
+
 
     size_slider = WheelSlider(
         size_row, from_=FONT_SIZE_MIN, to=FONT_SIZE_MAX,
@@ -179,6 +174,7 @@ def build_font_section(parent, sidebar, settings, i18n):
         size_entry.delete(0, "end")
         size_entry.insert(0, str(val))
         settings.font_size = val
+
         sidebar._on_change()
 
     size_entry.bind("<KeyRelease>", on_size_entry)
@@ -191,7 +187,7 @@ def build_font_section(parent, sidebar, settings, i18n):
 
     alignment_var = ctk.StringVar(value=settings.text_alignment)
     alignment_menu = ctk.CTkOptionMenu(
-        alignment_frame, values=["left", "center", "right"],
+        alignment_frame, values=[i18n.tr("left"), i18n.tr("center"), i18n.tr("right")],
         variable=alignment_var, width=90,
         command=lambda v: (setattr(settings, "text_alignment", v), sidebar._on_change()),
     )

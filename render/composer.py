@@ -371,11 +371,17 @@ def measure_arc_metrics(text, settings):
 
 
 def measure_icon_metrics(icon_path, settings):
-    # Иконку НЕ масштабируем по font_size: default_icon_font_size
-    # уже подобран так, что font_size == native-размер, а
-    # compute_batch_geometry для иконок не добавляет паддингов
-    # (см. icon_path-ветку). Иконка остаётся ровно нативного размера.
     mask, iw, ih = get_icon_mask(icon_path)
+    native_max = max(iw, ih) if max(iw, ih) > 0 else 1
+    target = int(settings.font_size) if settings.font_size else native_max
+    if target <= 0:
+        target = native_max
+    if target != native_max:
+        s = target / native_max
+        nw = max(1, int(round(iw * s)))
+        nh = max(1, int(round(ih * s)))
+        mask = mask.resize((nw, nh), Image.Resampling.LANCZOS)
+        iw, ih = nw, nh
     return {
         "font": None,
         "icon_mask": mask,

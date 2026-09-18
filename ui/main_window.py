@@ -125,15 +125,12 @@ class MainWindow:
     def _create_top_bar(self, parent):
         top_bar = ctk.CTkFrame(parent, fg_color="transparent")
         top_bar.grid(row=0, column=0, sticky="ew", padx=15, pady=(10, 5))
-        top_bar.grid_columnconfigure(0, weight=0)
-        top_bar.grid_columnconfigure(1, weight=0)
-        top_bar.grid_columnconfigure(2, weight=1)
-        top_bar.grid_columnconfigure(3, weight=0)
-        top_bar.grid_columnconfigure(4, weight=0)
-        top_bar.grid_columnconfigure(5, weight=0)
-        top_bar.grid_columnconfigure(6, weight=0)
 
-        # --- Text / Icons ---
+        # 0 — Текст, 1 — Иконки, 2 — Шаблон (тянется),
+        # 3 — Undo, 4 — Redo, 5 — .bin, 6 — Generate (тянется).
+        top_bar.grid_columnconfigure(2, weight=1)
+        top_bar.grid_columnconfigure(6, weight=1)
+
         self.mode_text_btn = ctk.CTkButton(
             top_bar, text="📝 " + self.i18n.tr("text_mode"),
             width=100, height=32,
@@ -149,12 +146,13 @@ class MainWindow:
         )
         self.mode_icon_btn.grid(row=0, column=1, sticky="w", padx=(0, 12))
 
-        # --- Filename template ---
         template_col = ctk.CTkFrame(top_bar, fg_color="transparent")
-        template_col.grid(row=0, column=2, sticky="ew")
+        template_col.grid(row=0, column=2, sticky="ew", padx=(0, 8))
 
-        ctk.CTkLabel(template_col, text=self.i18n.tr("filename_template") + ":",
-                     font=("Arial", 11)).pack(anchor="w")
+        ctk.CTkLabel(
+            template_col, text=self.i18n.tr("filename_template") + ":",
+            font=("Arial", 11),
+        ).pack(anchor="w")
 
         self.filename_template_entry = ctk.CTkEntry(template_col, font=("Arial", 11))
         self.filename_template_entry.pack(fill="x")
@@ -168,46 +166,43 @@ class MainWindow:
             font=("Arial", 9), text_color="gray",
         ).pack(anchor="w", pady=(2, 0))
 
-        # --- .bin checkbox ---
-        self.create_bin_var = ctk.BooleanVar(value=self.settings.create_bin)
-        bin_check = ctk.CTkCheckBox(
-            top_bar, text=".bin",
-            variable=self.create_bin_var,
-            command=self._on_bin_toggle,
-            checkbox_height=18, checkbox_width=18,
-        )
-        bin_check.grid(row=0, column=3, padx=(12, 6))
-
-        # --- Generate ---
-        self.generate_btn = ctk.CTkButton(
-            top_bar, text=self.i18n.tr("generate_images"),
-            command=self._on_generate,
-            height=44, font=("Arial", 14, "bold"),
-            fg_color="#1f538d", hover_color="#14375e",
-        )
-        self.generate_btn.grid(row=0, column=4, sticky="ew", padx=(6, 10))
-
-        # --- Undo / Redo ---
         self.undo_btn = ctk.CTkButton(
-            top_bar, text="↶", width=40, height=44,
+            top_bar, text="↶", width=36, height=44,
             font=("Segoe UI Symbol", 18),
             fg_color=("#dbdbdb", "#2b2b2b"),
             text_color=("#1a1a1a", "#e0e0e0"),
             hover_color=("#c7c7c7", "#3a3a3a"),
             command=self._undo, state="disabled",
         )
-        self.undo_btn.grid(row=0, column=5, padx=(0, 4))
+        self.undo_btn.grid(row=0, column=3, padx=(0, 4))
 
         self.redo_btn = ctk.CTkButton(
-            top_bar, text="↷", width=40, height=44,
+            top_bar, text="↷", width=36, height=44,
             font=("Segoe UI Symbol", 18),
             fg_color=("#dbdbdb", "#2b2b2b"),
             text_color=("#1a1a1a", "#e0e0e0"),
             hover_color=("#c7c7c7", "#3a3a3a"),
             command=self._redo, state="disabled",
         )
-        self.redo_btn.grid(row=0, column=6, padx=(0, 0))
+        self.redo_btn.grid(row=0, column=4, padx=(0, 8))
 
+        self.create_bin_var = ctk.BooleanVar(value=self.settings.create_bin)
+        bin_check = ctk.CTkCheckBox(
+            top_bar, text=self.i18n.tr("create_bin"),
+            variable=self.create_bin_var,
+            command=self._on_bin_toggle,
+            checkbox_height=18, checkbox_width=18,
+            font=("Arial", 12),
+        )
+        bin_check.grid(row=0, column=5, padx=(0, 10))
+
+        self.generate_btn = ctk.CTkButton(
+            top_bar, text="▶ " + self.i18n.tr("generate_images"),
+            command=self._on_generate,
+            height=44, font=("Arial", 14, "bold"),
+            fg_color="#1f538d", hover_color="#14375e",
+        )
+        self.generate_btn.grid(row=0, column=6, sticky="ew")
     # ==================== CHARACTERS ROW ====================
 
     def _create_characters_row(self, parent):
