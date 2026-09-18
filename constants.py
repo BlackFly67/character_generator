@@ -3,7 +3,7 @@
 Константы приложения
 """
 
-APP_VERSION = "v2 6.1.6"
+APP_VERSION = "v2 6.1.8"
 APP_NAME = "Character Image Generator"
 
 # Диапазоны значений
