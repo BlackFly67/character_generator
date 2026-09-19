@@ -241,7 +241,7 @@ class Settings:
             "letter_spacing": self.letter_spacing,
             "characters": self.characters,
             "gradient_enabled": self.gradient_enabled,
-            "gradient_stops": self.gradient_stops,
+            "gradient_stops": [dict(s) for s in self.gradient_stops],
             "gradient_type": self.gradient_type,
             "gradient_angle": self.gradient_angle,
             "pattern_enabled": self.pattern_enabled,
@@ -293,7 +293,7 @@ class Settings:
             "icon_preserve_color": getattr(self, "icon_preserve_color", False),
             "icon_recolor_mode": getattr(self, "icon_recolor_mode", "none"),
             "icon_tint_blend_mode": getattr(self, "icon_tint_blend_mode", "multiply"),
-            "icon_paths": self.icon_paths,
+            "icon_paths": list(self.icon_paths),
             "create_bin": self.create_bin,
             "canvas_width_enabled": self.canvas_width_enabled,
             "canvas_width": self.canvas_width_delta

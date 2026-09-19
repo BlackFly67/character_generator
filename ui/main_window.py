@@ -149,10 +149,11 @@ class MainWindow:
         template_col = ctk.CTkFrame(top_bar, fg_color="transparent")
         template_col.grid(row=0, column=2, sticky="ew", padx=(0, 8))
 
-        ctk.CTkLabel(
+        self.filename_template_label = ctk.CTkLabel(
             template_col, text=self.i18n.tr("filename_template") + ":",
             font=("Arial", 11),
-        ).pack(anchor="w")
+        )
+        self.filename_template_label.pack(anchor="w")
 
         self.filename_template_entry = ctk.CTkEntry(template_col, font=("Arial", 11))
         self.filename_template_entry.pack(fill="x")
@@ -161,10 +162,11 @@ class MainWindow:
             "<KeyRelease>", self._on_filename_template_change,
         )
 
-        ctk.CTkLabel(
+        self.filename_template_hint = ctk.CTkLabel(
             template_col, text=self.i18n.tr("filename_template_hint"),
             font=("Arial", 9), text_color="gray",
-        ).pack(anchor="w", pady=(2, 0))
+        )
+        self.filename_template_hint.pack(anchor="w", pady=(2, 0))
 
         self.undo_btn = ctk.CTkButton(
             top_bar, text="↶", width=36, height=44,
@@ -187,14 +189,14 @@ class MainWindow:
         self.redo_btn.grid(row=0, column=4, padx=(0, 8))
 
         self.create_bin_var = ctk.BooleanVar(value=self.settings.create_bin)
-        bin_check = ctk.CTkCheckBox(
+        self.bin_check = ctk.CTkCheckBox(
             top_bar, text=self.i18n.tr("create_bin"),
             variable=self.create_bin_var,
             command=self._on_bin_toggle,
             checkbox_height=18, checkbox_width=18,
             font=("Arial", 12),
         )
-        bin_check.grid(row=0, column=5, padx=(0, 10))
+        self.bin_check.grid(row=0, column=5, padx=(0, 10))
 
         self.generate_btn = ctk.CTkButton(
             top_bar, text="▶ " + self.i18n.tr("generate_images"),
@@ -212,10 +214,11 @@ class MainWindow:
         row.grid_columnconfigure(1, weight=1)
         row.grid_columnconfigure(2, weight=0)
 
-        ctk.CTkLabel(
+        self.char_label = ctk.CTkLabel(
             row, text=self.i18n.tr("characters_to_generate"),
             font=("Arial", 14, "bold"),
-        ).grid(row=0, column=0, sticky="w", padx=(0, 10))
+        )
+        self.char_label.grid(row=0, column=0, sticky="w", padx=(0, 10))
 
         self.characters_entry = ctk.CTkEntry(row, height=36, font=("Arial", 13))
         self.characters_entry.grid(row=0, column=1, sticky="ew")
@@ -266,27 +269,28 @@ class MainWindow:
         icon_header = ctk.CTkFrame(self.icon_input_frame, fg_color="transparent")
         icon_header.pack(fill="x", padx=15, pady=(5, 5))
 
-        ctk.CTkLabel(
+        self.icon_label = ctk.CTkLabel(
             icon_header, text=self.i18n.tr("loaded_icons"),
             font=("Arial", 14, "bold"),
-        ).pack(side="left")
+        )
+        self.icon_label.pack(side="left")
 
         icon_actions = ctk.CTkFrame(icon_header, fg_color="transparent")
         icon_actions.pack(side="right")
 
-        load_btn = ctk.CTkButton(
+        self.load_icons_btn = ctk.CTkButton(
             icon_actions, text="📁 " + self.i18n.tr("load_icons"),
             width=120, height=26, command=self._load_icons,
         )
-        load_btn.pack(side="left", padx=2)
+        self.load_icons_btn.pack(side="left", padx=2)
 
-        clear_btn = ctk.CTkButton(
+        self.clear_icons_btn = ctk.CTkButton(
             icon_actions, text="🗑 " + self.i18n.tr("clear"),
             width=90, height=26,
             fg_color="#8B0000", hover_color="#5C0000",
             command=self._clear_icons,
         )
-        clear_btn.pack(side="left", padx=2)
+        self.clear_icons_btn.pack(side="left", padx=2)
 
         self.icon_list_frame = ctk.CTkScrollableFrame(
             self.icon_input_frame, height=90,
@@ -320,12 +324,12 @@ class MainWindow:
             self.icon_input_frame.dnd_bind('<<DropEnter>>', self._on_icons_drag_enter)
             self.icon_input_frame.dnd_bind('<<DropLeave>>', self._on_icons_drag_leave)
 
-            hint = ctk.CTkLabel(
+            self.dnd_hint = ctk.CTkLabel(
                 self.icon_input_frame,
                 text=self.i18n.tr("drag_drop_hint"),
                 font=("Arial", 10), text_color="gray",
             )
-            hint.pack(anchor="w", padx=15, pady=(0, 10))
+            self.dnd_hint.pack(anchor="w", padx=15, pady=(0, 10))
         except Exception:
             pass
 
@@ -398,9 +402,43 @@ class MainWindow:
     def _on_preview_change(self):
         pass
 
+    def _retranslate_ui(self):
+        """
+        Обновить текст всех i18n-виджетов верхнего уровня (topbar,
+        chars row, иконки, превью) при смене языка. Sidebar
+        пересобирается отдельно через sidebar._refresh_all_widgets() —
+        здесь только то, что живёт ВНЕ Sidebar (см. старый
+        create_char_gui.py::update_ui_language, который делал то же
+        самое одним списком).
+        """
+        self.mode_text_btn.configure(text="📝 " + self.i18n.tr("text_mode"))
+        self.mode_icon_btn.configure(text="🖼 " + self.i18n.tr("icon_mode"))
+        self.filename_template_label.configure(
+            text=self.i18n.tr("filename_template") + ":"
+        )
+        self.filename_template_hint.configure(
+            text=self.i18n.tr("filename_template_hint")
+        )
+        self.bin_check.configure(text=self.i18n.tr("create_bin"))
+        self.generate_btn.configure(
+            text="▶ " + self.i18n.tr("generate_images")
+        )
+        self.char_label.configure(text=self.i18n.tr("characters_to_generate"))
+        self.icon_label.configure(text=self.i18n.tr("loaded_icons"))
+        self.load_icons_btn.configure(text="📁 " + self.i18n.tr("load_icons"))
+        self.clear_icons_btn.configure(text="🗑 " + self.i18n.tr("clear"))
+        if getattr(self, "dnd_hint", None) is not None:
+            self.dnd_hint.configure(text=self.i18n.tr("drag_drop_hint"))
+        if getattr(self, "preview", None) is not None:
+            self.preview.retranslate()
+        self._rebuild_icon_list()
+
     def _open_settings(self):
+        old_lang = self.settings.language
         dialog = SettingsDialog(self.root, self.settings, self.i18n)
         dialog.wait_window()
+        if self.settings.language != old_lang:
+            self._retranslate_ui()
         self._apply_settings()
         self.preview.update()
 
@@ -501,7 +539,7 @@ class MainWindow:
 
         self._rebuild_icon_list()
 
-        if was_empty and self.settings.icon_mode:
+        if was_empty and self.settings.icon_mode and self.settings.icon_font_size is None:
             dim = self._default_icon_font_size()
             if dim:
                 self.settings.font_size = dim
@@ -518,7 +556,7 @@ class MainWindow:
 
         self.preview_index = 0
         self.preview.update()
-        self.settings.icon_paths = self.loaded_icon_paths
+        self.settings.icon_paths = list(self.loaded_icon_paths)
         self.settings.save()
 
     def _get_icon_dims(self, paths):
@@ -537,7 +575,7 @@ class MainWindow:
             self._rebuild_icon_list()
             self.preview_index = 0
             self.preview.update()
-            self.settings.icon_paths = self.loaded_icon_paths
+            self.settings.icon_paths = list(self.loaded_icon_paths)
             self.settings.save()
 
     def _clear_icons(self):
@@ -548,6 +586,12 @@ class MainWindow:
         self.preview_index = 0
         self.preview.update()
         self.settings.icon_paths = []
+        # ИСПРАВЛЕНО: явный Clear — это осознанный сброс к пустому
+        # состоянию; сбрасываем и icon_font_size, чтобы следующая
+        # загрузка иконок снова прошла автоподбор размера (см. правку
+        # в _add_icon_paths, где эта автоустановка теперь защищена
+        # условием "icon_font_size is None").
+        self.settings.icon_font_size = None
         self.settings.save()
 
     def _rebuild_icon_list(self):
@@ -932,11 +976,12 @@ class MainWindow:
         def run_generation():
             try:
                 if self.settings.icon_mode:
-                    count = render_icons(
+                    generated = render_icons(
                         icon_paths=list(self.loaded_icon_paths),
                         settings=self.settings,
                         progress_callback=update_progress,
                     )
+                    count = len(generated)
                 else:
                     chars = parse_characters(raw)
                     render_text_characters(
@@ -1010,6 +1055,8 @@ class MainWindow:
         self._applying_history = True
         try:
             self.settings.from_dict(snapshot)
+            self.loaded_icon_paths = list(self.settings.icon_paths)
+            self._rebuild_icon_list()
             self.sidebar._refresh_all_widgets()
             self.sidebar.refresh_fx_grid()
             self.preview.update()

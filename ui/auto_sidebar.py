@@ -482,7 +482,9 @@ def _build_stops_row(parent, sidebar, settings, i18n,
             color = "#{:02x}{:02x}{:02x}".format(r, g, b)
             if a < 255:
                 color += "{:02x}".format(a)
-            stops.append({"pos": t, "color": color})
+            new_stops = stops + [{"pos": t, "color": color}]
+            setattr(settings, full_key, new_stops)
+            stops = new_stops
             state["selected_idx"] = len(stops) - 1
             sidebar._on_change()
             redraw_stops()
@@ -528,7 +530,9 @@ def _build_stops_row(parent, sidebar, settings, i18n,
         idx = get_stop_at(event.x, w)
         if idx is None:
             return
-        del stops[idx]
+
+        new_stops = stops[:idx] + stops[idx + 1:]
+        setattr(settings, full_key, new_stops)
         state["selected_idx"] = None
         sidebar._on_change()
         redraw_stops()

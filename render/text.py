@@ -40,7 +40,9 @@ def render_text_characters(characters, settings, progress_callback=None):
 def _save_one(img, settings, index, char, used_filenames):
     base_name = format_filename(settings.filename_template,
                                  settings.font_size, index, char)
-    suffix = "_cutout" if (settings.transparent_text and settings.cutout_mode) else ""
+    suffix = "_cutout" if (not settings.transparent_text
+                           and settings.cutout_mode
+                           and not settings.transparent_background) else ""
     candidate = base_name + suffix
     final_name = candidate
     n = 2

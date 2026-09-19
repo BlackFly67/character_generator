@@ -45,6 +45,9 @@ class ColorFill(EffectBase):
         # compose_full: if gradient_enabled ... else: плоский цвет).
         if getattr(s, "gradient_enabled", False):
             return ctx.image
+        is_icon = ctx.spec is not None and getattr(ctx.spec, "icon_path", None) is not None
+        if is_icon and getattr(s, "icon_preserve_color", False):
+            return ctx.image
 
         rgb = get_color_rgb(s.text_color)
         mask = ctx.fill_mask if ctx.fill_mask is not None else ctx.mask

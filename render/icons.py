@@ -19,22 +19,26 @@ def render_icons(icon_paths, settings, progress_callback=None):
     os.makedirs("output", exist_ok=True)
     used_filenames = set()
     total = len(icon_paths)
+    generated = []
 
     for index, icon_path in enumerate(icon_paths, 1):
         icon_name = os.path.splitext(os.path.basename(icon_path))[0]
         spec = CharSpec(icon_path=icon_path, index=index)
         img = compose_full(spec, settings)
-        _save_one(img, settings, index, icon_name, used_filenames)
+        out_path = _save_one(img, settings, index, icon_name, used_filenames)
+        generated.append(out_path)
         if progress_callback:
             progress_callback(index, total)
 
-    return total
+    return generated
 
 
 def _save_one(img, settings, index, name, used_filenames):
     base_name = format_filename(settings.filename_template,
                                  settings.font_size, index, name)
-    suffix = "_cutout" if (settings.transparent_text and settings.cutout_mode) else ""
+    suffix = "_cutout" if (not settings.transparent_text
+                           and settings.cutout_mode
+                           and not settings.transparent_background) else ""
     candidate = base_name + suffix
     final_name = candidate
     n = 2
@@ -53,3 +57,4 @@ def _save_one(img, settings, index, name, used_filenames):
         bin_path = os.path.join(bin_dir, f"{final_name}.bin")
         save_lvgl_v8_bin(np.array(img.convert("RGBA")), bin_path,
                          color_depth=32, has_alpha=True, swap_16=False)
+    return out_path                     

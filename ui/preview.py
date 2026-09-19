@@ -88,6 +88,16 @@ class PreviewPanel(ctk.CTkFrame):
     def add_callback(self, callback):
         self._callbacks.append(callback)
 
+    def retranslate(self):
+        """
+        Обновить i18n-тексты внутри панели превью при смене языка
+        (см. MainWindow._retranslate_ui). Обновляется только то, что
+        создано внутри PreviewPanel (чекбокс ширины холста).
+        """
+        self.canvas_width_check.configure(
+            text=self.i18n.tr("canvas_width_delta")
+        )
+
     # ============================================================
     #  Виджеты
     # ============================================================

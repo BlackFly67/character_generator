@@ -58,6 +58,7 @@ class EffectContext:
     fill_mask: Image.Image = None      # маска для заливки (может быть halftone)
     outer_mask: Image.Image = None     # расширенная маска (для glow после outline)
     will_warp: bool = False
+    spec: Any = None
     extra: dict = field(default_factory=dict)
 
 

@@ -273,7 +273,7 @@ def _transp_bg(settings):
 
 
 def _run_stage(image, base_mask, settings, stage,
-                fill_mask=None, outer_mask=None, extra=None):
+                fill_mask=None, outer_mask=None, extra=None, spec=None):
     """
     Применяет эффекты одной стадии из реестра в порядке PIPELINE.
 
@@ -301,6 +301,7 @@ def _run_stage(image, base_mask, settings, stage,
             fill_mask=fill_mask,
             outer_mask=outer_mask,
             will_warp=_will_warp(settings),
+            spec=spec,
             extra=extra or {},
         )
         result = eff.apply(ctx)
@@ -410,13 +411,11 @@ def compute_batch_geometry(specs, settings) -> BatchGeometry:
     нужны только для текста, где PIL-шрифты дают мягкие края глифа.
     """
     outer = _calc_outer_effects_width(settings)
-    # Для иконок outer-эффекты по умолчанию тоже дают outer=0 (нет
-    # outline_outer/glow_outer/shadow/glitch/extrude), так что холст
-    # остаётся ровно по размеру иконки. Если пользователь включит
-    # outer-эффект — холст честно расширится, это ожидаемо.
+
     is_icons_only = len(specs) > 0 and all(s.icon_path is not None for s in specs)
     safe_pad = 0 if is_icons_only else 1
-    rotation_margin = 0 if is_icons_only else 2
+
+    rotation_margin = 0 if (is_icons_only and settings.rotation_angle == 0) else 2
     eff_x = settings.text_scale_x if settings.text_scale_x > 0 else 1.0
 
     max_cw = 1
@@ -611,7 +610,7 @@ def compose_full(spec: CharSpec, settings,
     fill_mask = base_mask
     char_layer, base_mask, fill_mask, outer_mask = _run_stage(
         char_layer, base_mask, settings, "fill",
-        fill_mask=fill_mask, outer_mask=None,
+        fill_mask=fill_mask, outer_mask=None, spec=spec,
     )
 
     # 6. Inner-стадия: outline_inner → glow_inner → inner_shadow → emboss
