@@ -189,7 +189,7 @@ class PreviewPanel(ctk.CTkFrame):
 
         # Ресайз canvas → пересчёт видимости скроллбаров.
         self.canvas.bind("<Configure>",
-                          lambda e: self.after(50, self._sync_scrollbars),
+                          lambda e: self.after(50, self._on_canvas_resized),
                           add="+")
 
         # --- Строка ширины холста (delta) — под canvas ---
@@ -462,13 +462,34 @@ class PreviewPanel(ctk.CTkFrame):
         self._display_size = framed.size
 
         from PIL import ImageTk
+        
         self._display_photo = ImageTk.PhotoImage(framed)
+        # ИСПРАВЛЕНО: раньше картинка всегда вставлялась в (0, 0) с
+        # anchor="nw" — если видимая область canvas больше картинки
+        # (обычный случай при небольшом zoom/маленьком изображении),
+        # превью прилипало к левому верхнему углу вместо центра.
+        # Центрируем вручную по текущему размеру canvas. Сразу после
+        # создания/пересборки виджета winfo_width() может вернуть 1
+        # (геометрия ещё не устаканилась) — в этом случае просто не
+        # смещаем (fallback на размер картинки), корректная позиция
+        # будет выставлена чуть позже через _on_canvas_resized.
+        canvas_w = self.canvas.winfo_width()
+        canvas_h = self.canvas.winfo_height()
+        if canvas_w <= 1:
+            canvas_w = framed.width
+        if canvas_h <= 1:
+            canvas_h = framed.height
+
+        scroll_w = max(canvas_w, framed.width)
+        scroll_h = max(canvas_h, framed.height)
+        img_x = max(0, (scroll_w - framed.width) // 2)
+        img_y = max(0, (scroll_h - framed.height) // 2)
 
         self.canvas.delete("all")
         self._canvas_img_id = self.canvas.create_image(
-            0, 0, anchor="nw", image=self._display_photo
+            img_x, img_y, anchor="nw", image=self._display_photo
         )
-        self.canvas.configure(scrollregion=(0, 0, framed.width, framed.height))
+        self.canvas.configure(scrollregion=(0, 0, scroll_w, scroll_h))
 
         # Пересчитать видимость скроллбаров.
         self.after(50, self._sync_scrollbars)
@@ -507,7 +528,35 @@ class PreviewPanel(ctk.CTkFrame):
         elif not need_v and self._vbar_visible:
             self.vbar.grid_remove()
             self._vbar_visible = False
+            
+    def _on_canvas_resized(self):
+        self._recenter_image()
+        self._sync_scrollbars()
 
+    def _recenter_image(self):
+        """
+        Пересчитывает позицию уже нарисованной картинки при изменении
+        размеров canvas (без пересоздания PhotoImage — дёшево).
+        """
+        if self._canvas_img_id is None or not self._display_size:
+            return
+        try:
+            canvas_w = self.canvas.winfo_width()
+            canvas_h = self.canvas.winfo_height()
+        except Exception:
+            return
+        if canvas_w <= 1 or canvas_h <= 1:
+            return
+
+        disp_w, disp_h = self._display_size
+        scroll_w = max(canvas_w, disp_w)
+        scroll_h = max(canvas_h, disp_h)
+        x = max(0, (scroll_w - disp_w) // 2)
+        y = max(0, (scroll_h - disp_h) // 2)
+
+        self.canvas.coords(self._canvas_img_id, x, y)
+        self.canvas.configure(scrollregion=(0, 0, scroll_w, scroll_h))
+        
     def _draw_blueprint(self, img, real_w, real_h):
         is_dark = ctk.get_appearance_mode() == "Dark"
         bg_color = "#1a1a1a" if is_dark else "#e5e5e5"
