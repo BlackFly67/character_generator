@@ -17,7 +17,6 @@ function TextImageRenderer.new(parent, config)
     self.char_w = config.char_w or 24
     self.char_h = config.char_h or 26
     self.spacing = config.spacing or 0
-    self.scale = config.scale or 256          -- 256 = 100%
     self.img_path = config.img_path or (SCRIPT_PATH or "/")
     self.char_map = config.char_map or {}
     self.images = {}
@@ -37,17 +36,11 @@ function TextImageRenderer:render(text, x, y, align)
 
     align = align or "left"
 
-    -- Множитель масштаба: 256 = 1.0
-    local scale_f = self.scale / 256
-
-    -- Шаг между буквами с учётом масштаба
-    local step_x = math.floor(self.char_w * scale_f + self.spacing)
-
     local char_count = 0
     for _ in utf8_chars(text) do char_count = char_count + 1 end
     if char_count == 0 then return end
 
-    local total_w = char_count * step_x - self.spacing
+    local total_w = char_count * self.char_w + (char_count - 1) * self.spacing
 
     local cur_x = x
     if align == "center" then
@@ -62,15 +55,16 @@ function TextImageRenderer:render(text, x, y, align)
             if file_name then
                 local img = lvgl.Image(self.parent, {
                     x = cur_x, y = y,
+                    w = self.char_w, h = self.char_h,
                     src = self.img_path .. file_name,
                     bg_opa = lvgl.OPA(0)
                 })
-                img:set_scale(self.scale)
+				
                 img:add_flag(lvgl.FLAG.EVENT_BUBBLE)
                 table.insert(self.images, img)
             end
         end
-        cur_x = cur_x + step_x
+        cur_x = cur_x + self.char_w + self.spacing
     end
 end
 
@@ -108,7 +102,6 @@ local function entry()
         char_w = 24,
         char_h = 26,
         spacing = -8,
-        scale = 512,          -- 512 = 200%, 384 = 150%, 256 = 100%
         char_map = cyrillic_map
     })
 
