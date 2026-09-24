@@ -443,7 +443,8 @@ def compute_batch_geometry(specs, settings) -> BatchGeometry:
             max_descent = m["max_descent"]
 
     base_w = max_cw + outer * 2 + safe_pad * 2
-    base_h = max_ch + outer * 2 + safe_pad * 2
+    line_h = max(max_ch, max_ascent + max_descent)
+    base_h = line_h + outer * 2 + safe_pad * 2
     text_base_x = outer + safe_pad
     text_base_y = outer + safe_pad
 
@@ -477,7 +478,7 @@ def compute_batch_geometry(specs, settings) -> BatchGeometry:
     offset_x, offset_y = -min_x, -min_y
 
     if settings.reflection_enabled and settings.reflection_opacity > 0:
-        canvas_h += max(0, settings.reflection_gap + max_ch)
+        canvas_h += max(0, settings.reflection_gap + line_h)
 
     if getattr(settings, "canvas_width_enabled", False):
         delta = getattr(settings, "canvas_width_delta",
@@ -492,7 +493,7 @@ def compute_batch_geometry(specs, settings) -> BatchGeometry:
         offset_x=offset_x, offset_y=offset_y,
         text_base_x=text_base_x, text_base_y=text_base_y,
         scaled_content_w=max_cw,
-        content_height=max_ch,
+        content_height=line_h,
         max_ascent=max_ascent,
         max_descent=max_descent,
     )
