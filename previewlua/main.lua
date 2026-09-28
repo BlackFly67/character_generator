@@ -1,255 +1,336 @@
 local lvgl = require("lvgl")
-local dataman = require("dataman")
+local math = require("math")
 
--- Экран
-local globalWidth = lvgl.HOR_RES()
-local globalHeight = lvgl.VER_RES()
+--------------------------------------------------------------------------------
+-- Модуль рендеринга текста из картинок-символов (общий, для времени/темп./города)
+--------------------------------------------------------------------------------
+local TextImageRenderer = {}
+TextImageRenderer.__index = TextImageRenderer
 
--- Переменные для управления состоянием
-local screenActive = true
-local animationActive = true
-local cubeVisible = true
-
-function createRoot()
-    local scr = lvgl.Object(nil, {w=globalWidth, h=globalHeight, bg_color=0, bg_opa=lvgl.OPA(0), border_width = 0, pad_all = 0})
-    scr:clear_flag(lvgl.FLAG.SCROLLABLE)
-    scr:add_flag(lvgl.FLAG.EVENT_BUBBLE)
-    return scr
+local function utf8_chars(str)
+    return str:gmatch("[%z\1-\127\192-\247][\128-\191]*")
 end
 
--- Вершины куба
-local vertices = {
-    {-1,-1,-1}, {1,-1,-1}, {1,1,-1}, {-1,1,-1},
-    {-1,-1,1}, {1,-1,1}, {1,1,1}, {-1,1,1}
-}
-
--- Рёбра: пары индексов вершин
-local edges = {
-    {1,2},{2,3},{3,4},{4,1}, -- нижняя грань
-    {5,6},{6,7},{7,8},{8,5}, -- верхняя грань
-    {1,5},{2,6},{3,7},{4,8}  -- вертикальные
-}
-
--- 3D вращение
-local function rotate3D(v, ax, ay, az)
-    local x,y,z = v[1],v[2],v[3]
-    local cosx,sinx = math.cos(ax), math.sin(ax)
-    y,z = y*cosx - z*sinx, y*sinx + z*cosx
-    local cosy,siny = math.cos(ay), math.sin(ay)
-    x,z = x*cosy + z*siny, -x*siny + z*cosy
-    local cosz,sinz = math.cos(az), math.sin(az)
-    x,y = x*cosz - y*sinz, x*sinz + y*cosz
-    return {x,y,z}
+function TextImageRenderer.new(parent, config)
+    local self = setmetatable({}, TextImageRenderer)
+    self.parent = parent
+    self.char_w = config.char_w or 24
+    self.char_h = config.char_h or 26
+    self.spacing = config.spacing or 0
+    self.img_path = config.img_path or (SCRIPT_PATH or "/")
+    self.char_map = config.char_map or {}
+    -- ["символ"] = ширина_шага_для_курсора (не размер самого файла!).
+    -- Символ, для которого задано значение, должен быть НАРИСОВАН ПО ЦЕНТРУ
+    -- своей char_w x char_h ячейки в генераторе -- тогда при более узком шаге
+    -- центр картинки корректно совпадёт с центром укороченного слота.
+    self.char_advance = config.char_advance or {}
+    self.images = {}
+    return self
 end
 
--- Проекция 3D -> 2D
-local function project3D(v, width, height, scale, fov)
-    local factor = fov / (fov + v[3])
-    return {x = v[1]*scale*factor + width/2, y = v[2]*scale*factor + height/2}
+function TextImageRenderer:clear()
+    for _, img in ipairs(self.images) do
+        if img and img.delete then img:delete() end
+    end
+    self.images = {}
 end
 
--- Функция создания точки как объекта LVGL с настраиваемым размером
-local function createPoint(parent, size, color)
-    local point = lvgl.Object(parent, {
-        w = size,      -- ширина точки
-        h = size,      -- высота точки
-        bg_color = color,
-        bg_opa = lvgl.OPA(100),
-        border_width = 0,
-        radius = lvgl.RADIUS_CIRCLE  -- делаем точку круглой
-    })
-    return point
+function TextImageRenderer:advanceFor(char)
+    return self.char_advance[char] or self.char_w
 end
 
--- Функция создания невидимой кнопки
-local function createInvisibleButton(parent, x, y, w, h)
-    local btn = lvgl.Object(parent, {
-        x = x,
-        y = y,
-        w = w,
-        h = h,
-        bg_opa = lvgl.OPA(0), -- полностью прозрачная
-        border_width = 0,
-        pad_all = 0,
-        radius = 0
-    })
-    return btn
+function TextImageRenderer:render(text, x, y, align)
+    self:clear()
+    if not text or text == "" then return end
+
+    align = align or "left"
+
+    local char_list = {}
+    for char in utf8_chars(text) do
+        table.insert(char_list, char)
+    end
+    local char_count = #char_list
+    if char_count == 0 then return end
+
+    local total_w = (char_count - 1) * self.spacing
+    for _, char in ipairs(char_list) do
+        total_w = total_w + self:advanceFor(char)
+    end
+
+    local cur_x = x
+    if align == "center" then
+        cur_x = x - math.floor(total_w / 2)
+    elseif align == "right" then
+        cur_x = x - total_w
+    end
+
+    for _, char in ipairs(char_list) do
+        if char ~= " " then
+            local file_name = self.char_map[char]
+            if file_name then
+                local advance = self:advanceFor(char)
+                -- сдвиг отрисовки, чтобы центр (char_w x char_h) канвы совпал
+                -- с центром укороченного слота шириной advance
+                local draw_x = cur_x - math.floor((self.char_w - advance) / 2)
+                local img = lvgl.Image(self.parent, {
+                    x = draw_x, y = y,
+                    w = self.char_w, h = self.char_h,   -- всегда реальный размер файла -- не портим stride
+                    src = self.img_path .. file_name,
+                    bg_opa = lvgl.OPA(0)
+                })
+                img:add_flag(lvgl.FLAG.EVENT_BUBBLE)
+                table.insert(self.images, img)
+            end
+        end
+        cur_x = cur_x + self:advanceFor(char) + self.spacing
+    end
 end
 
--- Создание куба
+--------------------------------------------------------------------------------
+-- Чтение размера картинки прямо из заголовка .bin
+--------------------------------------------------------------------------------
+local function getBinImageSize(path)
+    local f = io.open(path, "rb")
+    if not f then return nil, nil end
+    local header = f:read(4)
+    f:close()
+    if not header or #header < 4 then return nil, nil end
+
+    local b1, b2, b3, b4 = string.byte(header, 1, 4)
+    local val = b1 + b2 * 256 + b3 * 65536 + b4 * 16777216
+
+    local w = math.floor(val / 1024) % 2048
+    local h = math.floor(val / 2097152) % 2048
+    return w, h
+end
+
+--------------------------------------------------------------------------------
+-- Основной скрипт
+--------------------------------------------------------------------------------
 local function entry()
-    local root = createRoot()
-    local scale = 80
-    local fov = 5
+    local global_w = lvgl.HOR_RES()
+    local global_h = lvgl.VER_RES()
 
-    -- ЯРКИЕ цвета в правильном формате LVGL
-    local colorList = {
-        "#ffffff", -- белый
-        "#ff8000", -- оранжевый
-        "#ff0000", -- красный
-        "#00ff00", -- зеленый
-        "#0000ff", -- синий
-        "#ffff00", -- желтый
-        "#ff00ff", -- пурпурный
-        "#00ffff"  -- голубой
+    local root = lvgl.Object(nil, {
+        w = global_w, h = global_h,
+        bg_color = 0, bg_opa = lvgl.OPA(0),
+        border_width = 0,
+        pad_all = 0
+    })
+    root:clear_flag(lvgl.FLAG.SCROLLABLE)
+    root:add_flag(lvgl.FLAG.EVENT_BUBBLE)
+
+    local IMAGE_PATH = SCRIPT_PATH or "/"
+
+    --------------------------------------------------------------------------
+    -- Настройки блока почасового прогноза
+    --------------------------------------------------------------------------
+    local HOURS_VISIBLE   = 4
+    local ALIGN             = "center"
+
+    local ICON_W, ICON_H = getBinImageSize(IMAGE_PATH .. "weather00.bin")
+    ICON_W = ICON_W or 50
+    ICON_H = ICON_H or 50
+
+    local DIGIT_W, DIGIT_H = getBinImageSize(IMAGE_PATH .. "num_01.bin")
+    DIGIT_W = DIGIT_W or 30
+    DIGIT_H = DIGIT_H or 37
+
+    -- ":" и "°" нарисованы по центру той же char_w x char_h ячейки, но визуально
+    -- узкие -- шаг курсора для них вдвое короче полной ширины цифры
+    local narrow_advance = {
+        [":"] = math.floor(DIGIT_W / 2),
+        ["°"] = math.floor(DIGIT_W / 2),
     }
-    local currentColorIndex = 1
 
-    -- Настройки размера точек
-    local vertexPointSize = 9    -- размер точек вершин
-    local edgePointSize = 6      -- размер точек рёбер
-    
-    -- Количество точек на ребре
-    local pointsPerEdge = 6
+    local COL_WIDTH        = 80
+    local BLOCK_WIDTH      = COL_WIDTH * HOURS_VISIBLE
 
-    -- Создаем невидимую кнопку в центре-вверху для смены цвета
-    local buttonWidth = 120
-    local buttonHeight = 60
-    local buttonX = (globalWidth - buttonWidth) / 2  -- центрирование по горизонтали
-    local buttonY = 2  -- 2px от верхнего края
-    
-    local colorButton = createInvisibleButton(root, buttonX, buttonY, buttonWidth, buttonHeight)
-    
-    -- Создаем невидимую кнопку в центре-внизу для включения/выключения
-    local toggleButtonWidth = 120
-    local toggleButtonHeight = 60
-    local toggleButtonX = (globalWidth - toggleButtonWidth) / 2  -- центрирование по горизонтали
-    local toggleButtonY = globalHeight - toggleButtonHeight - 2  -- 2px от нижнего края
-    
-    local toggleButton = createInvisibleButton(root, toggleButtonX, toggleButtonY, toggleButtonWidth, toggleButtonHeight)
-    
-    -- Создаем точки вершин
-    local points = {}
-    for i=1,#vertices do
-        points[i] = createPoint(root, vertexPointSize, colorList[currentColorIndex])
+    local BLOCK_X
+    if ALIGN == "center" then
+        BLOCK_X = math.floor((global_w - BLOCK_WIDTH) / 2)
+    elseif ALIGN == "right" then
+        BLOCK_X = global_w - BLOCK_WIDTH
+    else
+        BLOCK_X = 0
     end
 
-    -- Создаем точки для рёбер
-    local edgePoints = {}
-    for _, e in ipairs(edges) do
-        for i=1,pointsPerEdge do
-            local p = createPoint(root, edgePointSize, colorList[currentColorIndex])
-            table.insert(edgePoints, {widget=p, start=e[1], stop=e[2], t=(i-1)/(pointsPerEdge-1)})
-        end
+    local BLOCK_Y          = 0
+    local TIME_Y_OFFSET    = 0
+    local ICON_Y_OFFSET    = 30
+    local TEMP_Y_OFFSET    = 78
+
+    --------------------------------------------------------------------------
+    -- Рендерер цифр/времени/температуры: 0-9, ":", "-", "°"
+    --------------------------------------------------------------------------
+    local digits = {
+        "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", ":", "-", "°"
+    }
+    local digit_map = {}
+    for idx, ch in ipairs(digits) do
+        digit_map[ch] = string.format("num_%02d.bin", idx)
     end
 
-    -- Функция для переключения видимости куба
-    local function toggleCubeVisibility()
-        cubeVisible = not cubeVisible
-        animationActive = cubeVisible and screenActive  -- останавливаем анимацию когда куб скрыт или экран выключен
-        
-        -- Показываем или скрываем все точки
-        for i,p in ipairs(points) do
-            if cubeVisible then
-                p:clear_flag(lvgl.FLAG.HIDDEN)
-            else
-                p:add_flag(lvgl.FLAG.HIDDEN)
+    local time_renderers = {}
+    local temp_renderers = {}
+    for col = 1, HOURS_VISIBLE do
+        time_renderers[col] = TextImageRenderer.new(root, {
+            char_w = DIGIT_W, char_h = DIGIT_H, spacing = -4,
+            img_path = IMAGE_PATH, char_map = digit_map,
+            char_advance = narrow_advance
+        })
+        temp_renderers[col] = TextImageRenderer.new(root, {
+            char_w = DIGIT_W, char_h = DIGIT_H, spacing = -4,
+            img_path = IMAGE_PATH, char_map = digit_map,
+            char_advance = narrow_advance
+        })
+    end
+
+    --------------------------------------------------------------------------
+    -- Иконки погоды: код -> файл
+    --------------------------------------------------------------------------
+    local weather_icons = {
+        [0]  = "weather00.bin",
+        [1]  = "weather01.bin",
+        [2]  = "weather02.bin",
+        [3]  = "weather07.bin",
+        [4]  = "weather04.bin",
+        [5]  = "weather05.bin",
+        [6]  = "weather06.bin",
+        [7]  = "weather07.bin",
+        [8]  = "weather08.bin",
+        [9]  = "weather09.bin",
+        [10] = "weather09.bin",
+        [13] = "weather13.bin",
+        [14] = "weather13.bin",
+        [15] = "weather15.bin",
+        [16] = "weather16.bin",
+        [17] = "weather16.bin",
+        [18] = "weather18.bin",
+        [19] = "weather19.bin",
+        [20] = "weather20.bin",
+        [29] = "weather29.bin",
+        [35] = "weather18.bin",
+        [53] = "weather53.bin",
+    }
+    local DEFAULT_ICON = "weather99.bin"
+
+    local icon_widgets = {}
+    for col = 1, HOURS_VISIBLE do
+        icon_widgets[col] = lvgl.Image(root, {
+            x = 0, y = 0,
+            w = ICON_W, h = ICON_H,
+            src = IMAGE_PATH .. DEFAULT_ICON,
+            bg_opa = lvgl.OPA(0)
+        })
+        icon_widgets[col]:add_flag(lvgl.FLAG.EVENT_BUBBLE)
+    end
+
+    --------------------------------------------------------------------------
+    -- Чтение почасовых данных из wdata2
+    --------------------------------------------------------------------------
+    local REC0_OFFSET = 960
+    local REC_STRIDE  = 48
+    local REC_COUNT   = 23
+
+    local function getCurrentHour(content, pos)
+        local ts = content:sub(pos + 6, pos + 6 + 12)
+        local hh = tonumber(ts:sub(12, 13))
+        return hh or 0
+    end
+
+    local function readInt16(rec, byteOffset)
+        local lo, hi = string.byte(rec, byteOffset + 1, byteOffset + 2)
+        local v = lo + hi * 256
+        if v >= 32768 then v = v - 65536 end
+        return v
+    end
+
+    local function getHourlyForecast(count)
+        local result = {}
+        local f = io.open("/data/app/weather/database.db", "rb")
+        if not f then return result end
+        local content = f:read("*a")
+        f:close()
+        if not content then return result end
+
+        local pos = content:find("wdata2", 1, true)
+        if not pos then return result end
+
+        local base_hour = getCurrentHour(content, pos)
+
+        for i = 1, math.min(count, REC_COUNT - 1) do
+            local rec_start = pos + REC0_OFFSET + REC_STRIDE * i
+            local rec = content:sub(rec_start, rec_start + 47)
+            if #rec == 48 then
+                local icon_code = readInt16(rec, 4)
+                local temp      = readInt16(rec, 8)
+                local hour = (base_hour + i) % 24
+                table.insert(result, { hour = hour, temp = temp, icon_code = icon_code })
             end
         end
-        
-        -- Показываем или скрываем все точки рёбер
-        for _, ep in ipairs(edgePoints) do
-            if cubeVisible then
-                ep.widget:clear_flag(lvgl.FLAG.HIDDEN)
+        return result
+    end
+
+    --------------------------------------------------------------------------
+    -- Отрисовка блока
+    --------------------------------------------------------------------------
+    local function formatTime(hour)
+        return string.format("%02d:00", hour)
+    end
+
+    local function formatTemp(temp)
+        return string.format("%d°", temp)
+    end
+
+    local function renderForecast()
+        local data = getHourlyForecast(HOURS_VISIBLE)
+
+        for col = 1, HOURS_VISIBLE do
+            local item = data[col]
+            local col_x = BLOCK_X + (col - 1) * COL_WIDTH
+            local col_center = col_x + math.floor(COL_WIDTH / 2)
+
+            if item then
+                time_renderers[col]:render(formatTime(item.hour), col_center, BLOCK_Y + TIME_Y_OFFSET, "center")
+                temp_renderers[col]:render(formatTemp(item.temp), col_center, BLOCK_Y + TEMP_Y_OFFSET, "center")
+
+                local icon_file = weather_icons[item.icon_code] or DEFAULT_ICON
+                local icon_x = col_center - math.floor(ICON_W / 2)
+                icon_widgets[col]:set({
+                    x = icon_x, y = BLOCK_Y + ICON_Y_OFFSET,
+                    src = IMAGE_PATH .. icon_file
+                })
+                icon_widgets[col]:clear_flag(lvgl.FLAG.HIDDEN)
             else
-                ep.widget:add_flag(lvgl.FLAG.HIDDEN)
+                time_renderers[col]:clear()
+                temp_renderers[col]:clear()
+                icon_widgets[col]:add_flag(lvgl.FLAG.HIDDEN)
             end
         end
     end
 
-    -- Функция обновления цветов всех точек
-    local function updateColors()
-        local newColor = colorList[currentColorIndex]
-        -- Обновляем цвет вершин
-        for i,p in ipairs(points) do
-            p:set { bg_color = newColor }
-        end
-        -- Обновляем цвет точек рёбер
-        for _, ep in ipairs(edgePoints) do
-            ep.widget:set { bg_color = newColor }
-        end
-    end
+    renderForecast()
 
-    -- Обработчик нажатия на невидимую кнопку (смена цвета)
-    colorButton:onevent(lvgl.EVENT.CLICKED, function(obj, code)
-        currentColorIndex = currentColorIndex + 1
-        if currentColorIndex > #colorList then
-            currentColorIndex = 1
+    local forecast_timer = lvgl.Timer({
+        period = 900000,
+        repeat_count = -1,
+        cb = function(timer)
+            renderForecast()
         end
-        updateColors()
-    end)
+    })
 
-    -- Обработчик нажатия на невидимую кнопку внизу (включение/выключение)
-    toggleButton:onevent(lvgl.EVENT.CLICKED, function(obj, code)
-        toggleCubeVisibility()
-    end)
-
-    local angleX, angleY, angleZ = 0,0,0
-
-    local function updateCube()
-        if not cubeVisible then
-            return -- Не обновляем позиции если куб скрыт
-        end
-        
-        -- Проекция вершин
-        local projected = {}
-        for i,v in ipairs(vertices) do
-            projected[i] = project3D(rotate3D(v, angleX, angleY, angleZ), globalWidth, globalHeight, scale, fov)
-        end
-
-        -- Обновляем точки вершин (центрируем с учетом размера)
-        for i,p in ipairs(points) do
-            p:set { x = projected[i].x - vertexPointSize/2, y = projected[i].y - vertexPointSize/2 }
-        end
-
-        -- Обновляем точки рёбер (центрируем с учетом размера)
-        for _, ep in ipairs(edgePoints) do
-            local startP = projected[ep.start]
-            local stopP = projected[ep.stop]
-            local x = startP.x + (stopP.x - startP.x) * ep.t
-            local y = startP.y + (stopP.y - startP.y) * ep.t
-            ep.widget:set { x = x - edgePointSize/2, y = y - edgePointSize/2 }
-        end
-    end
-
-    -- Функции для управления состоянием экрана
     local function screenONCb()
-        screenActive = true
-        animationActive = cubeVisible
-        print("Cube: screen ON")
+        renderForecast()
     end
-
-    local function screenOFFCb()
-        screenActive = false
-        animationActive = false
-        print("Cube: screen OFF")
-    end
-
-    -- Подписка на timeCentiSecond
-    dataman.subscribe("timeCentiSecond", root, function()
-        if not animationActive then
-            return -- Выходим если анимация остановлена
-        end
-        
-        -- Плавное вращение: добавляем маленькие шаги
-        angleX = angleX + 0.05
-        angleY = angleY + 0.07
-        angleZ = angleZ + 0.03
-        updateCube()
-    end)
-
-    -- Первоначальное обновление
-    updateCube()
+    local function screenOFFCb() end
 
     return screenONCb, screenOFFCb
 end
 
--- Запускаем куб и получаем колбэки управления экраном
 local onCb, offCb = entry()
 
--- Глобальный обработчик состояния экрана
 function ScreenStateChangedCB(pre, now, reason)
-    print("Screen state changed:", pre, "->", now, "reason:", reason)
     if pre ~= "ON" and now == "ON" then
         if onCb then onCb() end
     elseif pre == "ON" and now ~= "ON" then
