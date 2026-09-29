@@ -384,7 +384,8 @@ class Settings:
         self.shadow_direction = data.get("shadow_direction", 8)
         self.shadow_blur = data.get("shadow_blur", DEFAULT_SHADOW_BLUR)
         self.rotation_angle = data.get("rotation_angle", DEFAULT_ROTATION)
-        self.text_alignment = data.get("text_alignment", "center")
+        _align = str(data.get("text_alignment", "center")).lower()
+        self.text_alignment = _align if _align in ("left", "center", "right") else "center"
         self.emboss_depth = data.get("emboss_depth", DEFAULT_EMBOSS_DEPTH)
         self.emboss_blur = data.get("emboss_blur", DEFAULT_EMBOSS_BLUR)
         # ИСПРАВЛЕНО: синхронизировано с новым дефолтом в reset()
