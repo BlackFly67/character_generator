@@ -1,0 +1,202 @@
+local lvgl = require("lvgl")
+local math = require("math")
+
+--------------------------------------------------------------------------------
+-- Модуль рендеринга текста из картинок-букв
+--------------------------------------------------------------------------------
+local TextImageRenderer = {}
+TextImageRenderer.__index = TextImageRenderer
+
+local function utf8_chars(str)
+    return str:gmatch("[%z\1-\127\192-\247][\128-\191]*")
+end
+
+function TextImageRenderer.new(parent, config)
+    local self = setmetatable({}, TextImageRenderer)
+    self.parent = parent
+    self.char_w = config.char_w or 24
+    self.char_h = config.char_h or 26
+    self.spacing = config.spacing or 0
+    self.img_path = config.img_path or (SCRIPT_PATH or "/")
+    self.char_map = config.char_map or {}
+    self.images = {}
+    return self
+end
+
+function TextImageRenderer:clear()
+    for _, img in ipairs(self.images) do
+        if img and img.delete then img:delete() end
+    end
+    self.images = {}
+end
+
+function TextImageRenderer:render(text, x, y, align)
+    self:clear()
+    if not text or text == "" then return end
+
+    align = align or "left"
+
+    local char_count = 0
+    for _ in utf8_chars(text) do char_count = char_count + 1 end
+    if char_count == 0 then return end
+
+    local total_w = char_count * self.char_w + (char_count - 1) * self.spacing
+
+    local cur_x = x
+    if align == "center" then
+        cur_x = x - math.floor(total_w / 2)
+    elseif align == "right" then
+        cur_x = x - total_w
+    end
+
+    for char in utf8_chars(text) do
+        if char ~= " " then
+            local file_name = self.char_map[char]
+            if file_name then
+                local img = lvgl.Image(self.parent, {
+                    x = cur_x, y = y,
+                    w = self.char_w, h = self.char_h,
+                    src = self.img_path .. file_name,
+                    bg_opa = lvgl.OPA(0)
+                })
+                img:add_flag(lvgl.FLAG.EVENT_BUBBLE)
+                table.insert(self.images, img)
+            end
+        end
+        cur_x = cur_x + self.char_w + self.spacing
+    end
+end
+
+--------------------------------------------------------------------------------
+-- Чтение размера картинки прямо из заголовка .bin (не хардкодим руками)
+-- Формат: 4 байта LE-заголовка -- биты 10-20 = width, биты 21-31 = height
+--------------------------------------------------------------------------------
+local function getBinImageSize(path)
+    local f = io.open(path, "rb")
+    if not f then return nil, nil end
+    local header = f:read(4)
+    f:close()
+    if not header or #header < 4 then return nil, nil end
+
+    local b1, b2, b3, b4 = string.byte(header, 1, 4)
+    local val = b1 + b2 * 256 + b3 * 65536 + b4 * 16777216
+
+    local w = math.floor(val / 1024) % 2048
+    local h = math.floor(val / 2097152) % 2048
+    return w, h
+end
+
+--------------------------------------------------------------------------------
+-- Основной скрипт
+--------------------------------------------------------------------------------
+local function entry()
+    local global_w = lvgl.HOR_RES()
+    local global_h = lvgl.VER_RES()
+
+    local root = lvgl.Object(nil, {
+        w = global_w, h = global_h,
+        bg_color = 0, bg_opa = lvgl.OPA(0),
+        border_width = 0,
+        pad_all = 0
+    })
+    root:clear_flag(lvgl.FLAG.SCROLLABLE)
+    root:add_flag(lvgl.FLAG.EVENT_BUBBLE)
+
+    local IMAGE_PATH = SCRIPT_PATH or "/"
+
+    --------------------------------------------------------------------------
+    -- Настройки вывода названия города
+    --------------------------------------------------------------------------
+    -- размер символа -- берём из самого файла (эталон symb_01.bin), а не хардкодим.
+    -- Работает надёжно только пока ВСЕ symb_XX.bin одного размера (фикс. ячейка,
+    -- как рисует gen_watchface_assets.py) -- если когда-то перейдёте на
+    -- пропорциональные глифы, эта логика "один эталон на всех" сломается.
+    local SYMB_W, SYMB_H = getBinImageSize(IMAGE_PATH .. "symb_01.bin")
+    SYMB_W = SYMB_W or 19   -- запасное значение, если файл не нашёлся
+    SYMB_H = SYMB_H or 26
+
+    local CITY_X = math.floor(global_w / 2)
+    local CITY_Y = 0
+    local CITY_ALIGN = "center"   -- "left" | "center" | "right"
+
+    --------------------------------------------------------------------------
+    -- Город из картинок-букв symb_XX.bin (кириллица + латиница)
+    --------------------------------------------------------------------------
+    local letters = {
+        -- кириллица (1-65)
+        "А", "Б", "В", "Г", "Д", "Е", "Ё", "Ж", "З", "И", "Й", "К", "Л", "М", "Н", "О", "П", "Р", "С", "Т", "У", "Ф", "Х", "Ц", "Ч", "Ш", "Щ", "Ы", "Э", "Ю", "Я",
+        "а", "б", "в", "г", "д", "е", "ё", "ж", "з", "и", "й", "к", "л", "м", "н", "о", "п", "р", "с", "т", "у", "ф", "х", "ц", "ч", "ш", "щ", "ъ", "ы", "ь", "э", "ю", "я",
+        "-",
+        -- латиница (66-117)
+        "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
+        "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z",
+    }
+
+    local symb_map = {}
+    for idx, char in ipairs(letters) do
+        symb_map[char] = string.format("symb_%02d.bin", idx)
+    end
+
+    local cityRenderer = TextImageRenderer.new(root, {
+        char_w = SYMB_W,
+        char_h = SYMB_H,
+        spacing = -10,
+        char_map = symb_map
+    })
+
+    local function getCityName()
+        local default_city = "Смоленск"
+        local f = io.open("/data/app/weather/database.db", "rb")
+        if not f then return default_city end
+        local content = f:read("*a")
+        f:close()
+        if not content then return default_city end
+
+        local pos = content:find("wdata2", 1, true)
+        if not pos then return default_city end
+
+        local city_start = pos + 104
+        local raw = content:sub(city_start, city_start + 64)
+        local city = raw:match("^([^%z]+)")
+        if city and #city >= 2 then
+            local b1 = string.byte(city, 1)
+            if b1 == 0xD0 or b1 == 0xD1 then
+                return city
+            end
+        end
+
+        return default_city
+    end
+
+    local function updateCity()
+        local city_name = getCityName()
+        cityRenderer:render(city_name, CITY_X, CITY_Y, CITY_ALIGN)
+    end
+
+    updateCity()
+
+    local city_timer = lvgl.Timer({
+        period = 900000,
+        repeat_count = -1,
+        cb = function(timer)
+            updateCity()
+        end
+    })
+
+    local function screenONCb()
+        updateCity()
+    end
+    local function screenOFFCb() end
+
+    return screenONCb, screenOFFCb
+end
+
+local onCb, offCb = entry()
+
+function ScreenStateChangedCB(pre, now, reason)
+    if pre ~= "ON" and now == "ON" then
+        if onCb then onCb() end
+    elseif pre == "ON" and now ~= "ON" then
+        if offCb then offCb() end
+    end
+end
