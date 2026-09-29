@@ -185,12 +185,30 @@ def build_font_section(parent, sidebar, settings, i18n):
 
     ctk.CTkLabel(alignment_frame, text=i18n.tr("align") + ":").pack(side="left")
 
-    alignment_var = ctk.StringVar(value=settings.text_alignment)
-    alignment_menu = ctk.CTkOptionMenu(
-        alignment_frame, values=[i18n.tr("left"), i18n.tr("center"), i18n.tr("right")],
-        variable=alignment_var, width=90,
-        command=lambda v: (setattr(settings, "text_alignment", v), sidebar._on_change()),
+    # ИСПРАВЛЕНО: в settings хранится внутренний ключ ("left"/"center"/"right"),
+    # а в меню показывается локализованная подпись. Раньше в settings попадала
+    # сама подпись ("Left"/"Слева"), которую composer не узнавал -> всегда center
+    # (а в arc-режиме "Center" превращался в right).
+    _align_keys = ["left", "center", "right"]
+    _align_labels = [i18n.tr(k) for k in _align_keys]
+    _label_to_key = dict(zip(_align_labels, _align_keys))
+    _key_to_label = dict(zip(_align_keys, _align_labels))
+
+    # ИСПРАВЛЕНО: начальное значение меню — подпись, соответствующая ключу из settings.
+    alignment_var = ctk.StringVar(
+        value=_key_to_label.get(settings.text_alignment, _key_to_label["center"])
     )
+
+    def on_alignment(label):
+        settings.text_alignment = _label_to_key.get(label, "center")
+        sidebar._on_change()
+
+    alignment_menu = ctk.CTkOptionMenu(
+        alignment_frame, values=_align_labels,
+        variable=alignment_var, width=90,
+        command=on_alignment,
+    )
+
     alignment_menu.pack(side="left", padx=5)
     widgets["alignment_var"] = alignment_var
 
