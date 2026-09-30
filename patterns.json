@@ -134,6 +134,60 @@
             "Days": "Dom Seg Ter Qua Qui Sex Sáb"
         }
     },
+    "Days (German Full)": {
+        "name": "Days (German Full)",
+        "description": "Vollständige Namen der Wochentage auf Deutsch",
+        "lang": "de",
+        "characters": "Sonntag Montag Dienstag Mittwoch Donnerstag Freitag Samstag",
+        "categories": {
+            "Days": "Sonntag Montag Dienstag Mittwoch Donnerstag Freitag Samstag"
+        }
+    },
+    "Days (German Short 3)": {
+        "name": "Days (German Short 3)",
+        "description": "3-Buchstaben-Abkürzungen für Wochentage auf Deutsch",
+        "lang": "de",
+        "characters": "Son Mon Die Mit Don Fre Sam",
+        "categories": {
+            "Days": "Son Mon Die Mit Don Fre Sam"
+        }
+    },
+    "Days (German Short 2)": {
+        "name": "Days (German Short 2)",
+        "description": "2-Buchstaben-Abkürzungen für Wochentage auf Deutsch",
+        "lang": "de",
+        "characters": "So Mo Di Mi Do Fr Sa",
+        "categories": {
+            "Days": "So Mo Di Mi Do Fr Sa"
+        }
+    },
+    "Days (Turkish Full)": {
+        "name": "Days (Turkish Full)",
+        "description": "Türkçe gün adlarının tam halleri",
+        "lang": "tr",
+        "characters": "Pazar Pazartesi Salı Çarşamba Perşembe Cuma Cumartesi",
+        "categories": {
+            "Days": "Pazar Pazartesi Salı Çarşamba Perşembe Cuma Cumartesi"
+        }
+    },
+    "Days (Turkish Short 3)": {
+        "name": "Days (Turkish Short 3)",
+        "description": "Türkçe gün adlarının 3 harfli kısaltmaları",
+        "lang": "tr",
+        "characters": "Paz Pzt Sal Çar Per Cum Cmt",
+        "categories": {
+            "Days": "Paz Pzt Sal Çar Per Cum Cmt"
+        }
+    },
+    "Days (Turkish Short 2)": {
+        "name": "Days (Turkish Short 2)",
+        "description": "Türkçe gün adlarının 2 harfli kısaltmaları",
+        "lang": "tr",
+        "characters": "Pa Pt Sa Ça Pe Cu Ct",
+        "categories": {
+            "Days": "Pa Pt Sa Ça Pe Cu Ct"
+        }
+    },
     "Months (Russian Full)": {
         "name": "Months (Russian Full)",
         "description": "Полные названия месяцев на русском",
@@ -260,6 +314,42 @@
             "Months": "Jan Fev Mar Abr Mai Jun Jul Ago Set Out Nov Dez"
         }
     },
+    "Months (German Full)": {
+        "name": "Months (German Full)",
+        "description": "Vollständige Monatsnamen auf Deutsch",
+        "lang": "de",
+        "characters": "Januar Februar März April Mai Juni Juli August September Oktober November Dezember",
+        "categories": {
+            "Months": "Januar Februar März April Mai Juni Juli August September Oktober November Dezember"
+        }
+    },
+    "Months (German Short 3)": {
+        "name": "Months (German Short 3)",
+        "description": "3-Buchstaben-Abkürzungen für Monate auf Deutsch",
+        "lang": "de",
+        "characters": "Jan Feb Mär Apr Mai Jun Jul Aug Sep Okt Nov Dez",
+        "categories": {
+            "Months": "Jan Feb Mär Apr Mai Jun Jul Aug Sep Okt Nov Dez"
+        }
+    },
+    "Months (Turkish Full)": {
+        "name": "Months (Turkish Full)",
+        "description": "Türkçe ay adlarının tam halleri",
+        "lang": "tr",
+        "characters": "Ocak Şubat Mart Nisan Mayıs Haziran Temmuz Ağustos Eylül Ekim Kasım Aralık",
+        "categories": {
+            "Months": "Ocak Şubat Mart Nisan Mayıs Haziran Temmuz Ağustos Eylül Ekim Kasım Aralık"
+        }
+    },
+    "Months (Turkish Short 3)": {
+        "name": "Months (Turkish Short 3)",
+        "description": "Türkçe ay adlarının 3 harfli kısaltmaları",
+        "lang": "tr",
+        "characters": "Oca Şub Mar Nis May Haz Tem Ağu Eyl Eki Kas Ara",
+        "categories": {
+            "Months": "Oca Şub Mar Nis May Haz Tem Ağu Eyl Eki Kas Ara"
+        }
+    },
     "Beaufort Scale Russian": {
         "name": "Beaufort Scale Russian",
         "description": "Шкала Бофорта на русском языке с разделителем ``` для многословных названий",
@@ -314,6 +404,24 @@
             "Beaufort Scale": "Calmaria```Aragem```Brisa leve```Brisa moderada```Brisa forte```Brisa fresca```Vento fresco```Vento forte```Ventania```Ventania forte```Tempestade```Tempestade violenta```Furacão"
         }
     },
+    "Beaufort Scale German": {
+        "name": "Beaufort Scale German",
+        "description": "Beaufort-Skala auf Deutsch mit ``` als Trennzeichen für mehrteilige Begriffe",
+        "lang": "de",
+        "characters": "Windstille```Leiser Zug```Leichte Brise```Schwache Brise```Mäßige Brise```Frische Brise```Starker Wind```Steifer Wind```Stürmischer Wind```Sturm```Schwerer Sturm```Orkanartiger Sturm```Orkan",
+        "categories": {
+            "Beaufort Scale": "Windstille```Leiser Zug```Leichte Brise```Schwache Brise```Mäßige Brise```Frische Brise```Starker Wind```Steifer Wind```Stürmischer Wind```Sturm```Schwerer Sturm```Orkanartiger Sturm```Orkan"
+        }
+    },
+    "Beaufort Scale Turkish": {
+        "name": "Beaufort Scale Turkish",
+        "description": "Beaufort rüzgar şiddeti ölçeği Türkçe, çok kelimeli terimler için ``` ayırıcısı ile",
+        "lang": "tr",
+        "characters": "Sakin```Esinti```Hafif esinti```Tatlı esinti```Orta esinti```Serin esinti```Kuvvetli esinti```Sert esinti```Fırtınamsı rüzgar```Fırtına```Kuvvetli fırtına```Tam fırtına```Kasırga",
+        "categories": {
+            "Beaufort Scale": "Sakin```Esinti```Hafif esinti```Tatlı esinti```Orta esinti```Serin esinti```Kuvvetli esinti```Sert esinti```Fırtınamsı rüzgar```Fırtına```Kuvvetli fırtına```Tam fırtına```Kasırga"
+        }
+    },
     "Weather (Russian)": {
         "name": "Weather (Russian)",
         "description": "Описание погоды на русском языке",
@@ -366,6 +474,24 @@
         "characters": "Ensolarado```Nublado```Encoberto```Tempestade```Granizo```Chuva e neve```Chuva congelante```Chuva leve```Chuva```Chuva forte```Neve leve```Neve```Nevasca```Nevoeiro```Poeira```Tempestade de areia```Smog```N/D",
         "categories": {
             "Weather": "Ensolarado```Nublado```Encoberto```Tempestade```Granizo```Chuva e neve```Chuva congelante```Chuva leve```Chuva```Chuva forte```Neve leve```Neve```Nevasca```Nevoeiro```Poeira```Tempestade de areia```Smog```N/D"
+        }
+    },
+    "Weather (German)": {
+        "name": "Weather (German)",
+        "description": "Wetterbeschreibungen auf Deutsch",
+        "lang": "de",
+        "characters": "Sonnig```Bewölkt```Bedeckt```Gewitter```Hagel```Schneeregen```Gefrierender Regen```Leichter Regen```Regen```Starker Regen```Leichter Schneefall```Schnee```Schneesturm```Nebel```Staub```Sandsturm```Smog```N/V",
+        "categories": {
+            "Weather": "Sonnig```Bewölkt```Bedeckt```Gewitter```Hagel```Schneeregen```Gefrierender Regen```Leichter Regen```Regen```Starker Regen```Leichter Schneefall```Schnee```Schneesturm```Nebel```Staub```Sandsturm```Smog```N/V"
+        }
+    },
+    "Weather (Turkish)": {
+        "name": "Weather (Turkish)",
+        "description": "Türkçe hava durumu açıklamaları",
+        "lang": "tr",
+        "characters": "Güneşli```Bulutlu```Kapalı```Gök gürültülü fırtına```Dolu```Sulu kar```Dondurucu yağmur```Hafif yağmur```Yağmur```Şiddetli yağmur```Hafif kar```Kar```Kar fırtınası```Sis```Toz```Kum fırtınası```Duman```Yok",
+        "categories": {
+            "Weather": "Güneşli```Bulutlu```Kapalı```Gök gürültülü fırtına```Dolu```Sulu kar```Dondurucu yağmur```Hafif yağmur```Yağmur```Şiddetli yağmur```Hafif kar```Kar```Kar fırtınası```Sis```Toz```Kum fırtınası```Duman```Yok"
         }
     },
     "Directions (Russian Nouns)": {
@@ -494,6 +620,42 @@
             "Directions": "N NE L SE S SO O NO"
         }
     },
+    "Directions (German Full)": {
+        "name": "Directions (German Full)",
+        "description": "Vollständige Himmelsrichtungen im Uhrzeigersinn",
+        "lang": "de",
+        "characters": "Norden```Nordosten```Osten```Südosten```Süden```Südwesten```Westen```Nordwesten",
+        "categories": {
+            "Directions": "Norden```Nordosten```Osten```Südosten```Süden```Südwesten```Westen```Nordwesten"
+        }
+    },
+    "Directions (German Short)": {
+        "name": "Directions (German Short)",
+        "description": "Kurzbezeichnungen der Himmelsrichtungen im Uhrzeigersinn",
+        "lang": "de",
+        "characters": "N NO O SO S SW W NW",
+        "categories": {
+            "Directions": "N NO O SO S SW W NW"
+        }
+    },
+    "Directions (Turkish Full)": {
+        "name": "Directions (Turkish Full)",
+        "description": "Saat yönünde tam yön adları",
+        "lang": "tr",
+        "characters": "Kuzey```Kuzeydoğu```Doğu```Güneydoğu```Güney```Güneybatı```Batı```Kuzeybatı",
+        "categories": {
+            "Directions": "Kuzey```Kuzeydoğu```Doğu```Güneydoğu```Güney```Güneybatı```Batı```Kuzeybatı"
+        }
+    },
+    "Directions (Turkish Short)": {
+        "name": "Directions (Turkish Short)",
+        "description": "Saat yönünde kısa yön adları",
+        "lang": "tr",
+        "characters": "K KD D GD G GB B KB",
+        "categories": {
+            "Directions": "K KD D GD G GB B KB"
+        }
+    },
     "Moon Phases (Russian)": {
         "name": "Moon Phases (Russian)",
         "description": "Полные 8 фаз лунного цикла на русском",
@@ -546,6 +708,24 @@
         "characters": "Lua nova```Lua crescente```Quarto crescente```Gibosa crescente```Lua cheia```Gibosa minguante```Quarto minguante```Lua minguante",
         "categories": {
             "Astronomy": "Lua nova```Lua crescente```Quarto crescente```Gibosa crescente```Lua cheia```Gibosa minguante```Quarto minguante```Lua minguante"
+        }
+    },
+    "Moon Phases (German)": {
+        "name": "Moon Phases (German)",
+        "description": "Vollständige 8 Phasen des Mondzyklus auf Deutsch",
+        "lang": "de",
+        "characters": "Neumond```Zunehmende Sichel```Erstes Viertel```Zunehmender Mond```Vollmond```Abnehmender Mond```Letztes Viertel```Abnehmende Sichel",
+        "categories": {
+            "Astronomy": "Neumond```Zunehmende Sichel```Erstes Viertel```Zunehmender Mond```Vollmond```Abnehmender Mond```Letztes Viertel```Abnehmende Sichel"
+        }
+    },
+    "Moon Phases (Turkish)": {
+        "name": "Moon Phases (Turkish)",
+        "description": "Ay döngüsünün 8 evresinin tamamı Türkçe",
+        "lang": "tr",
+        "characters": "Yeni Ay```Hilal```İlk Dördün```Şişkin Ay```Dolunay```Son Şişkin Ay```Son Dördün```Küçülen Hilal",
+        "categories": {
+            "Astronomy": "Yeni Ay```Hilal```İlk Dördün```Şişkin Ay```Dolunay```Son Şişkin Ay```Son Dördün```Küçülen Hilal"
         }
     },
     "Digits and Symbols": {
@@ -609,6 +789,24 @@
         "characters": "°C```°F```km/h```m/s```mph```mmHg```hPa```inHg```mm```pol```km```mi```kcal```bpm```passos",
         "categories": {
             "Units": "°C```°F```km/h```m/s```mph```mmHg```hPa```inHg```mm```pol```km```mi```kcal```bpm```passos"
+        }
+    },
+    "Units (German)": {
+        "name": "Units (German)",
+        "description": "Abkürzungen für Maßeinheiten auf Deutsch",
+        "lang": "de",
+        "characters": "°C```°F```km/h```m/s```mph```mmHg```hPa```inHg```mm```in```km```mi```kcal```bpm```Schritte",
+        "categories": {
+            "Units": "°C```°F```km/h```m/s```mph```mmHg```hPa```inHg```mm```in```km```mi```kcal```bpm```Schritte"
+        }
+    },
+    "Units (Turkish)": {
+        "name": "Units (Turkish)",
+        "description": "Türkçe ölçü birimi kısaltmaları",
+        "lang": "tr",
+        "characters": "°C```°F```km/sa```m/s```mph```mmHg```hPa```inHg```mm```in```km```mi```kcal```bpm```adım",
+        "categories": {
+            "Units": "°C```°F```km/sa```m/s```mph```mmHg```hPa```inHg```mm```in```km```mi```kcal```bpm```adım"
         }
     }
 }
