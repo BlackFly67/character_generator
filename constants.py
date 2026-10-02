@@ -219,7 +219,7 @@ DEFAULT_CONFIG = {
     "emboss_enabled": False,
     "emboss_depth": 4,
     "emboss_blur": 1,
-    "emboss_angle": 135,
+    "emboss_angle": 225,  # ИСПРАВЛЕНО: как в Settings.reset()
     "emboss_highlight": "#ffffff",
     "emboss_shadow": "#000000",
     "outline_outer_enabled": False,
@@ -287,7 +287,13 @@ DEFAULT_CONFIG = {
     "icon_paths": [],
     "create_bin": False,
     "canvas_width_enabled": False,
-    "canvas_width_delta": 0,
+    # ИСПРАВЛЕНО: ключ в to_dict/from_dict — "canvas_width", а здесь
+    # было "canvas_width_delta" — значение из DEFAULT_CONFIG терялось.
+    "canvas_width": 0,
+    # ДОБАВЛЕНО: состояние окна выбора паттернов (язык-фильтр и
+    # последний выбранный паттерн).
+    "patterns_lang": "all",
+    "patterns_selected": None,
     "saved_background_color": None,
     "saved_text_color": "#ffffff"
 }

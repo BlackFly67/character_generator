@@ -73,18 +73,8 @@ class MainWindow:
         #   column 1 — правая (Sidebar во всю высоту).
         self.root.grid_columnconfigure(0, weight=1)
         self.root.grid_columnconfigure(1, weight=0)
-        # 4 строки:
-        #   row 0 — topbar (только column 0).
-        #   row 1 — chars row (только column 0).
-        #   row 2 — preview (column 0, тянется).
-        #   row 3 — column 0 ПУСТАЯ (ничего туда не кладётся; в
-        #     докстрине модуля раньше значилось "canvas_width_delta",
-        #     но этот контрол живёт ВНУТРИ ui/preview.py::PreviewPanel,
-        #     т.е. фактически в row=2 — см. исправленный докстринг
-        #     выше). Строка row=3 не мёртвая: sidebar_holder занимает
-        #     rowspan=4 (row 0..3) в column 1, и весь этот диапазон
-        #     нужен, чтобы правая колонка растягивалась на всю высоту
-        #     окна наравне с превью (row 2, weight=1).
+        # 4 строки (row 3 нужна, чтобы sidebar_holder с rowspan=4
+        # растягивался на всю высоту окна).
         self.root.grid_rowconfigure(0, weight=0)
         self.root.grid_rowconfigure(1, weight=0)
         self.root.grid_rowconfigure(2, weight=1)
@@ -115,7 +105,7 @@ class MainWindow:
 
         self.sidebar = Sidebar(sidebar_holder, self.settings, self.i18n)
         self.sidebar.pack(fill="both", expand=True)
-        
+
         self.sidebar.add_change_callback(self._on_settings_change)
         self.sidebar.add_change_callback(self._schedule_history_snapshot)
         self.sidebar.set_settings_callback(self._open_settings)
@@ -359,19 +349,7 @@ class MainWindow:
     def _apply_settings(self):
         ctk.set_appearance_mode(self.settings.theme)
 
-        # Сбросить кэш FX-иконок: с этого момента их рендер реально
-        # зависит от темы (насыщенность + базовый цвет буквы для
-        # пресетов без своего text_color) — см. ui/effect_icon.py.
-        # ИСПРАВЛЕНО: раньше комментарий здесь утверждал то же самое,
-        # но фактически ничего не менялось при смене темы — оба
-        # варианта CTkImage (light_image/dark_image) указывали на один
-        # и тот же объект, а _BASE_CACHE кэшировался только по panel_id
-        # без учёта темы. Проверено побайтовым сравнением пикселей.
-        # Теперь оба кэша (_CTK_CACHE и _BASE_CACHE) корректно
-        # учитывают тему в ключе, и clear_cache() здесь — не обязателен
-        # для корректности (старые записи для другой темы просто
-        # останутся неиспользуемыми в памяти), но полезен, чтобы не
-        # копить обе версии сразу.
+        # Сбросить кэш FX-иконок (рендер зависит от темы).
         try:
             from ui.effect_icon import clear_cache
             clear_cache()
@@ -406,10 +384,7 @@ class MainWindow:
         """
         Обновить текст всех i18n-виджетов верхнего уровня (topbar,
         chars row, иконки, превью) при смене языка. Sidebar
-        пересобирается отдельно через sidebar._refresh_all_widgets() —
-        здесь только то, что живёт ВНЕ Sidebar (см. старый
-        create_char_gui.py::update_ui_language, который делал то же
-        самое одним списком).
+        пересобирается отдельно через sidebar._refresh_all_widgets().
         """
         self.mode_text_btn.configure(text="📝 " + self.i18n.tr("text_mode"))
         self.mode_icon_btn.configure(text="🖼 " + self.i18n.tr("icon_mode"))
@@ -447,8 +422,7 @@ class MainWindow:
     def _set_input_mode(self, is_icon_mode, apply=False):
         self.settings.icon_mode = is_icon_mode
 
-        # Секции Sidebar'а, зависящие от режима (arc скрыт
-        # в иконках; содержимое font переключается), синхронизируем
+        # Секции Sidebar'а, зависящие от режима, синхронизируем
         # без полной пересборки.
         try:
             self.sidebar._sync_mode_dependent_sections()
@@ -502,12 +476,7 @@ class MainWindow:
                 text_color=inactive_text, border_color=inactive_border,
             )
     def _default_icon_font_size(self):
-        # ИСПРАВЛЕНО: раньше здесь была ВТОРАЯ, независимая копия той же
-        # формулы (с той же магической константой ICON_CANVAS_BASELINE_
-        # OVERHEAD=4), которую пришлось бы обновлять синхронно с
-        # render/composer.py::default_icon_font_size(). Используем ту же
-        # единственную функцию, чтобы поле Size и реальный расчёт холста
-        # больше не могли разойтись.
+        # Единая функция расчёта с render/composer.py.
         return _shared_default_icon_font_size(self.loaded_icon_paths)
 
     # ==================== ICONS ====================
@@ -586,11 +555,8 @@ class MainWindow:
         self.preview_index = 0
         self.preview.update()
         self.settings.icon_paths = []
-        # ИСПРАВЛЕНО: явный Clear — это осознанный сброс к пустому
-        # состоянию; сбрасываем и icon_font_size, чтобы следующая
-        # загрузка иконок снова прошла автоподбор размера (см. правку
-        # в _add_icon_paths, где эта автоустановка теперь защищена
-        # условием "icon_font_size is None").
+        # Явный Clear — сбрасываем и icon_font_size, чтобы следующая
+        # загрузка иконок снова прошла автоподбор размера.
         self.settings.icon_font_size = None
         self.settings.save()
 
@@ -804,6 +770,7 @@ class MainWindow:
         listbox = tk.Listbox(
             list_frame, yscrollcommand=scrollbar.set,
             height=10, font=("Arial", 12),
+            exportselection=False,
         )
         listbox.pack(side="left", fill="both", expand=True)
         scrollbar.configure(command=listbox.yview)
@@ -838,19 +805,35 @@ class MainWindow:
             info_text.delete(1.0, "end")
             info_text.config(state="disabled")
 
+        def on_lang_change(selected_lang):
+            # ДОБАВЛЕНО: запоминаем выбранный языковой фильтр.
+            update_list(selected_lang)
+            self.settings.patterns_lang = selected_lang
+            self.settings.save()
+
         lang_combo = ctk.CTkComboBox(
             lang_frame, values=combo_values,
-            width=100, state="readonly", command=update_list,
+            width=100, state="readonly", command=on_lang_change,
         )
-        lang_combo.set("all")
+
+        # ДОБАВЛЕНО: восстанавливаем сохранённый язык (если его нет в
+        # текущем файле паттернов — откатываемся на "all").
+        saved_lang = str(getattr(self.settings, "patterns_lang", "all") or "all").lower()
+        if saved_lang not in combo_values:
+            saved_lang = "all"
+        lang_combo.set(saved_lang)
         lang_combo.pack(side="left")
-        update_list("all")
+        update_list(saved_lang)
 
         def on_select(event):
             selection = listbox.curselection()
             if selection and selection[0] < len(filtered_keys):
                 key = filtered_keys[selection[0]]
                 pattern = patterns[key]
+                # ДОБАВЛЕНО: запоминаем выбранный паттерн.
+                if self.settings.patterns_selected != key:
+                    self.settings.patterns_selected = key
+                    self.settings.save()
                 info_text.config(state="normal")
                 info_text.delete(1.0, "end")
                 info_text.insert("end", f"{self.i18n.tr('name')}: {pattern.get('name', key)}\n")
@@ -864,6 +847,15 @@ class MainWindow:
                 info_text.config(state="disabled")
 
         listbox.bind('<<ListboxSelect>>', on_select)
+
+        # ДОБАВЛЕНО: предвыбираем последний выбранный паттерн, если он
+        # есть в текущем (отфильтрованном) списке.
+        saved_key = getattr(self.settings, "patterns_selected", None)
+        if saved_key in filtered_keys:
+            idx = filtered_keys.index(saved_key)
+            listbox.selection_set(idx)
+            listbox.see(idx)
+            on_select(None)
 
         btn_frame = ctk.CTkFrame(main)
         btn_frame.pack(fill="x", pady=10)
@@ -880,18 +872,11 @@ class MainWindow:
                         current = "```".join(current.split())
                         new_text = current + "```" + new_chars
                     elif "```" in current and "```" not in new_chars:
-                        # ИСПРАВЛЕНО: обратный случай к ветке выше —
-                        # текущая строка уже в "```"-формате, а новый
-                        # паттерн обычный (пробельный). Раньше это
-                        # попадало в else и склеивалось пробелом, из-за
-                        # чего parse_characters (переключающийся на
-                        # "```"-режим при наличии "```" где угодно в
-                        # строке) склеивал все пробельные слова нового
-                        # паттерна в один "символ". Приводим новый
-                        # паттерн к тому же "```"-формату перед склейкой.
+                        # Текущая строка в "```"-формате, а новый
+                        # паттерн пробельный — приводим к одному формату.
                         new_chars_joined = "```".join(new_chars.split())
-                        new_text = current + "```" + new_chars_joined                        
-                        
+                        new_text = current + "```" + new_chars_joined
+
                     elif "```" in new_chars:
                         new_text = current + "```" + new_chars
                     else:
@@ -903,6 +888,9 @@ class MainWindow:
                 self.preview_index = 0
                 self.preview.update()
                 self.settings.characters = new_text
+                # ДОБАВЛЕНО: сохраняем выбранный паттерн и язык вместе с символами.
+                self.settings.patterns_selected = key
+                self.settings.patterns_lang = lang_combo.get()
                 self.settings.save()
                 selector.destroy()
 
@@ -993,9 +981,11 @@ class MainWindow:
 
                 progress_window.destroy()
 
-                output_dir = os.path.join(
-                    os.path.dirname(os.path.abspath(__file__)), "..", "output",
-                )
+                # ИСПРАВЛЕНО: рендер пишет в os.path.join("output", ...)
+                # относительно текущей рабочей папки. Раньше здесь
+                # показывался путь <папка модуля>/../output, не совпадающий
+                # с реальным при запуске из другой директории.
+                output_dir = os.path.abspath("output")
                 messagebox.showinfo(
                     self.i18n.tr("done"),
                     self.i18n.tr("generated").format(count=count)
@@ -1059,6 +1049,24 @@ class MainWindow:
             self._rebuild_icon_list()
             self.sidebar._refresh_all_widgets()
             self.sidebar.refresh_fx_grid()
+
+            # ИСПРАВЛЕНО: from_dict меняет также characters,
+            # filename_template, icon_mode и canvas_width_*, но виджеты
+            # раньше не обновлялись — следующее нажатие клавиши в поле
+            # перезаписывало settings старым текстом из поля.
+            self.characters_entry.delete(0, "end")
+            self.characters_entry.insert(0, self.settings.characters)
+            self.filename_template_entry.delete(0, "end")
+            self.filename_template_entry.insert(0, self.settings.filename_template)
+            pv = self.preview
+            pv.canvas_width_enabled_var.set(bool(self.settings.canvas_width_enabled))
+            pv.canvas_width_entry.delete(0, "end")
+            pv.canvas_width_entry.insert(0, str(self.settings.canvas_width_delta))
+            pv.canvas_width_slider.set(self.settings.canvas_width_delta)
+            self.create_bin_var.set(bool(self.settings.create_bin))
+            # Переключает панели ввода, кнопки режима и обновляет превью.
+            self._set_input_mode(self.settings.icon_mode)
+
             self.preview.update()
             self._update_undo_redo_buttons()
         finally:

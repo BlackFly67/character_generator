@@ -52,7 +52,9 @@ class Emboss(EffectBase):
             return ctx.image
         depth = int(self._get(ctx, "depth", 4))
         blur = int(self._get(ctx, "blur", 1))
-        angle = int(self._get(ctx, "angle", 135))
+        # ИСПРАВЛЕНО: fallback был 135, а дефолт ParamSpec/Settings — 225;
+        # при отсутствии атрибута свет падал с зеркально противоположной стороны.
+        angle = int(self._get(ctx, "angle", 225))
         highlight = self._get(ctx, "highlight", "#ffffff")
         shadow = self._get(ctx, "shadow", "#000000")
         return apply_emboss(ctx.image, ctx.mask, depth, blur, angle,

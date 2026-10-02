@@ -48,12 +48,6 @@ class Settings:
         self.text_color = DEFAULT_TEXT_COLOR
         self.saved_text_color = DEFAULT_TEXT_COLOR
         self.background_color = DEFAULT_BACKGROUND_COLOR
-        # FIX: атрибут saved_background_color раньше нигде не
-        # инициализировался (в отличие от симметричного
-        # saved_text_color) — он появлялся только в рантайме, в
-        # ui/sidebar.py::_toggle_transparent_background, через
-        # getattr(..., None). Инициализируем его здесь же, чтобы
-        # атрибут существовал с самого начала жизни Settings.
         self.saved_background_color = "#000000"
         self.shadow_color = DEFAULT_SHADOW_COLOR
         self.emboss_highlight = DEFAULT_EMBOSS_HIGHLIGHT
@@ -87,9 +81,6 @@ class Settings:
         self.create_bin = False
         self.canvas_width_enabled = False
         self.icon_mode = False
-        # FIX: эти три поля читались в main_window.py и preview.py,
-        # но никогда не были объявлены в Settings — при первом запуске
-        # без конфига падало с AttributeError. Теперь объявлены явно.
         self.icon_preserve_color = False
         self.icon_recolor_mode = "none"
         self.icon_tint_blend_mode = "multiply"
@@ -148,13 +139,19 @@ class Settings:
         self.extrude_angle = DEFAULT_EXTRUDE_ANGLE
         self.extrude_color_near = DEFAULT_EXTRUDE_COLOR_NEAR
         self.extrude_color_far = DEFAULT_EXTRUDE_COLOR_FAR
-        self.extrude_blend_mode = "normal"        
+        self.extrude_blend_mode = "normal"
         self.canvas_width_delta = 0
 
         # Текст и иконки
         self.characters = ""
         self.icon_paths = []
         self.filename_template = DEFAULT_FILENAME_TEMPLATE
+
+        # ДОБАВЛЕНО: состояние окна выбора паттернов.
+        #   patterns_lang     — последний выбранный языковой фильтр ("all" / "ru" / ...);
+        #   patterns_selected — ключ последнего выбранного паттерна (None = не выбран).
+        self.patterns_lang = "all"
+        self.patterns_selected = None
 
     # ============================================================
     #  font_size как property
@@ -165,12 +162,7 @@ class Settings:
         """
         Активный размер шрифта: text_font_size или icon_font_size в
         зависимости от icon_mode. Если для режима иконок размер ещё не
-        задан (None), возвращаем text_font_size — так при первом входе
-        в режим иконок без загруженных иконок приложение получает
-        осмысленное значение, а не падает.
-
-        Все присваивания settings.font_size = X попадают в правильное
-        поле — не нужно синхронизировать вручную в main_window.
+        задан (None), возвращаем text_font_size.
         """
         if getattr(self, "icon_mode", False):
             if self.icon_font_size is None:
@@ -192,12 +184,6 @@ class Settings:
             "theme": self.theme,
             "text_color": self.text_color,
             "background_color": self.background_color,
-            # FIX: сохраняем saved_background_color в конфиг —
-            # симметрично тому, что для текста (текстовый аналог этого
-            # поля в to_dict не хранится тоже, но здесь фиксируем
-            # именно то, чего не хватало: без этого поля выбор цвета
-            # фона терялся при перезапуске приложения после включения
-            # "прозрачного фона" — см. from_dict ниже.
             "saved_background_color": getattr(self, "saved_background_color", "#000000"),
             "saved_text_color": getattr(self, "saved_text_color", DEFAULT_TEXT_COLOR),
             "transparent_background": self.transparent_background,
@@ -208,9 +194,6 @@ class Settings:
             "shadow_distance": self.shadow_distance,
             "shadow_direction": self.shadow_direction,
             "shadow_blur": self.shadow_blur,
-            # FIX: пишем только text_font_size и icon_font_size, "font_size"
-            # больше не самостоятельное поле — при загрузке старых конфигов
-            # его значение мигрирует в text_font_size (см. from_dict).
             "text_font_size": self.text_font_size,
             "icon_font_size": self.icon_font_size,
             "rotation_angle": self.rotation_angle,
@@ -287,7 +270,7 @@ class Settings:
             "extrude_angle": self.extrude_angle,
             "extrude_color_near": self.extrude_color_near,
             "extrude_color_far": self.extrude_color_far,
-            "extrude_blend_mode": self.extrude_blend_mode,            
+            "extrude_blend_mode": self.extrude_blend_mode,
             "filename_template": self.filename_template,
             "icon_mode": self.icon_mode,
             "icon_preserve_color": getattr(self, "icon_preserve_color", False),
@@ -296,7 +279,10 @@ class Settings:
             "icon_paths": list(self.icon_paths),
             "create_bin": self.create_bin,
             "canvas_width_enabled": self.canvas_width_enabled,
-            "canvas_width": self.canvas_width_delta
+            "canvas_width": self.canvas_width_delta,
+            # ДОБАВЛЕНО: язык-фильтр и выбранный паттерн
+            "patterns_lang": self.patterns_lang,
+            "patterns_selected": self.patterns_selected,
         }
 
     def from_dict(self, data):
@@ -309,12 +295,6 @@ class Settings:
         self.theme = data.get("theme", "dark")
         self.font_path = data.get("font_path", get_default_font() or "")
 
-        # FIX: раздельные размеры с миграцией старого "font_size".
-        # Если в конфиге есть text_font_size — берём его; иначе, если
-        # есть legacy-поле "font_size" (старые конфиги), используем его
-        # как text_font_size. icon_font_size — None по умолчанию, чтобы
-        # при первом входе в режим иконок сработал автоподбор по нативной
-        # иконке (default_icon_font_size).
         legacy_font_size = data.get("font_size", DEFAULT_FONT_SIZE)
         self.text_font_size = data.get("text_font_size", legacy_font_size)
         self.icon_font_size = data.get("icon_font_size", None)
@@ -327,15 +307,6 @@ class Settings:
             DEFAULT_TEXT_COLOR,
         )
         self.background_color = safe_color(data.get("background_color", None), None)
-        # FIX: раньше saved_background_color вообще не восстанавливался
-        # из конфига (в отличие от saved_text_color выше), из-за чего
-        # выбор цвета фона терялся при перезапуске приложения после
-        # включения "прозрачного фона" (см. ui/sidebar.py
-        # ::_toggle_transparent_background — там читается через
-        # getattr(..., None) и, если атрибута нет, подставляется
-        # "#ffffff" вместо реального сохранённого цвета).
-        # Приоритет: явно сохранённое значение из файла -> текущий
-        # background_color, если он задан -> "#ffffff" по умолчанию.
         smart_default = self.background_color if self.background_color is not None else "#000000"
         self.saved_background_color = safe_color(
             data.get("saved_background_color") or smart_default,
@@ -373,8 +344,6 @@ class Settings:
         self.create_bin = data.get("create_bin", False)
         self.canvas_width_enabled = data.get("canvas_width_enabled", False)
         self.icon_mode = data.get("icon_mode", False)
-        # FIX: эти три поля раньше не загружались из конфига — при
-        # первом запуске с новым конфигом падало (см. reset()).
         self.icon_preserve_color = data.get("icon_preserve_color", False)
         self.icon_recolor_mode = data.get("icon_recolor_mode", "none")
         self.icon_tint_blend_mode = data.get("icon_tint_blend_mode", "multiply")
@@ -388,8 +357,6 @@ class Settings:
         self.text_alignment = _align if _align in ("left", "center", "right") else "center"
         self.emboss_depth = data.get("emboss_depth", DEFAULT_EMBOSS_DEPTH)
         self.emboss_blur = data.get("emboss_blur", DEFAULT_EMBOSS_BLUR)
-        # ИСПРАВЛЕНО: синхронизировано с новым дефолтом в reset()
-        # (225° = "сверху-слева" при текущей формуле offset).        
         self.emboss_angle = data.get("emboss_angle", 225)
         self.outline_outer_width = data.get("outline_outer_width", 2)
         self.outline_inner_width = data.get("outline_inner_width", 1)
@@ -462,7 +429,7 @@ class Settings:
         self.reflection_gap = data.get("reflection_gap", DEFAULT_REFLECTION_GAP)
         self.reflection_opacity = data.get("reflection_opacity", DEFAULT_REFLECTION_OPACITY)
         self.reflection_fade = data.get("reflection_fade", DEFAULT_REFLECTION_FADE)
-        
+
         # 3D-выдавливание
         self.extrude_depth = data.get("extrude_depth", DEFAULT_EXTRUDE_DEPTH)
         self.extrude_angle = data.get("extrude_angle", DEFAULT_EXTRUDE_ANGLE)
@@ -478,7 +445,14 @@ class Settings:
         self.characters = data.get("characters", "")
         self.icon_paths = list(data.get("icon_paths", []))
         self.filename_template = data.get("filename_template", DEFAULT_FILENAME_TEMPLATE)
-        self.canvas_width_delta = data.get("canvas_width", 0)
+        # ИСПРАВЛЕНО: принимаем оба имени ключа ("canvas_width" — актуальное,
+        # "canvas_width_delta" — старое из DEFAULT_CONFIG), иначе значение терялось.
+        self.canvas_width_delta = data.get("canvas_width", data.get("canvas_width_delta", 0))
+
+        # ДОБАВЛЕНО: окно выбора паттернов
+        self.patterns_lang = str(data.get("patterns_lang", "all") or "all")
+        _sel = data.get("patterns_selected", None)
+        self.patterns_selected = str(_sel) if _sel else None
 
     def load(self, default_config=None):
         """Загружает настройки из файла."""
@@ -491,14 +465,6 @@ class Settings:
             except Exception:
                 pass
 
-        # FIX: раньше default_config полностью игнорировался — если
-        # config.json отсутствует или повреждён, вызывался просто
-        # self.reset(), а переданный из main.py DEFAULT_CONFIG никак
-        # не использовался, хотя сигнатура функции предполагает
-        # обратное. Теперь, если default_config передан, настройки
-        # загружаются из него через тот же from_dict(), что и из
-        # файла — reset() остаётся резервным вариантом, когда
-        # default_config не передан.
         if default_config:
             self.from_dict(default_config)
         else:

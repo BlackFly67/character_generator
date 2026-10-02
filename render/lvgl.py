@@ -14,24 +14,32 @@ def save_lvgl_v8_bin(rgba_array, filename, color_depth=32, has_alpha=True, swap_
     # PIL отдаёт RGBA - переводим в BGRA
     img = rgba_array[:, :, [2, 1, 0, 3]].copy()
     height, width = img.shape[:2]
-    
+
+    # ИСПРАВЛЕНО: поля ширины/высоты в заголовке — по 11 бит. Раньше
+    # размер > 2047 молча обрезался маской & 0x7FF, и получался битый
+    # .bin без какого-либо сообщения. Теперь — явная ошибка.
+    if width > 0x7FF or height > 0x7FF:
+        raise ValueError(
+            f"LVGL .bin: размер {width}x{height} превышает 2047 px"
+        )
+
     cf = 5 if has_alpha else 4  # LV_IMG_CF_TRUE_COLOR_ALPHA или LV_IMG_CF_TRUE_COLOR
-    
+
     # Формирование заголовка
     header_int = (cf & 0x1F) | ((width & 0x7FF) << 10) | ((height & 0x7FF) << 21)
     header = struct.pack('<I', header_int)
-    
+
     with open(filename, "wb") as f:
         f.write(header)
-        
+
         if color_depth == 16:
             b = img[:, :, 0].astype(np.uint16)
             g = img[:, :, 1].astype(np.uint16)
             r = img[:, :, 2].astype(np.uint16)
             a = img[:, :, 3].astype(np.uint8)
-            
+
             rgb565 = (((r >> 3) & 0x1F) << 11) | (((g >> 2) & 0x3F) << 5) | ((b >> 3) & 0x1F)
-            
+
             if has_alpha:
                 out_img = np.empty((height, width, 3), dtype=np.uint8)
                 if swap_16:
@@ -49,9 +57,9 @@ def save_lvgl_v8_bin(rgba_array, filename, color_depth=32, has_alpha=True, swap_
                 else:
                     out_img[:, :, 0] = rgb565 & 0xFF
                     out_img[:, :, 1] = (rgb565 >> 8) & 0xFF
-            
+
             f.write(out_img.tobytes())
-        
+
         elif color_depth == 32:
             if not has_alpha:
                 img[:, :, 3] = 0xFF

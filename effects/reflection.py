@@ -36,15 +36,24 @@ class Reflection(EffectBase):
         opacity = int(self._get(ctx, "opacity", 50)) / 100.0
         fade = int(self._get(ctx, "fade", 100)) / 100.0
 
+        # ИСПРАВЛЕНО: compose_full считает фон прозрачным, если
+        # transparent_background=True ИЛИ background_color is None.
+        # Раньше сюда всегда шёл settings.background_color, и при
+        # transparent_background=True, но непустом background_color
+        # (пресет/конфиг) холст отражения заливался цветом.
+        s = ctx.settings
+        bg = None if (s.transparent_background or s.background_color is None) \
+            else s.background_color
+
         return apply_reflection(
             ctx.image, char_layer, paste_x, paste_y,
-            ctx.settings.background_color,
+            bg,
             gap, opacity, fade,
         )
 
 
 # ============================================================
-#  Старая функция — копия прежней версии.
+#  Функция эффекта
 # ============================================================
 
 def apply_reflection(final_img, content_layer, paste_x, paste_y, background_color,
@@ -86,10 +95,6 @@ def apply_reflection(final_img, content_layer, paste_x, paste_y, background_colo
         new_canvas = Image.new("RGBA", (new_w, new_h), (0, 0, 0, 0))
     else:
         if isinstance(background_color, str) and background_color.startswith('#'):
-            # ИСПРАВЛЕНО: та же потеря альфа-канала, что и в
-            # render/composer.py — "#RRGGBBAA" усечённо читался как
-            # "#RRGGBB" + 255, полупрозрачный фон становился
-            # непрозрачным на холсте отражения.
             _h = background_color.lstrip('#')
             if len(_h) == 8:
                 bg_col = tuple(int(_h[i:i+2], 16) for i in (0, 2, 4, 6))
@@ -101,8 +106,12 @@ def apply_reflection(final_img, content_layer, paste_x, paste_y, background_colo
             bg_col = background_color
         new_canvas = Image.new("RGBA", (new_w, new_h), bg_col)
 
-    # Вставляем оригинал и отражение
-    new_canvas.paste(final_img, (0, 0), final_img)
+    # ИСПРАВЛЕНО: раньше было paste(final_img, (0, 0), final_img) —
+    # маска = сама картинка, и альфа считалась как src*a + dst*(1-a)
+    # по ВСЕМ каналам, включая альфу: на прозрачном холсте итоговая
+    # альфа возводилась в квадрат (a²/255), мягкие края/свечения/тень
+    # ослабевали. alpha_composite даёт корректное смешивание.
+    new_canvas.alpha_composite(final_img, (0, 0))
     new_canvas.alpha_composite(reflected, (refl_x, refl_y))
 
     return new_canvas
