@@ -1,18 +1,9 @@
 # -*- coding: utf-8 -*-
 """
 lua_preview_gui.py — GUI для универсального предпросмотра Lua-циферблатов.
-
-Лежит рядом с lua_preview.py (использует его эмулятор lvgl/io/dataman).
-Зависимости: pip install lupa pillow numpy   (tkinter входит в Python)
-
-Возможности:
-  - выбор .lua и папки с .bin / database.db
-  - размер экрана, масштаб, фон: чёрный / шахматка (видна прозрачность) / свой цвет
-  - Render (F5), авто-перерисовка при сохранении .lua или смене файлов в папке
-  - сохранение PNG на выбранном фоне и PNG с прозрачным фоном
-  - лог: print() из Lua, отсутствующие файлы, ошибки со строкой
 """
 import contextlib
+import datetime
 import io
 import os
 import sys
@@ -24,6 +15,27 @@ from PIL import Image, ImageTk
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import lua_preview as lp  # noqa: E402
+
+GUI_DIR = os.path.dirname(os.path.abspath(__file__))
+LOG_PATH = os.path.join(GUI_DIR, "log.txt")
+
+
+def write_log(text):
+    try:
+        with open(LOG_PATH, "a", encoding="utf-8") as f:
+            f.write(text)
+            if not text.endswith("\n"):
+                f.write("\n")
+    except Exception:
+        pass
+
+
+def log_separator(title):
+    ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    write_log("")
+    write_log("=" * 70)
+    write_log(f"[{ts}] {title}")
+    write_log("=" * 70)
 
 
 def checkerboard(size, cell=10):
@@ -41,9 +53,10 @@ class App:
     def __init__(self, root):
         self.root = root
         root.title("Lua Preview")
-        self.transparent = None      # последний отрисованный кадр (RGBA, без фона)
+        self.transparent = None
         self.tk_img = None
         self.watch_state = None
+        self.emu = None
 
         self.v_lua = tk.StringVar()
         self.v_dir = tk.StringVar()
@@ -58,7 +71,6 @@ class App:
         root.bind("<F5>", lambda e: self.render())
         root.after(1000, self._poll)
 
-    # ---------------- интерфейс ----------------
     def _build(self):
         top = ttk.Frame(self.root, padding=6)
         top.pack(fill="x")
@@ -90,10 +102,13 @@ class App:
         btns = ttk.Frame(self.root, padding=6)
         btns.pack(fill="x")
         ttk.Button(btns, text="Render (F5)", command=self.render).pack(side="left")
+        ttk.Button(btns, text="Клик", command=self.click).pack(side="left", padx=4)
         ttk.Button(btns, text="Сохранить PNG (с фоном)",
                    command=lambda: self.save(False)).pack(side="left", padx=4)
         ttk.Button(btns, text="Сохранить PNG (прозрачный)",
                    command=lambda: self.save(True)).pack(side="left")
+        ttk.Button(btns, text="Открыть log.txt",
+                   command=self.open_log).pack(side="left", padx=4)
 
         body = ttk.PanedWindow(self.root, orient="vertical")
         body.pack(fill="both", expand=True)
@@ -117,10 +132,26 @@ class App:
         self.log.tag_config("err", foreground="#c00000")
         body.add(logf, weight=1)
 
-        self.status = ttk.Label(self.root, text="Выберите .lua файл", anchor="w")
+        self.status = ttk.Label(self.root, text=f"Лог: {LOG_PATH}", anchor="w")
         self.status.pack(fill="x")
 
-    # ---------------- выбор файлов ----------------
+    def log_write(self, text, tag=None, to_file=True):
+        self.log.insert("end", text, tag)
+        self.log.see("end")
+        if to_file:
+            write_log(text)
+
+    def open_log(self):
+        try:
+            if sys.platform.startswith("win"):
+                os.startfile(LOG_PATH)
+            elif sys.platform == "darwin":
+                os.system(f'open "{LOG_PATH}"')
+            else:
+                os.system(f'xdg-open "{LOG_PATH}"')
+        except Exception as e:
+            self.log_write(f"Не удалось открыть log.txt: {e}\n", "err")
+
     def pick_lua(self):
         p = filedialog.askopenfilename(filetypes=[("Lua", "*.lua"), ("Все файлы", "*.*")])
         if p:
@@ -142,40 +173,104 @@ class App:
                 self.custom_color = c
         self.refresh_view()
 
-    # ---------------- рендер ----------------
-    def log_write(self, text, tag=None):
-        self.log.insert("end", text, tag)
-        self.log.see("end")
-
     def render(self):
         lua_path = self.v_lua.get().strip()
         if not lua_path or not os.path.isfile(lua_path):
             self.status.config(text="Lua-файл не найден")
+            self.log_write("Lua-файл не найден\n", "err")
             return
         script_dir = self.v_dir.get().strip() or os.path.dirname(lua_path)
 
         self.log.delete("1.0", "end")
+
+        log_separator(f"RENDER {os.path.basename(lua_path)}")
+        write_log(f"lua:  {lua_path}")
+        write_log(f"dir:  {script_dir}")
+        write_log(f"size: {self.v_w.get()}x{self.v_h.get()}, scale={self.v_scale.get()}, "
+                  f"bg={self.v_bg.get()}")
+
         buf = io.StringIO()
         try:
             canvas = lp.Canvas(int(self.v_w.get()), int(self.v_h.get()))
             canvas.bg = (0, 0, 0, 0)
             canvas._redraw()
-            emu = lp.LuaEmulator(canvas, script_dir, "")
+            emu = lp.LuaEmulator(canvas, script_dir)
             with contextlib.redirect_stdout(buf):
                 emu.run(lua_path)
+            self.emu = emu
+
             self.transparent = canvas.img.copy()
-            self.status.config(text=f"OK: {os.path.basename(lua_path)}  "
-                                    f"{canvas.w}×{canvas.h}, объектов: {len(canvas.commands)}")
+            self.status.config(
+                text=f"OK: {os.path.basename(lua_path)}  "
+                     f"{canvas.w}×{canvas.h}, объектов: {len(canvas.commands)}  "
+                     f"(лог: log.txt)"
+            )
+            write_log(f"OK: объектов {len(canvas.commands)}")
+
         except Exception:
-            self.log_write(buf.getvalue())
-            self.log_write(traceback.format_exc(), "err")
-            self.status.config(text="Ошибка выполнения — см. лог")
+            tb = traceback.format_exc()
+            out = buf.getvalue()
+            if out:
+                self.log_write(out)
+                write_log(out)
+            self.log_write(tb, "err", to_file=False)
+            write_log(tb)
+            self.status.config(text="Ошибка выполнения — см. лог и log.txt")
             return
-        self.log_write(buf.getvalue() or "(нет вывода)\n")
+
+        out = buf.getvalue()
+        if out:
+            self.log_write(out)
+            write_log(out)
+        else:
+            self.log_write("(нет вывода)\n")
+
         self.watch_state = self._snapshot()
         self.refresh_view()
 
-    # ---------------- показ ----------------
+    def click(self):
+        if self.emu is None:
+            self.status.config(text="Сначала Render")
+            return
+        CLICKED = 1
+        target = None
+        for w in self.emu.lvgl_facade.widgets:
+            events = getattr(w, "_events", None)
+            if not events:
+                continue
+            if any(ev == CLICKED for ev, _ in events):
+                cfg = getattr(w, "cfg", None)
+                if not cfg:
+                    continue
+                ww = cfg.get("w", 0)
+                wh = cfg.get("h", 0)
+                wx = cfg.get("x", 0)
+                wy = cfg.get("y", 0)
+                if ww and wh and ww > 0 and wh > 0:
+                    target = (wx + ww // 2, wy + wh // 2)
+                    break
+
+        buf = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(buf):
+                if target:
+                    total = self.emu.click_at(target[0], target[1])
+                else:
+                    total = 0
+            self.transparent = self.emu.canvas.img.copy()
+            self.refresh_view()
+            self.status.config(text=f"Клик: {total} колбэков")
+            write_log(f"CLICK: {total}")
+            out = buf.getvalue()
+            if out:
+                self.log_write(out)
+                write_log(out)
+        except Exception:
+            tb = traceback.format_exc()
+            self.log_write(tb, "err", to_file=False)
+            write_log(tb)
+            self.status.config(text="Ошибка клика — см. лог")
+
     def _composited(self):
         if self.transparent is None:
             return None
@@ -201,14 +296,14 @@ class App:
         self.canvas.create_image(0, 0, image=self.tk_img, anchor="nw")
         self.canvas.configure(scrollregion=(0, 0, img.width, img.height))
 
-    # ---------------- сохранение ----------------
     def save(self, transparent):
         if self.transparent is None:
             return
-        p = filedialog.asksaveasfilename(defaultextension=".png",
-                                         filetypes=[("PNG", "*.png")],
-                                         initialfile="preview_transparent.png" if transparent
-                                         else "preview.png")
+        p = filedialog.asksaveasfilename(
+            defaultextension=".png",
+            filetypes=[("PNG", "*.png")],
+            initialfile="preview_transparent.png" if transparent else "preview.png"
+        )
         if not p:
             return
         img = self.transparent if transparent else self._composited()
@@ -217,8 +312,8 @@ class App:
             img = img.resize((img.width * s, img.height * s), Image.NEAREST)
         img.save(p)
         self.status.config(text=f"Сохранено: {p}")
+        write_log(f"Сохранено: {p}")
 
-    # ---------------- авто-перерисовка ----------------
     def _snapshot(self):
         lua = self.v_lua.get().strip()
         d = self.v_dir.get().strip() or (os.path.dirname(lua) if lua else "")
@@ -242,10 +337,16 @@ class App:
 def main():
     root = tk.Tk()
     app = App(root)
+
+    log_separator("GUI START")
+    write_log(f"Python: {sys.version}")
+    write_log(f"log.txt: {LOG_PATH}")
+
     if len(sys.argv) > 1:
-        app.v_lua.set(os.path.abspath(sys.argv[1]))
-        app.v_dir.set(os.path.abspath(sys.argv[2]) if len(sys.argv) > 2
-                      else os.path.dirname(os.path.abspath(sys.argv[1])))
+        lua = os.path.abspath(sys.argv[1])
+        d = os.path.abspath(sys.argv[2]) if len(sys.argv) > 2 else os.path.dirname(lua)
+        app.v_lua.set(lua)
+        app.v_dir.set(d)
         root.after(100, app.render)
     root.mainloop()
 

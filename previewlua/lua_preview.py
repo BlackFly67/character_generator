@@ -6,8 +6,8 @@ import numpy as np
 from PIL import Image, ImageDraw
 from lupa import LuaRuntime
 
-SCRIPT_DIR = os.getcwd()          # переопределяется аргументом --dir
-BG_COLOR   = (0, 0, 0, 255)      # переопределяется --bg
+SCRIPT_DIR = os.getcwd()
+BG_COLOR   = (0, 0, 0, 255)
 ANIM_FRAMES = 60
 
 
@@ -18,19 +18,57 @@ def read_lvgl_v8_bin(path):
         if len(data) < 4:
             return None
         val = struct.unpack("<I", data[:4])[0]
+        cf = val & 0x1F
         w = (val >> 10) & 0x7FF
         h = (val >> 21) & 0x7FF
         if w == 0 or h == 0:
             return None
-        expected = 4 + w * h * 4
-        if len(data) < expected:
-            return None
-        px = data[4:4 + w * h * 4]
-        arr = np.frombuffer(px, dtype=np.uint8).reshape(h, w, 4)
-        b = arr[:, :, 0]; g = arr[:, :, 1]
-        r = arr[:, :, 2]; a = arr[:, :, 3]
-        rgba = np.stack([r, g, b, a], axis=-1).astype(np.uint8)
-        return w, h, rgba
+
+        # cf=5: TRUE_COLOR_ALPHA (BGRA8888, 4 байта/пиксель)
+        if cf == 5:
+            expected = 4 + w * h * 4
+            if len(data) < expected:
+                return None
+            px = data[4:4 + w * h * 4]
+            arr = np.frombuffer(px, dtype=np.uint8).reshape(h, w, 4)
+            b = arr[:, :, 0]; g = arr[:, :, 1]
+            r = arr[:, :, 2]; a = arr[:, :, 3]
+            rgba = np.stack([r, g, b, a], axis=-1).astype(np.uint8)
+            return w, h, rgba
+
+        # cf=4: TRUE_COLOR (RGB565, 2 байта/пиксель)
+        if cf == 4:
+            expected = 4 + w * h * 2
+            if len(data) < expected:
+                return None
+            px = data[4:4 + w * h * 2]
+            arr = np.frombuffer(px, dtype=np.uint8).reshape(h, w, 2)
+            rgb565 = arr[:, :, 0].astype(np.uint16) | (arr[:, :, 1].astype(np.uint16) << 8)
+            r = ((rgb565 >> 11) & 0x1F) << 3
+            g = ((rgb565 >> 5) & 0x3F) << 2
+            b = (rgb565 & 0x1F) << 3
+            r = r | (r >> 5); g = g | (g >> 6); b = b | (b >> 5)
+            a = np.full((h, w), 255, dtype=np.uint8)
+            rgba = np.stack([r, g, b, a], axis=-1).astype(np.uint8)
+            return w, h, rgba
+
+        # cf=10: INDEXED_8BIT (палитра 256*4 BGRA + w*h индексов)
+        if cf == 10:
+            palette_size = 256 * 4
+            expected = 4 + palette_size + w * h
+            if len(data) < expected:
+                return None
+            palette = data[4:4 + palette_size]
+            indices = data[4 + palette_size:4 + palette_size + w * h]
+            pal = np.frombuffer(palette, dtype=np.uint8).reshape(256, 4)
+            idx = np.frombuffer(indices, dtype=np.uint8).reshape(h, w)
+            bgra = pal[idx]
+            b = bgra[:, :, 0]; g = bgra[:, :, 1]
+            r = bgra[:, :, 2]; a = bgra[:, :, 3]
+            rgba = np.stack([r, g, b, a], axis=-1).astype(np.uint8)
+            return w, h, rgba
+
+        return None
     except Exception:
         return None
 
@@ -109,11 +147,9 @@ class ObjectWrapper:
         self.id = ObjectWrapper._next_id
         self.parent = parent
         self.canvas = canvas
-        self.cfg = {
-            "x": 0, "y": 0, "w": 0, "h": 0,
-            "bg_color": None, "bg_opa": 255,
-            "radius": 0, "hidden": False,
-        }
+        self._events = []
+        self.cfg = {"x": 0, "y": 0, "w": 0, "h": 0,
+                    "bg_color": None, "bg_opa": 255, "radius": 0, "hidden": False}
         if cfg:
             for k in cfg:
                 self.cfg[k] = cfg[k]
@@ -129,8 +165,7 @@ class ObjectWrapper:
             opa = int(opa)
         except Exception:
             opa = 255
-        if opa > 255:
-            opa = 255
+        if opa > 255: opa = 255
         a = a * opa // 255
         return (r, g, b, a)
 
@@ -139,60 +174,38 @@ class ObjectWrapper:
         if col is None or col[3] == 0:
             self.canvas.remove(self.id)
             return
-        data = (
-            self.cfg.get("x", 0), self.cfg.get("y", 0),
-            self.cfg.get("w", 0), self.cfg.get("h", 0),
-            col, int(self.cfg.get("radius", 0)),
-            bool(self.cfg.get("hidden", False)),
-        )
+        data = (self.cfg.get("x", 0), self.cfg.get("y", 0),
+                self.cfg.get("w", 0), self.cfg.get("h", 0),
+                col, int(self.cfg.get("radius", 0)),
+                bool(self.cfg.get("hidden", False)))
         self.canvas.add(self.id, "rect", data)
 
     def set(self, tbl):
         if tbl:
-            for k in tbl:
-                self.cfg[k] = tbl[k]
+            for k in tbl: self.cfg[k] = tbl[k]
         self._draw()
         return self
-
     def add_flag(self, flag):
         if flag == 3:
-            self.cfg["hidden"] = True
-            self._draw()
+            self.cfg["hidden"] = True; self._draw()
         return self
-
     def clear_flag(self, flag):
         if flag == 3:
-            self.cfg["hidden"] = False
-            self._draw()
+            self.cfg["hidden"] = False; self._draw()
         return self
-
-    def delete(self):
-        self.canvas.remove(self.id)
-
-    def onevent(self, *args, **kwargs):
+    def delete(self): self.canvas.remove(self.id)
+    def onevent(self, event=None, callback=None):
+        if event is not None and callback is not None:
+            self._events.append((event, callback))
         return self
-
-    def invalidate(self):
-        self._draw()
-        return self
-
+    def invalidate(self): self._draw(); return self
     def __getattr__(self, name):
-        def noop(*a, **k):
-            return self
+        def noop(*a, **k): return self
         return noop
-
     def __getitem__(self, key):
-        # lupa транслирует Lua obj:method(...) через __getitem__ (как obj["method"]),
-        # а не через обычный getattr -- поэтому сюда сначала нужно отдавать
-        # РЕАЛЬНЫЙ метод/атрибут, если он есть, и только для несуществующих
-        # имён возвращать no-op-заглушку. Раньше здесь был безусловный noop,
-        # из-за чего вообще ВСЕ вызовы через двоеточие (:set(), :delete(),
-        # :add_flag() и т.д.) молча ничего не делали.
         attr = getattr(self, key, None)
-        if attr is not None:
-            return attr
-        def noop(*a, **k):
-            return self
+        if attr is not None: return attr
+        def noop(*a, **k): return self
         return noop
 
 
@@ -205,10 +218,10 @@ class ImageWrapper:
         self.canvas = canvas
         self.script_dir = script_dir
         self.image_path = image_path
+        self._events = []
         self.cfg = {}
         if cfg:
-            for k in cfg:
-                self.cfg[k] = cfg[k]
+            for k in cfg: self.cfg[k] = cfg[k]
         self.parent_w = None
         self.parent_h = None
         if parent is not None and hasattr(parent, "cfg"):
@@ -217,11 +230,9 @@ class ImageWrapper:
         self._draw()
 
     def _resolve_pos(self):
-        x = self.cfg.get("x")
-        y = self.cfg.get("y")
+        x = self.cfg.get("x"); y = self.cfg.get("y")
         align = self.cfg.get("align")
-        w = self.cfg.get("w")
-        h = self.cfg.get("h")
+        w = self.cfg.get("w"); h = self.cfg.get("h")
         if (x is None or y is None) and align is not None:
             pw = self.parent_w or self.canvas.w
             ph = self.parent_h or self.canvas.h
@@ -233,38 +244,25 @@ class ImageWrapper:
                         file_name = src[len(self.image_path):]
                     full = os.path.join(self.script_dir, self.image_path, file_name)
                     res = read_lvgl_v8_bin(full)
-                    if res:
-                        w, h = res[0], res[1]
-            w = w or 0
-            h = h or 0
-            if align == 0:
-                x = (pw - w) // 2; y = (ph - h) // 2
-            elif align == 1:
-                x, y = 0, 0
-            elif align == 2:
-                x = (pw - w) // 2; y = 0
-            elif align == 3:
-                x = pw - w; y = 0
-            elif align == 4:
-                x = 0; y = (ph - h) // 2
-            elif align == 5:
-                x = pw - w; y = (ph - h) // 2
-            elif align == 6:
-                x = 0; y = ph - h
-            elif align == 7:
-                x = (pw - w) // 2; y = ph - h
-            elif align == 8:
-                x = pw - w; y = ph - h
+                    if res: w, h = res[0], res[1]
+            w = w or 0; h = h or 0
+            if align == 0: x, y = (pw - w) // 2, (ph - h) // 2
+            elif align == 1: x, y = 0, 0
+            elif align == 2: x, y = (pw - w) // 2, 0
+            elif align == 3: x, y = pw - w, 0
+            elif align == 4: x, y = 0, (ph - h) // 2
+            elif align == 5: x, y = pw - w, (ph - h) // 2
+            elif align == 6: x, y = 0, ph - h
+            elif align == 7: x, y = (pw - w) // 2, ph - h
+            elif align == 8: x, y = pw - w, ph - h
         return int(x or 0), int(y or 0)
 
     def _draw(self):
         src = self.cfg.get("src")
         if not src:
-            self.canvas.remove(self.id)
-            return
+            self.canvas.remove(self.id); return
         x, y = self._resolve_pos()
-        w = self.cfg.get("w")
-        h = self.cfg.get("h")
+        w = self.cfg.get("w"); h = self.cfg.get("h")
         file_name = src
         if self.image_path and src.startswith(self.image_path):
             file_name = src[len(self.image_path):]
@@ -273,224 +271,93 @@ class ImageWrapper:
 
     def set(self, tbl):
         if tbl:
-            for k in tbl:
-                self.cfg[k] = tbl[k]
+            for k in tbl: self.cfg[k] = tbl[k]
         self._draw()
         return self
-
-    def set_src(self, src):
-        self.cfg["src"] = src
-        self._draw()
+    def set_src(self, src): self.cfg["src"] = src; self._draw(); return self
+    def invalidate(self): self._draw(); return self
+    def add_flag(self, *_): return self
+    def clear_flag(self, *_): return self
+    def delete(self): self.canvas.remove(self.id)
+    def onevent(self, event=None, callback=None):
+        if event is not None and callback is not None:
+            self._events.append((event, callback))
         return self
-
-    def invalidate(self):
-        self._draw()
-        return self
-
-    def add_flag(self, *_):
-        return self
-    def clear_flag(self, *_):
-        return self
-    def delete(self):
-        self.canvas.remove(self.id)
-
-    def onevent(self, *args, **kwargs):
-        return self
-
     def __getattr__(self, name):
-        def noop(*a, **k):
-            return self
+        def noop(*a, **k): return self
         return noop
-
     def __getitem__(self, key):
-        # lupa транслирует Lua obj:method(...) через __getitem__ (как obj["method"]),
-        # а не через обычный getattr -- поэтому сюда сначала нужно отдавать
-        # РЕАЛЬНЫЙ метод/атрибут, если он есть, и только для несуществующих
-        # имён возвращать no-op-заглушку. Раньше здесь был безусловный noop,
-        # из-за чего вообще ВСЕ вызовы через двоеточие (:set(), :delete(),
-        # :add_flag() и т.д.) молча ничего не делали.
         attr = getattr(self, key, None)
-        if attr is not None:
-            return attr
-        def noop(*a, **k):
-            return self
+        if attr is not None: return attr
+        def noop(*a, **k): return self
         return noop
 
 
 class Scheduler:
-    """Виртуальные часы: таймеры срабатывают не по реальному времени, а когда
-    вызывающий код двигает время вперёд через advance(ms)."""
     MAX_FIRES = 100000
-
-    def __init__(self):
-        self.now = 0
-        self.timers = []
-
-    def add(self, timer):
-        self.timers.append(timer)
-
+    def __init__(self): self.now = 0; self.timers = []
+    def add(self, timer): self.timers.append(timer)
     def advance(self, ms):
-        target = self.now + int(ms)
-        fired = 0
+        target = self.now + int(ms); fired = 0
         while fired < self.MAX_FIRES:
             due = [t for t in self.timers
                    if not t.deleted and not t.paused and t.period > 0 and t.next_fire <= target]
-            if not due:
-                break
+            if not due: break
             t = min(due, key=lambda x: x.next_fire)
-            self.now = t.next_fire
-            t.fire()
-            fired += 1
+            self.now = t.next_fire; t.fire(); fired += 1
         self.now = target
         self.timers = [t for t in self.timers if not t.deleted]
         return fired
 
 
 class TimerWrapper:
-    """lvgl.Timer{period=мс, repeat_count=N (-1 = бесконечно), cb=function(timer)}"""
     def __init__(self, cfg, scheduler):
         self.cfg = {}
         if cfg:
-            for k in cfg:
-                self.cfg[k] = cfg[k]
+            for k in cfg: self.cfg[k] = cfg[k]
         self.scheduler = scheduler
         self.period = int(self.cfg.get("period") or 0)
         rc = self.cfg.get("repeat_count")
         self.repeat = -1 if rc is None else int(rc)
         self.cb = self.cfg.get("cb")
-        self.paused = False
-        self.deleted = False
+        self.paused = False; self.deleted = False
         self.next_fire = scheduler.now + self.period
         scheduler.add(self)
-        print(f"  [Timer] создан: period={self.period} мс, repeat_count={self.repeat}")
-
     def fire(self):
         if self.cb is not None:
-            try:
-                self.cb(self)
-            except Exception as e:
-                print(f"  [Timer] ошибка в cb: {e}")
+            try: self.cb(self)
+            except Exception as e: print(f"  [Timer] ошибка: {e}")
         if self.repeat > 0:
             self.repeat -= 1
-            if self.repeat == 0:
-                self.deleted = True
+            if self.repeat == 0: self.deleted = True
         self.next_fire += self.period
-
-    def pause(self):
-        self.paused = True
-        return self
-
-    def resume(self):
-        self.paused = False
-        self.next_fire = self.scheduler.now + self.period
-        return self
-
-    def reset(self):
-        self.next_fire = self.scheduler.now + self.period
-        return self
-
-    def set_period(self, ms):
-        self.period = int(ms)
-        return self
-
-    def delete(self):
-        self.deleted = True
-
+    def pause(self): self.paused = True; return self
+    def resume(self): self.paused = False; self.next_fire = self.scheduler.now + self.period; return self
+    def reset(self): self.next_fire = self.scheduler.now + self.period; return self
+    def set_period(self, ms): self.period = int(ms); return self
+    def delete(self): self.deleted = True
     def __getattr__(self, name):
-        def noop(*a, **k):
-            return self
+        def noop(*a, **k): return self
         return noop
-
     def __getitem__(self, key):
         attr = getattr(self, key, None)
-        if attr is not None:
-            return attr
-        def noop(*a, **k):
-            return self
+        if attr is not None: return attr
+        def noop(*a, **k): return self
         return noop
-
-
-class LuaFile:
-    def __init__(self, f):
-        self.f = f
-        self.closed = False
-    def read(self, fmt=None):
-        if fmt is None or fmt == "*a" or fmt == "a":
-            return self.f.read()
-        if fmt == "*l" or fmt == "l":
-            line = self.f.readline()
-            if isinstance(line, bytes) and line.endswith(b"\n"):
-                line = line[:-1]
-            return line
-        if fmt == "*n" or fmt == "n":
-            buf = b""
-            while True:
-                ch = self.f.read(1)
-                if not ch:
-                    break
-                if ch in b"0123456789+-.eE":
-                    buf += ch
-                else:
-                    self.f.seek(self.f.tell() - 1)
-                    break
-            try:
-                return float(buf) if (b"." in buf or b"e" in buf or b"E" in buf) else int(buf)
-            except ValueError:
-                return None
-        if isinstance(fmt, int):
-            return self.f.read(fmt)
-        return self.f.read()
-    def seek(self, whence, offset=None):
-        if offset is None:
-            return self.f.seek(0, 1)
-        wmap = {"set": 0, "cur": 1, "end": 2}
-        w = wmap.get(whence, 0)
-        return self.f.seek(offset, w)
-    def close(self):
-        self.f.close()
-        self.closed = True
-    def write(self, *args):
-        for a in args:
-            self.f.write(a)
-    def flush(self):
-        self.f.flush()
-    def lines(self):
-        for line in self.f:
-            yield line
-
-
-def make_io(script_dir):
-    real_open = open
-    def open_(path, mode="r"):
-        local = os.path.join(script_dir, os.path.basename(path))
-        if not os.path.exists(local):
-            print(f"  [io.open] нет файла: {local}")
-            return None
-        f = real_open(local, mode)
-        return LuaFile(f)
-    return {"open": open_}
 
 
 class DatamanStub:
-    def __init__(self):
-        self.subscriptions = []
+    def __init__(self): self.subscriptions = []
     def subscribe(self, *args):
-        print(f"  [dataman.subscribe] args={len(args)}")
         if len(args) >= 3:
-            event = args[0]
-            callback = args[-1]
-            self.subscriptions.append((event, callback))
+            self.subscriptions.append((args[0], args[-1]))
         return None
     def fire(self, event, times=1):
-        print(f"  [dataman.fire] event={event}, subs={len(self.subscriptions)}")
         for ev, cb in self.subscriptions:
-            print(f"    sub: {ev}")
             if ev == event:
                 for i in range(times):
-                    try:
-                        cb(None)
-                    except Exception as e:
-                        print(f"    error: {e}")
+                    try: cb(None)
+                    except Exception as e: print(f"    error: {e}")
 
 
 class LVGLFacade:
@@ -499,39 +366,31 @@ class LVGLFacade:
         self.script_dir = script_dir
         self.image_path = image_path
         self.scheduler = scheduler or Scheduler()
+        self.widgets = []
 
     def Image(self, parent, cfg):
-        return ImageWrapper(parent, self.canvas, self.script_dir, self.image_path, cfg)
-
+        w = ImageWrapper(parent, self.canvas, self.script_dir, self.image_path, cfg)
+        self.widgets.append(w); return w
     def Object(self, parent, cfg):
-        return ObjectWrapper(parent, self.canvas, cfg)
-
-    def Timer(self, cfg):
-        return TimerWrapper(cfg, self.scheduler)
-
-    def OPA(self, v):
-        return v
-
-    def HOR_RES(self):
-        return self.canvas.w
-
-    def VER_RES(self):
-        return self.canvas.h
-
+        w = ObjectWrapper(parent, self.canvas, cfg)
+        self.widgets.append(w); return w
+    def Timer(self, cfg): return TimerWrapper(cfg, self.scheduler)
+    def OPA(self, v): return v
+    def HOR_RES(self): return self.canvas.w
+    def VER_RES(self): return self.canvas.h
     def __getattr__(self, name):
-        def noop(*a, **k):
-            return None
+        def noop(*a, **k): return None
         return noop
 
 
 class LuaEmulator:
-    def __init__(self, canvas, script_dir, image_path):
+    def __init__(self, canvas, script_dir):
         self.canvas = canvas
         self.script_dir = script_dir
-        self.image_path = image_path
+        self.image_path = script_dir.replace("\\", "/").rstrip("/") + "/"
         self.lua = LuaRuntime(unpack_returned_tuples=True)
         self.scheduler = Scheduler()
-        self.lvgl_facade = LVGLFacade(canvas, script_dir, image_path, self.scheduler)
+        self.lvgl_facade = LVGLFacade(canvas, script_dir, self.image_path, self.scheduler)
         self.dataman = DatamanStub()
 
     def run(self, lua_path):
@@ -541,7 +400,26 @@ class LuaEmulator:
         g.string = lua.eval("require('string')")
         g.os     = lua.eval("require('os')")
         g.table  = lua.eval("require('table')")
-        g.io = lua.table_from(make_io(self.script_dir))
+
+        g.io = lua.eval("require('io')")
+
+        script_dir_lua = self.image_path
+        lua.execute(f"""
+            local _script_dir = [==[{script_dir_lua}]==]
+            local _real_open = io.open
+            io.open = function(path, mode)
+                local f = _real_open(path, mode)
+                if f then return f end
+                local base = path:match("([^/\\\\]+)$")
+                if base then
+                    local alt = _script_dir .. base
+                    f = _real_open(alt, mode)
+                    if f then return f end
+                end
+                return nil
+            end
+        """)
+
         g.dataman = lua.table_from({"subscribe": self.dataman.subscribe})
 
         lvgl_table = lua.table()
@@ -593,6 +471,64 @@ class LuaEmulator:
 
         self.dataman.fire("timeCentiSecond", times=ANIM_FRAMES)
 
+    def click_all(self, times=1):
+        CLICKED = 1
+        total = 0
+        for _ in range(times):
+            for w in self.lvgl_facade.widgets:
+                events = getattr(w, "_events", None)
+                if not events:
+                    continue
+                for ev, cb in events:
+                    if ev == CLICKED:
+                        try:
+                            cb(None)
+                            total += 1
+                        except Exception as e:
+                            print(f"  [click] ошибка: {e}")
+                        break
+        print(f"  [click] вызвано CLICKED-колбэков: {total}")
+        return total
+
+    def click_at(self, x, y):
+        CLICKED = 1
+        candidates = []
+        for w in self.lvgl_facade.widgets:
+            events = getattr(w, "_events", None)
+            if not events:
+                continue
+            has_clicked = any(ev == CLICKED for ev, _ in events)
+            if not has_clicked:
+                continue
+            cfg = getattr(w, "cfg", None)
+            if not cfg:
+                continue
+            wx = cfg.get("x", 0)
+            wy = cfg.get("y", 0)
+            ww = cfg.get("w", 0)
+            wh = cfg.get("h", 0)
+            if wx is None or wy is None or ww is None or wh is None:
+                continue
+            if ww <= 0 or wh <= 0:
+                continue
+            if wx <= x < wx + ww and wy <= y < wy + wh:
+                candidates.append((wx, wy, w))
+        if not candidates:
+            print(f"  [click] нет виджета в точке ({x}, {y})")
+            return 0
+        candidates.sort(key=lambda c: (c[0], c[1]))
+        _, _, w = candidates[-1]
+        total = 0
+        for ev, cb in w._events:
+            if ev == CLICKED:
+                try:
+                    cb(None)
+                    total += 1
+                except Exception as e:
+                    print(f"  [click] ошибка: {e}")
+        print(f"  [click] в точке ({x}, {y}) вызвано: {total}")
+        return total
+
 
 def parse_duration(text):
     t = str(text).strip().lower()
@@ -605,20 +541,15 @@ def parse_duration(text):
 def main():
     import argparse
     global SCRIPT_DIR, BG_COLOR
-    ap = argparse.ArgumentParser(
-        description="Универсальный предпросмотр Lua-циферблатов: реально выполняет "
-                    ".lua через lupa с заглушками lvgl/io/dataman и сохраняет PNG.")
-    ap.add_argument("lua", help="путь к .lua файлу")
-    ap.add_argument("--dir", default=None,
-                    help="папка с .bin и database.db (по умолчанию -- папка .lua файла). "
-                         "io.open() ищет файлы по ИМЕНИ в этой папке, путь игнорируется")
+    ap = argparse.ArgumentParser()
+    ap.add_argument("lua")
+    ap.add_argument("--dir", default=None)
     ap.add_argument("--width", type=int, default=390)
     ap.add_argument("--height", type=int, default=450)
     ap.add_argument("--bg", default="#000000")
-    ap.add_argument("--scale", type=int, default=1, help="увеличение итогового PNG")
-    ap.add_argument("--advance", default=None,
-                    help="прокрутить виртуальное время перед снимком, чтобы сработали "
-                         "lvgl.Timer: 500ms, 30s, 15m, 2h или просто число в мс")
+    ap.add_argument("--scale", type=int, default=1)
+    ap.add_argument("--advance", default=None)
+    ap.add_argument("--click", type=int, default=0)
     ap.add_argument("--out", default="preview.png")
     args = ap.parse_args()
 
@@ -628,15 +559,18 @@ def main():
     BG_COLOR = tuple(int(h[i:i + 2], 16) for i in (0, 2, 4)) + (255,)
 
     canvas = Canvas(args.width, args.height)
-    canvas.bg = (0, 0, 0, 0)          # холст прозрачный: фон добавляется только в предпросмотр
+    canvas.bg = (0, 0, 0, 0)
     canvas._redraw()
-    emu = LuaEmulator(canvas, SCRIPT_DIR, "")
+    emu = LuaEmulator(canvas, SCRIPT_DIR)
     emu.run(lua_full)
 
     if args.advance:
         ms = parse_duration(args.advance)
         fired = emu.scheduler.advance(ms)
-        print(f"Время прокручено на {ms} мс, сработало таймеров: {fired}")
+        print(f"Время прокручено на {ms} мс, таймеров: {fired}")
+
+    if args.click > 0:
+        emu.click_all(times=args.click)
 
     transparent = canvas.img.copy()
     preview = Image.new("RGBA", transparent.size, BG_COLOR)
@@ -651,8 +585,8 @@ def main():
     out_transparent = f"{base}_transparent{ext or '.png'}"
     preview.save(args.out)
     transparent.save(out_transparent)
-    print(f"Предпросмотр (фон {args.bg}): {args.out}")
-    print(f"Прозрачный PNG:               {out_transparent}")
+    print(f"Предпросмотр: {args.out}")
+    print(f"Прозрачный:   {out_transparent}")
 
 
 if __name__ == "__main__":
