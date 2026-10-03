@@ -6309,3 +6309,132 @@ dir:  C:/character_generator/previewlua
 size: 390x450, scale=1, bg=black
 OK: объектов 40
 (нет вывода)
+
+======================================================================
+[2026-10-03 14:22:07] GUI START
+======================================================================
+Python: 3.13.7 (tags/v3.13.7:bcee1c3, Aug 14 2025, 14:15:11) [MSC v.1944 64 bit (AMD64)]
+log.txt: C:\character_generator\previewlua\log.txt
+
+======================================================================
+[2026-10-03 14:22:11] RENDER day_hourly_weather.lua
+======================================================================
+lua:  C:/character_generator/previewlua/day_hourly_weather.lua
+dir:  C:/character_generator/previewlua
+size: 390x450, scale=1, bg=black
+OK: объектов 39
+(нет вывода)
+
+======================================================================
+[2026-10-03 14:22:14] RENDER day_hourly_weather.lua
+======================================================================
+lua:  C:/character_generator/previewlua/day_hourly_weather.lua
+dir:  C:/character_generator/previewlua
+size: 390x450, scale=1, bg=black
+OK: объектов 40
+(нет вывода)
+CLICK: 1
+  [click] в точке (99, 82) вызвано: 1
+  [click] в точке (99, 82) вызвано: 1
+CLICK: 1
+  [click] в точке (99, 82) вызвано: 1
+  [click] в точке (99, 82) вызвано: 1
+
+======================================================================
+[2026-10-03 14:24:02] GUI START
+======================================================================
+Python: 3.13.7 (tags/v3.13.7:bcee1c3, Aug 14 2025, 14:15:11) [MSC v.1944 64 bit (AMD64)]
+log.txt: C:\character_generator\previewlua\log.txt
+
+======================================================================
+[2026-10-03 14:24:05] RENDER day_hourly_weather.lua
+======================================================================
+lua:  C:/character_generator/previewlua/day_hourly_weather.lua
+dir:  C:/character_generator/previewlua
+size: 390x450, scale=1, bg=black
+OK: объектов 36
+(нет вывода)
+CLICK: 1
+  [click] в точке (99, 82) вызвано: 1
+  [click] в точке (99, 82) вызвано: 1
+CLICK: 1
+  [click] в точке (99, 82) вызвано: 1
+  [click] в точке (99, 82) вызвано: 1
+
+======================================================================
+[2026-10-03 14:24:12] RENDER hourly_forecast_res_icons.lua
+======================================================================
+lua:  C:/character_generator/previewlua/hourly_forecast_res_icons.lua
+dir:  C:/character_generator/previewlua
+size: 390x450, scale=1, bg=black
+OK: объектов 36
+(нет вывода)
+
+======================================================================
+[2026-10-03 14:24:13] RENDER hourly_forecast_res_icons.lua
+======================================================================
+lua:  C:/character_generator/previewlua/hourly_forecast_res_icons.lua
+dir:  C:/character_generator/previewlua
+size: 390x450, scale=1, bg=black
+OK: объектов 36
+(нет вывода)
+CLICK: 1
+  [click] в точке (99, 78) вызвано: 1
+  [click] в точке (99, 78) вызвано: 1
+
+======================================================================
+[2026-10-03 14:24:15] RENDER hourly_forecast_res_icons.lua
+======================================================================
+lua:  C:/character_generator/previewlua/hourly_forecast_res_icons.lua
+dir:  C:/character_generator/previewlua
+size: 390x450, scale=1, bg=black
+OK: объектов 36
+(нет вывода)
+CLICK: 1
+  [click] в точке (99, 78) вызвано: 1
+  [click] в точке (99, 78) вызвано: 1
+
+======================================================================
+[2026-10-03 14:24:18] RENDER hourly_forecast_res_icons.lua
+======================================================================
+lua:  C:/character_generator/previewlua/hourly_forecast_res_icons.lua
+dir:  C:/character_generator/previewlua
+size: 390x450, scale=1, bg=black
+OK: объектов 36
+(нет вывода)
+CLICK: 1
+  [click] в точке (99, 78) вызвано: 1
+  [click] в точке (99, 78) вызвано: 1
+
+======================================================================
+[2026-10-03 14:24:21] RENDER hourly_forecast_res_icons.lua
+======================================================================
+lua:  C:/character_generator/previewlua/hourly_forecast_res_icons.lua
+dir:  C:/character_generator/previewlua
+size: 390x450, scale=1, bg=black
+OK: объектов 36
+(нет вывода)
+CLICK: 1
+  [click] в точке (99, 78) вызвано: 1
+  [click] в точке (99, 78) вызвано: 1
+
+======================================================================
+[2026-10-03 14:24:24] RENDER hourly_forecast_res_icons.lua
+======================================================================
+lua:  C:/character_generator/previewlua/hourly_forecast_res_icons.lua
+dir:  C:/character_generator/previewlua
+size: 390x450, scale=1, bg=black
+OK: объектов 36
+(нет вывода)
+CLICK: 1
+  [click] в точке (99, 78) вызвано: 1
+  [click] в точке (99, 78) вызвано: 1
+
+======================================================================
+[2026-10-03 14:24:26] RENDER hourly_forecast_res_icons.lua
+======================================================================
+lua:  C:/character_generator/previewlua/hourly_forecast_res_icons.lua
+dir:  C:/character_generator/previewlua
+size: 390x450, scale=1, bg=black
+OK: объектов 36
+(нет вывода)

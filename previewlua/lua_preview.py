@@ -221,7 +221,8 @@ class ImageWrapper:
         self._events = []
         self.cfg = {}
         if cfg:
-            for k in cfg: self.cfg[k] = cfg[k]
+            for k in cfg:
+                self.cfg[k] = cfg[k]
         self.parent_w = None
         self.parent_h = None
         if parent is not None and hasattr(parent, "cfg"):
@@ -258,6 +259,9 @@ class ImageWrapper:
         return int(x or 0), int(y or 0)
 
     def _draw(self):
+        if self.cfg.get("hidden", False):
+            self.canvas.remove(self.id)
+            return
         src = self.cfg.get("src")
         if not src:
             self.canvas.remove(self.id); return
@@ -276,8 +280,19 @@ class ImageWrapper:
         return self
     def set_src(self, src): self.cfg["src"] = src; self._draw(); return self
     def invalidate(self): self._draw(); return self
-    def add_flag(self, *_): return self
-    def clear_flag(self, *_): return self
+
+    def add_flag(self, flag):
+        if flag == 3:  # HIDDEN
+            self.cfg["hidden"] = True
+            self._draw()
+        return self
+
+    def clear_flag(self, flag):
+        if flag == 3:
+            self.cfg["hidden"] = False
+            self._draw()
+        return self
+
     def delete(self): self.canvas.remove(self.id)
     def onevent(self, event=None, callback=None):
         if event is not None and callback is not None:
@@ -291,7 +306,6 @@ class ImageWrapper:
         if attr is not None: return attr
         def noop(*a, **k): return self
         return noop
-
 
 class Scheduler:
     MAX_FIRES = 100000
