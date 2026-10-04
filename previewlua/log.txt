@@ -6438,3 +6438,469 @@ dir:  C:/character_generator/previewlua
 size: 390x450, scale=1, bg=black
 OK: объектов 36
 (нет вывода)
+
+======================================================================
+[2026-10-03 20:53:06] GUI START
+======================================================================
+Python: 3.13.3 (tags/v3.13.3:6280bb5, Apr  8 2025, 14:47:33) [MSC v.1943 64 bit (AMD64)]
+log.txt: C:\git\previewlua\log.txt
+
+======================================================================
+[2026-10-03 20:53:24] RENDER hourly_forecast_res_icons.lua
+======================================================================
+lua:  C:/git/previewlua/hourly_forecast_res_icons.lua
+dir:  C:/git/previewlua
+size: 390x450, scale=1, bg=black
+OK: объектов 36
+(нет вывода)
+
+======================================================================
+[2026-10-03 20:53:30] RENDER hourly_forecast_res_icons.lua
+======================================================================
+lua:  C:/git/previewlua/hourly_forecast_res_icons.lua
+dir:  C:/git/previewlua
+size: 390x450, scale=1, bg=black
+OK: объектов 36
+(нет вывода)
+CLICK: 1
+  [click] в точке (99, 78) вызвано: 1
+  [click] в точке (99, 78) вызвано: 1
+
+======================================================================
+[2026-10-03 20:53:33] RENDER hourly_forecast_res_icons.lua
+======================================================================
+lua:  C:/git/previewlua/hourly_forecast_res_icons.lua
+dir:  C:/git/previewlua
+size: 390x450, scale=1, bg=black
+OK: объектов 36
+(нет вывода)
+CLICK: 1
+  [click] в точке (99, 78) вызвано: 1
+  [click] в точке (99, 78) вызвано: 1
+
+======================================================================
+[2026-10-03 20:53:38] RENDER hourly_forecast_res_icons.lua
+======================================================================
+lua:  C:/git/previewlua/hourly_forecast_res_icons.lua
+dir:  C:/git/previewlua
+size: 390x450, scale=1, bg=black
+OK: объектов 36
+(нет вывода)
+CLICK: 1
+  [click] в точке (99, 78) вызвано: 1
+  [click] в точке (99, 78) вызвано: 1
+
+======================================================================
+[2026-10-03 20:53:46] RENDER hourly_forecast_res_icons.lua
+======================================================================
+lua:  C:/git/previewlua/hourly_forecast_res_icons.lua
+dir:  C:/git/previewlua
+size: 390x450, scale=1, bg=black
+OK: объектов 36
+(нет вывода)
+CLICK: 1
+  [click] в точке (99, 78) вызвано: 1
+  [click] в точке (99, 78) вызвано: 1
+
+======================================================================
+[2026-10-03 20:53:52] RENDER hourly_forecast_res_icons.lua
+======================================================================
+lua:  C:/git/previewlua/hourly_forecast_res_icons.lua
+dir:  C:/git/previewlua
+size: 390x450, scale=1, bg=black
+OK: объектов 36
+(нет вывода)
+
+======================================================================
+[2026-10-03 20:53:56] RENDER hourly_forecast_res_icons.lua
+======================================================================
+lua:  C:/git/previewlua/hourly_forecast_res_icons.lua
+dir:  C:/git/previewlua
+size: 390x450, scale=1, bg=black
+OK: объектов 36
+(нет вывода)
+CLICK: 1
+  [click] в точке (99, 78) вызвано: 1
+  [click] в точке (99, 78) вызвано: 1
+CLICK: 1
+  [click] в точке (99, 78) вызвано: 1
+  [click] в точке (99, 78) вызвано: 1
+
+======================================================================
+[2026-10-03 20:53:59] RENDER hourly_forecast_res_icons.lua
+======================================================================
+lua:  C:/git/previewlua/hourly_forecast_res_icons.lua
+dir:  C:/git/previewlua
+size: 390x450, scale=1, bg=black
+OK: объектов 36
+(нет вывода)
+CLICK: 1
+  [click] в точке (99, 78) вызвано: 1
+  [click] в точке (99, 78) вызвано: 1
+
+======================================================================
+[2026-10-03 20:54:05] RENDER hourly_forecast_res_icons.lua
+======================================================================
+lua:  C:/git/previewlua/hourly_forecast_res_icons.lua
+dir:  C:/git/previewlua
+size: 390x450, scale=1, bg=black
+OK: объектов 36
+(нет вывода)
+CLICK: 1
+  [click] в точке (99, 78) вызвано: 1
+  [click] в точке (99, 78) вызвано: 1
+
+======================================================================
+[2026-10-03 20:54:10] RENDER hourly_forecast_res_icons.lua
+======================================================================
+lua:  C:/git/previewlua/hourly_forecast_res_icons.lua
+dir:  C:/git/previewlua
+size: 390x450, scale=1, bg=black
+OK: объектов 36
+(нет вывода)
+
+======================================================================
+[2026-10-03 20:54:20] RENDER hourly_forecast_res_icons.lua
+======================================================================
+lua:  C:/git/previewlua/hourly_forecast_res_icons.lua
+dir:  C:/git/previewlua
+size: 200x150, scale=1, bg=black
+OK: объектов 36
+(нет вывода)
+CLICK: 1
+  [click] в точке (99, 78) вызвано: 1
+  [click] в точке (99, 78) вызвано: 1
+
+======================================================================
+[2026-10-03 20:54:26] RENDER hourly_forecast_res_icons.lua
+======================================================================
+lua:  C:/git/previewlua/hourly_forecast_res_icons.lua
+dir:  C:/git/previewlua
+size: 200x150, scale=1, bg=black
+OK: объектов 36
+(нет вывода)
+CLICK: 1
+  [click] в точке (99, 78) вызвано: 1
+  [click] в точке (99, 78) вызвано: 1
+
+======================================================================
+[2026-10-03 20:54:31] RENDER hourly_forecast_res_icons.lua
+======================================================================
+lua:  C:/git/previewlua/hourly_forecast_res_icons.lua
+dir:  C:/git/previewlua
+size: 200x150, scale=1, bg=black
+OK: объектов 36
+(нет вывода)
+
+======================================================================
+[2026-10-03 20:54:38] RENDER hourly_forecast_res_icons.lua
+======================================================================
+lua:  C:/git/previewlua/hourly_forecast_res_icons.lua
+dir:  C:/git/previewlua
+size: 200x150, scale=1, bg=black
+OK: объектов 36
+(нет вывода)
+
+======================================================================
+[2026-10-03 20:54:47] RENDER hourly_forecast_res_icons.lua
+======================================================================
+lua:  C:/git/previewlua/hourly_forecast_res_icons.lua
+dir:  C:/git/previewlua
+size: 204x150, scale=1, bg=black
+OK: объектов 36
+(нет вывода)
+
+======================================================================
+[2026-10-03 20:54:58] RENDER hourly_forecast_res_icons.lua
+======================================================================
+lua:  C:/git/previewlua/hourly_forecast_res_icons.lua
+dir:  C:/git/previewlua
+size: 200x152, scale=1, bg=black
+OK: объектов 36
+(нет вывода)
+
+======================================================================
+[2026-10-03 20:55:04] RENDER hourly_forecast_res_icons.lua
+======================================================================
+lua:  C:/git/previewlua/hourly_forecast_res_icons.lua
+dir:  C:/git/previewlua
+size: 200x154, scale=1, bg=black
+OK: объектов 36
+(нет вывода)
+CLICK: 1
+  [click] в точке (99, 78) вызвано: 1
+  [click] в точке (99, 78) вызвано: 1
+
+======================================================================
+[2026-10-03 20:55:11] RENDER hourly_forecast_res_icons.lua
+======================================================================
+lua:  C:/git/previewlua/hourly_forecast_res_icons.lua
+dir:  C:/git/previewlua
+size: 200x154, scale=1, bg=black
+OK: объектов 36
+(нет вывода)
+
+======================================================================
+[2026-10-03 20:55:31] RENDER hourly_forecast_res_icons.lua
+======================================================================
+lua:  C:/git/previewlua/hourly_forecast_res_icons.lua
+dir:  C:/git/previewlua
+size: 200x154, scale=1, bg=black
+OK: объектов 36
+(нет вывода)
+CLICK: 1
+  [click] в точке (99, 78) вызвано: 1
+  [click] в точке (99, 78) вызвано: 1
+CLICK: 1
+  [click] в точке (99, 78) вызвано: 1
+  [click] в точке (99, 78) вызвано: 1
+
+======================================================================
+[2026-10-03 20:55:34] RENDER hourly_forecast_res_icons.lua
+======================================================================
+lua:  C:/git/previewlua/hourly_forecast_res_icons.lua
+dir:  C:/git/previewlua
+size: 200x154, scale=1, bg=black
+OK: объектов 36
+(нет вывода)
+
+======================================================================
+[2026-10-03 20:55:38] RENDER day_hourly_weather.lua
+======================================================================
+lua:  C:/git/previewlua/day_hourly_weather.lua
+dir:  C:/git/previewlua
+size: 200x154, scale=1, bg=black
+OK: объектов 36
+(нет вывода)
+
+======================================================================
+[2026-10-03 20:55:48] RENDER day_hourly_weather.lua
+======================================================================
+lua:  C:/git/previewlua/day_hourly_weather.lua
+dir:  C:/git/previewlua
+size: 200x160, scale=1, bg=black
+OK: объектов 36
+(нет вывода)
+
+======================================================================
+[2026-10-03 20:55:56] RENDER day_hourly_weather.lua
+======================================================================
+lua:  C:/git/previewlua/day_hourly_weather.lua
+dir:  C:/git/previewlua
+size: 200x165, scale=1, bg=black
+OK: объектов 36
+(нет вывода)
+
+======================================================================
+[2026-10-03 20:56:02] RENDER day_hourly_weather.lua
+======================================================================
+lua:  C:/git/previewlua/day_hourly_weather.lua
+dir:  C:/git/previewlua
+size: 200x162, scale=1, bg=black
+OK: объектов 36
+(нет вывода)
+CLICK: 1
+  [click] в точке (99, 82) вызвано: 1
+  [click] в точке (99, 82) вызвано: 1
+
+======================================================================
+[2026-10-03 20:56:16] RENDER day_hourly_weather.lua
+======================================================================
+lua:  C:/git/previewlua/day_hourly_weather.lua
+dir:  C:/git/previewlua
+size: 200x164, scale=1, bg=black
+OK: объектов 36
+(нет вывода)
+CLICK: 1
+  [click] в точке (99, 82) вызвано: 1
+  [click] в точке (99, 82) вызвано: 1
+
+======================================================================
+[2026-10-03 21:06:36] RENDER day_hourly_weather.lua
+======================================================================
+lua:  C:/git/previewlua/day_hourly_weather.lua
+dir:  C:/git/previewlua
+size: 200x164, scale=1, bg=black
+OK: объектов 36
+(нет вывода)
+CLICK: 1
+  [click] в точке (99, 82) вызвано: 1
+  [click] в точке (99, 82) вызвано: 1
+
+======================================================================
+[2026-10-03 21:06:52] RENDER hourly_forecast_res_icons.lua
+======================================================================
+lua:  C:/git/previewlua/hourly_forecast_res_icons.lua
+dir:  C:/git/previewlua
+size: 200x164, scale=1, bg=black
+OK: объектов 36
+(нет вывода)
+CLICK: 1
+  [click] в точке (99, 78) вызвано: 1
+  [click] в точке (99, 78) вызвано: 1
+
+======================================================================
+[2026-10-03 21:07:02] RENDER hourly_forecast_res_icons.lua
+======================================================================
+lua:  C:/git/previewlua/hourly_forecast_res_icons.lua
+dir:  C:/git/previewlua
+size: 200x164, scale=1, bg=black
+OK: объектов 36
+(нет вывода)
+
+======================================================================
+[2026-10-03 21:07:12] RENDER hourly_forecast_res_icons.lua
+======================================================================
+lua:  C:/git/previewlua/hourly_forecast_res_icons.lua
+dir:  C:/git/previewlua
+size: 200x164, scale=1, bg=black
+OK: объектов 36
+(нет вывода)
+CLICK: 1
+  [click] в точке (99, 78) вызвано: 1
+  [click] в точке (99, 78) вызвано: 1
+
+======================================================================
+[2026-10-03 21:07:15] RENDER hourly_forecast_res_icons.lua
+======================================================================
+lua:  C:/git/previewlua/hourly_forecast_res_icons.lua
+dir:  C:/git/previewlua
+size: 200x164, scale=1, bg=black
+OK: объектов 36
+(нет вывода)
+CLICK: 1
+  [click] в точке (99, 78) вызвано: 1
+  [click] в точке (99, 78) вызвано: 1
+
+======================================================================
+[2026-10-03 21:07:28] RENDER hourly_forecast_res_icons.lua
+======================================================================
+lua:  C:/git/previewlua/hourly_forecast_res_icons.lua
+dir:  C:/git/previewlua
+size: 200x164, scale=1, bg=black
+OK: объектов 36
+(нет вывода)
+CLICK: 1
+  [click] в точке (99, 78) вызвано: 1
+  [click] в точке (99, 78) вызвано: 1
+
+======================================================================
+[2026-10-03 21:11:59] RENDER hourly_forecast_res_icons.lua
+======================================================================
+lua:  C:/git/previewlua/hourly_forecast_res_icons.lua
+dir:  C:/git/previewlua
+size: 200x164, scale=1, bg=black
+OK: объектов 36
+(нет вывода)
+CLICK: 1
+  [click] в точке (116, 78) вызвано: 1
+  [click] в точке (116, 78) вызвано: 1
+
+======================================================================
+[2026-10-03 21:12:27] RENDER hourly_forecast_res_icons.lua
+======================================================================
+lua:  C:/git/previewlua/hourly_forecast_res_icons.lua
+dir:  C:/git/previewlua
+size: 200x157, scale=1, bg=black
+OK: объектов 36
+(нет вывода)
+
+======================================================================
+[2026-10-03 21:12:37] RENDER hourly_forecast_res_icons.lua
+======================================================================
+lua:  C:/git/previewlua/hourly_forecast_res_icons.lua
+dir:  C:/git/previewlua
+size: 200x150, scale=1, bg=black
+OK: объектов 36
+(нет вывода)
+
+======================================================================
+[2026-10-03 21:12:39] RENDER hourly_forecast_res_icons.lua
+======================================================================
+lua:  C:/git/previewlua/hourly_forecast_res_icons.lua
+dir:  C:/git/previewlua
+size: 200x150, scale=1, bg=black
+OK: объектов 36
+(нет вывода)
+
+======================================================================
+[2026-10-03 21:12:41] RENDER hourly_forecast_res_icons.lua
+======================================================================
+lua:  C:/git/previewlua/hourly_forecast_res_icons.lua
+dir:  C:/git/previewlua
+size: 200x150, scale=1, bg=black
+OK: объектов 36
+(нет вывода)
+
+======================================================================
+[2026-10-03 21:13:18] RENDER hourly_forecast_res_icons.lua
+======================================================================
+lua:  C:/git/previewlua/hourly_forecast_res_icons.lua
+dir:  C:/git/previewlua
+size: 200x160, scale=1, bg=black
+OK: объектов 36
+(нет вывода)
+
+======================================================================
+[2026-10-03 21:13:28] RENDER hourly_forecast_res_icons.lua
+======================================================================
+lua:  C:/git/previewlua/hourly_forecast_res_icons.lua
+dir:  C:/git/previewlua
+size: 200x155, scale=1, bg=black
+OK: объектов 36
+(нет вывода)
+CLICK: 1
+  [click] в точке (116, 78) вызвано: 1
+  [click] в точке (116, 78) вызвано: 1
+
+======================================================================
+[2026-10-03 21:18:46] RENDER hourly_forecast_res_icons.lua
+======================================================================
+lua:  C:/git/previewlua/hourly_forecast_res_icons.lua
+dir:  C:/git/previewlua
+size: 200x155, scale=1, bg=black
+OK: объектов 36
+(нет вывода)
+CLICK: 1
+  [click] в точке (116, 78) вызвано: 1
+  [click] в точке (116, 78) вызвано: 1
+
+======================================================================
+[2026-10-03 21:19:02] RENDER hourly_forecast_res_icons.lua
+======================================================================
+lua:  C:/git/previewlua/hourly_forecast_res_icons.lua
+dir:  C:/git/previewlua
+size: 208x155, scale=1, bg=black
+OK: объектов 36
+(нет вывода)
+CLICK: 1
+  [click] в точке (120, 78) вызвано: 1
+  [click] в точке (120, 78) вызвано: 1
+
+======================================================================
+[2026-10-03 21:31:34] RENDER hourly_forecast_res_icons.lua
+======================================================================
+lua:  C:/git/previewlua/hourly_forecast_res_icons.lua
+dir:  C:/git/previewlua
+size: 208x155, scale=1, bg=black
+OK: объектов 36
+(нет вывода)
+CLICK: 1
+  [click] в точке (117, 78) вызвано: 1
+  [click] в точке (117, 78) вызвано: 1
+CLICK: 1
+  [click] в точке (117, 78) вызвано: 1
+  [click] в точке (117, 78) вызвано: 1
+CLICK: 1
+  [click] в точке (117, 78) вызвано: 1
+  [click] в точке (117, 78) вызвано: 1
+
+======================================================================
+[2026-10-03 21:32:06] RENDER hourly_forecast_res_icons.lua
+======================================================================
+lua:  C:/git/previewlua/hourly_forecast_res_icons.lua
+dir:  C:/git/previewlua
+size: 208x155, scale=1, bg=black
+OK: объектов 36
+(нет вывода)
+Сохранено: C:/git/previewlua/preview_transparent_щз.png

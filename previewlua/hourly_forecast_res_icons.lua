@@ -36,6 +36,25 @@ function TextImageRenderer:advanceFor(char)
     return self.char_advance[char] or self.char_w
 end
 
+-- Считает итоговую ширину текста (как её вычисляет render()), не рисуя ничего.
+-- Нужно, чтобы заранее посчитать, сколько места реально займёт строка вроде
+-- "-22°/-28°", и не упираться в ширину слота "на глаз".
+function TextImageRenderer:measure(text)
+    if not text or text == "" then return 0 end
+    local char_list = {}
+    for char in utf8_chars(text) do
+        table.insert(char_list, char)
+    end
+    local char_count = #char_list
+    if char_count == 0 then return 0 end
+
+    local total_w = (char_count - 1) * self.spacing
+    for _, char in ipairs(char_list) do
+        total_w = total_w + self:advanceFor(char)
+    end
+    return total_w
+end
+
 function TextImageRenderer:render(text, x, y, align)
     self:clear()
     if not text or text == "" then return end
@@ -120,14 +139,6 @@ local WEATHER_RES_PALETTE_SIZE = 1024
 
 local WEATHER_RES_TMP_PREFIX = "_wx_tmp_row"
 
--- true  = копируем блок (заголовок+палитра+индексы) из weather.res КАК ЕСТЬ,
---         в исходном формате cf=10 (LV_IMG_CF_INDEXED_8BIT) -- без конвертации.
---         Проще и быстрее, но ТРЕБУЕТ, чтобы lvgl.Image в этом движке скриптов
---         умел открывать indexed-8bit картинки.
--- false = конвертируем indexed-8bit -> BGRA8888 (cf=5) -- заведомо рабочий,
---         но более медленный вариант (цикл по пикселям в Lua).
-local WEATHER_RES_RAW_COPY = true
-
 -- код явления (как в API/приложении «Погода») -> смещение начала записи
 -- (4-байтного заголовка) этой иконки внутри weather.res
 local WEATHER_RES_OFFSETS = {
@@ -169,7 +180,10 @@ local function resolveWeatherCode(code)
 end
 
 -- Читает иконку для кода `code` прямо из weather.res и пишет её во временный
--- файл `out_path` (один файл на СЛОТ/строку; перезаписывается при каждом вызове)
+-- файл `out_path` (один файл на СЛОТ/строку; перезаписывается при каждом вызове).
+-- Копируем блок (заголовок+палитра+индексы) КАК ЕСТЬ, в исходном формате
+-- cf=10 (LV_IMG_CF_INDEXED_8BIT) -- lvgl.Image на устройстве его открывает
+-- напрямую, без конвертации в BGRA8888 -- проверено на часах.
 local function extractWeatherIcon(code, out_path)
     local offset = WEATHER_RES_OFFSETS[code]
     if not offset then return nil end
@@ -179,54 +193,14 @@ local function extractWeatherIcon(code, out_path)
 
     local body_len = WEATHER_RES_PALETTE_SIZE + WEATHER_RES_ICON_W * WEATHER_RES_ICON_H
 
-    if WEATHER_RES_RAW_COPY then
-        src:seek("set", offset)
-        local blob = src:read(4 + body_len)
-        src:close()
-        if not blob or #blob < 4 + body_len then return nil end
-
-        local out = io.open(out_path, "wb")
-        if not out then return nil end
-        out:write(blob)
-        out:close()
-
-        return out_path
-    end
-
-    -- Запасной вариант: конвертация indexed-8bit -> BGRA8888 (cf=5)
-    src:seek("set", offset + 4)
-    local raw = src:read(body_len)
+    src:seek("set", offset)
+    local blob = src:read(4 + body_len)
     src:close()
-    if not raw or #raw < body_len then
-        return nil
-    end
-
-    local palette = raw:sub(1, WEATHER_RES_PALETTE_SIZE)
-    local indices = raw:sub(WEATHER_RES_PALETTE_SIZE + 1)
-
-    -- Заголовок нашего обычного .bin: cf=5, w, h
-    -- val = cf + (w << 10) + (h << 21)
-    local cf = 5
-    local val = cf + WEATHER_RES_ICON_W * 1024 + WEATHER_RES_ICON_H * 2097152
-    local header = string.char(
-        val % 256,
-        math.floor(val / 256) % 256,
-        math.floor(val / 65536) % 256,
-        math.floor(val / 16777216) % 256
-    )
+    if not blob or #blob < 4 + body_len then return nil end
 
     local out = io.open(out_path, "wb")
     if not out then return nil end
-    out:write(header)
-
-    local buf = {}
-    local n = WEATHER_RES_ICON_W * WEATHER_RES_ICON_H
-    for i = 1, n do
-        local idx = string.byte(indices, i)
-        local p = idx * 4
-        buf[i] = palette:sub(p + 1, p + 4)
-    end
-    out:write(table.concat(buf))
+    out:write(blob)
     out:close()
 
     return out_path
@@ -236,8 +210,8 @@ end
 -- Основной скрипт
 --------------------------------------------------------------------------------
 local function entry()
-    local global_w = 200 --lvgl.HOR_RES()
-    local global_h = 150 --lvgl.VER_RES()
+    local global_w = lvgl.HOR_RES()
+    local global_h = lvgl.VER_RES()
 
     local root = lvgl.Object(nil, {
         w = global_w, h = global_h,
@@ -293,18 +267,65 @@ local function entry()
         ["°"] = math.floor(MED_DIGIT_W * 0.7),
     }
 
+    --------------------------------------------------------------------------
+    -- Ширина правого столбца (температура): считаем ТОЧНО, а не "DIGIT_W * 3",
+    -- по наихудшему случаю символов для каждого режима --
+    --   почасовой: "%d°"     -> худший случай "-22°"      (цифры DIGIT_W, spacing -6)
+    --   дневной:   "%d°/%d°" -> худший случай "-22°/-28°" (цифры MED_DIGIT_W, spacing -6)
+    -- и берём максимум, чтобы слот не "плыл" при отрицательной двузначной
+    -- температуре в любом из режимов.
+    --------------------------------------------------------------------------
+    local function measureText(text, char_w, spacing, advance_table)
+        local char_list = {}
+        for char in utf8_chars(text) do
+            table.insert(char_list, char)
+        end
+        local char_count = #char_list
+        if char_count == 0 then return 0 end
+        local total_w = (char_count - 1) * spacing
+        for _, char in ipairs(char_list) do
+            total_w = total_w + (advance_table[char] or char_w)
+        end
+        return total_w
+    end
+
+    local HOURLY_TEMP_SPACING = -6
+    local DAILY_TEMP_SPACING  = -6
+
     local TIME_SLOT_W = TIME_DIGIT_W * 5 + 5
     local ICON_SLOT_W = ICON_W - 6
-    local TEMP_SLOT_W = DIGIT_W * 3
 
-    local ROW_WIDTH  = TIME_SLOT_W + ICON_SLOT_W + TEMP_SLOT_W
+    -- Ширина столбца температуры -- точная ширина строки, которую посчитает
+    -- render() (measureText повторяет ту же формулу: сумма advance-ширин
+    -- символов минус spacing между ними). Никакого "запаса на глаз" не
+    -- добавляем -- ширина глифов и spacing нам известны точно, поэтому и
+    -- результат точный, без приблизительных чисел.
+    --
+    -- Считаем ОТДЕЛЬНО для каждого режима (почасовой/дневной), а не одним
+    -- "максимумом на двоих" -- иначе в почасовом режиме (где "-22°" заметно
+    -- уже, чем дневное "-22°/-28°") столбец раздувался бы под дневной случай,
+    -- а поскольку центр столбца считается от его собственной ширины, это
+    -- тащило бы почасовую температуру вправо "в холостую".
+    local TEMP_SLOT_W_HOURLY = measureText("-22°", DIGIT_W, HOURLY_TEMP_SPACING, narrow_advance_temp)
+    local TEMP_SLOT_W_DAILY  = measureText("-22°/-28°", MED_DIGIT_W, DAILY_TEMP_SPACING, narrow_advance_med)
+    local TEMP_SLOT_W        = math.max(TEMP_SLOT_W_HOURLY, TEMP_SLOT_W_DAILY) -- для клик-зоны
+
+    -- ВАЖНО: позиция времени/иконки (BLOCK_X) считается по НОМИНАЛЬНОЙ ширине
+    -- столбца температуры (как было раньше, DIGIT_W*3), а не по расширенной
+    -- TEMP_SLOT_W. Иначе при увеличении TEMP_SLOT_W центрирование пересчитывает
+    -- BLOCK_X и сдвигает ВЕСЬ блок (время, иконку) влево -- а должен расширяться
+    -- только сам правый столбец, без сдвига времени/иконки.
+    local NOMINAL_TEMP_SLOT_W = DIGIT_W * 3
+    local LAYOUT_ROW_WIDTH = TIME_SLOT_W + ICON_SLOT_W + NOMINAL_TEMP_SLOT_W
+
+    local ROW_WIDTH  = TIME_SLOT_W + ICON_SLOT_W + TEMP_SLOT_W   -- реальная (худшая) ширина -- для клик-зоны
     local ROW_HEIGHT = math.max(DIGIT_H, ICON_H) - 9
 
     local BLOCK_X
     if ALIGN == "center" then
-        BLOCK_X = math.floor((global_w - ROW_WIDTH) / 2)
+        BLOCK_X = math.floor((global_w - LAYOUT_ROW_WIDTH) / 2)
     elseif ALIGN == "right" then
-        BLOCK_X = global_w - ROW_WIDTH
+        BLOCK_X = global_w - LAYOUT_ROW_WIDTH
     else
         BLOCK_X = 0
     end
@@ -312,7 +333,14 @@ local function entry()
 
     local TIME_SLOT_CENTER_X = BLOCK_X + math.floor(TIME_SLOT_W / 2) - 10
     local ICON_SLOT_CENTER_X = BLOCK_X + TIME_SLOT_W + math.floor(ICON_SLOT_W / 2) - 12
-    local TEMP_SLOT_CENTER_X = BLOCK_X + TIME_SLOT_W + ICON_SLOT_W + math.floor(TEMP_SLOT_W / 2)
+
+    -- Левая граница столбца температуры -- одна и та же точка (сразу после
+    -- иконки) для ОБОИХ режимов. Каждый режим центрируется в СВОЕЙ ширине
+    -- от этой точки, поэтому почасовой текст не тащится вправо шириной,
+    -- посчитанной под дневной случай, и наоборот.
+    local TEMP_SLOT_LEFT_X = BLOCK_X + TIME_SLOT_W + ICON_SLOT_W
+    local TEMP_SLOT_CENTER_X_HOURLY = TEMP_SLOT_LEFT_X + math.floor(TEMP_SLOT_W_HOURLY / 2)
+    local TEMP_SLOT_CENTER_X_DAILY  = TEMP_SLOT_LEFT_X + math.floor(TEMP_SLOT_W_DAILY / 2)
 
     --------------------------------------------------------------------------
     -- Карта цифр
@@ -350,7 +378,7 @@ local function entry()
             img_opa = TIME_OPACITY
         })
         temp_renderers[row] = TextImageRenderer.new(root, {
-            char_w = DIGIT_W, char_h = DIGIT_H, spacing = -6,
+            char_w = DIGIT_W, char_h = DIGIT_H, spacing = HOURLY_TEMP_SPACING,
             img_path = IMAGE_PATH, char_map = digit_map,
             char_advance = narrow_advance_temp
         })
@@ -360,7 +388,7 @@ local function entry()
     local med_temp_renderers = {}
     for row = 1, DAYS_VISIBLE do
         med_temp_renderers[row] = TextImageRenderer.new(root, {
-            char_w = MED_DIGIT_W, char_h = MED_DIGIT_H, spacing = -6,
+            char_w = MED_DIGIT_W, char_h = MED_DIGIT_H, spacing = DAILY_TEMP_SPACING,
             img_path = IMAGE_PATH, char_map = med_map,
             char_advance = narrow_advance_med
         })
@@ -522,7 +550,7 @@ local function entry()
 
             if item then
                 time_renderers[row]:render(formatTime(item.hour), TIME_SLOT_CENTER_X, time_text_y, "center")
-                temp_renderers[row]:render(formatTemp(item.temp), TEMP_SLOT_CENTER_X, temp_text_y, "center")
+                temp_renderers[row]:render(formatTemp(item.temp), TEMP_SLOT_CENTER_X_HOURLY, temp_text_y, "center")
 
                 -- иконка читается из weather.res и перезаписывается в файл
                 -- этого слота ЗАНОВО при каждом срабатывании -- без кэша
@@ -569,9 +597,11 @@ local function entry()
                 })
                 weekday_widgets[row]:clear_flag(lvgl.FLAG.HIDDEN)
 
-                -- high°/low°
+                -- high°/low° -- слот теперь посчитан на худший случай
+                -- "-22°/-28°", поэтому отрицательные двузначные значения не
+                -- вылезают за пределы столбца и не наезжают на иконку
                 local temp_text = string.format("%d°/%d°", item.high, item.low)
-                med_temp_renderers[row]:render(temp_text, TEMP_SLOT_CENTER_X, temp_text_y, "center")
+                med_temp_renderers[row]:render(temp_text, TEMP_SLOT_CENTER_X_DAILY, temp_text_y, "center")
 
                 -- иконка из weather.res
                 local resolved_code = resolveWeatherCode(item.day_icon)
