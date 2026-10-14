@@ -7226,3 +7226,33 @@ size: 210x158, scale=1, bg=black
 OK: объектов 36
 (нет вывода)
 Сохранено: C:/character_generator/previewlua/preview_transparent_щз.png
+
+======================================================================
+[2026-10-14 12:03:20] GUI START
+======================================================================
+Python: 3.13.7 (tags/v3.13.7:bcee1c3, Aug 14 2025, 14:15:11) [MSC v.1944 64 bit (AMD64)]
+log.txt: C:\character_generator\previewlua\log.txt
+
+======================================================================
+[2026-10-14 12:03:53] RENDER main.lua
+======================================================================
+lua:  C:/watchfaces/NEW/RW4/LUA_Code/city_SO/main.lua
+dir:  C:/watchfaces/NEW/RW4/LUA_Code/city_SO
+size: 390x450, scale=1, bg=black
+OK: объектов 12
+(нет вывода)
+
+======================================================================
+[2026-10-14 12:56:04] GUI START
+======================================================================
+Python: 3.13.7 (tags/v3.13.7:bcee1c3, Aug 14 2025, 14:15:11) [MSC v.1944 64 bit (AMD64)]
+log.txt: C:\character_generator\previewlua\log.txt
+
+======================================================================
+[2026-10-14 12:56:08] RENDER main.lua
+======================================================================
+lua:  C:/watchfaces/NEW/RW4/LUA_Code/city_SO/main.lua
+dir:  C:/watchfaces/NEW/RW4/LUA_Code/city_SO
+size: 390x450, scale=1, bg=black
+OK: объектов 12
+(нет вывода)

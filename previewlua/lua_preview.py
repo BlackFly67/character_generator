@@ -11,62 +11,143 @@ BG_COLOR   = (0, 0, 0, 255)
 ANIM_FRAMES = 60
 
 
+def rle_decode(enc: bytes, length: int) -> bytes:
+    out = bytearray(length)
+    ip = op = 0
+    while ip < len(enc) and op < length:
+        c = enc[ip]
+        ip += 1
+        n = c & 0x7F
+        if c & 0x80:
+            n = min(n, length - op, len(enc) - ip)
+            out[op:op + n] = enc[ip:ip + n]
+            ip += n
+            op += n
+        else:
+            if ip >= len(enc):
+                break
+            v = enc[ip]
+            ip += 1
+            n = min(n, length - op)
+            out[op:op + n] = bytes((v,)) * n
+            op += n
+    return bytes(out)
+
+
+def _rgb565_to_rgb(lo: int, hi: int):
+    r = hi & 0xF8
+    g = ((hi & 7) << 5) | ((lo & 0xE0) >> 3)
+    b = (lo & 0x1F) << 3
+    return r | (r >> 5), g | (g >> 6), b | (b >> 5)
+
+
 def read_lvgl_v8_bin(path):
     try:
         with open(path, "rb") as f:
             data = f.read()
         if len(data) < 4:
             return None
-        val = struct.unpack("<I", data[:4])[0]
-        cf = val & 0x1F
-        w = (val >> 10) & 0x7FF
-        h = (val >> 21) & 0x7FF
+        
+        sign = data[0]
+        dim = int.from_bytes(data[1:4], 'little')
+        w = (dim >> 2) & 0x7FF
+        h = dim >> 13
         if w == 0 or h == 0:
             return None
 
-        # cf=5: TRUE_COLOR_ALPHA (BGRA8888, 4 байта/пиксель)
-        if cf == 5:
-            expected = 4 + w * h * 4
-            if len(data) < expected:
+        # Проверка на RLE-сжатие (сигнатура E0 21 A5 5A после заголовка)
+        packed = len(data) >= 8 and data[4:8] == b'\xE0\x21\xA5\x5A'
+        
+        if packed:
+            info = struct.unpack_from('<I', data, 8)[0]
+            raw_len, bpp = info >> 4, info & 15
+            if bpp != 1:
                 return None
-            px = data[4:4 + w * h * 4]
-            arr = np.frombuffer(px, dtype=np.uint8).reshape(h, w, 4)
-            b = arr[:, :, 0]; g = arr[:, :, 1]
-            r = arr[:, :, 2]; a = arr[:, :, 3]
-            rgba = np.stack([r, g, b, a], axis=-1).astype(np.uint8)
+            pix = rle_decode(data[12:], raw_len)
+        else:
+            pix = data[4:]
+
+        n = w * h
+
+        # cf=10, 16: INDEXED_8BIT (палитра 256*4 BGRA + w*h индексов)
+        if sign in (10, 16):
+            if len(pix) < 1024 + n:
+                pix = pix.ljust(1024 + n, b'\0')
+            pal = np.frombuffer(pix[:1024], dtype=np.uint8).reshape(256, 4)
+            indices = np.frombuffer(pix[1024:1024 + n], dtype=np.uint8).reshape(h, w)
+            bgra = pal[indices]
+            rgba = np.stack([bgra[:, :, 2], bgra[:, :, 1], bgra[:, :, 0], bgra[:, :, 3]], axis=-1).astype(np.uint8)
             return w, h, rgba
+
+        # cf=9: INDEXED_4BIT (палитра 16*4 BGRA + упаковка по 2 индекса в байт)
+        if sign == 9:
+            expected_size = 64 + (n + 1) // 2
+            if len(pix) < expected_size:
+                pix = pix.ljust(expected_size, b'\0')
+            pal = np.frombuffer(pix[:64], dtype=np.uint8).reshape(16, 4)
+            body = np.frombuffer(pix[64:64 + (n + 1) // 2], dtype=np.uint8)
+            
+            indices = np.empty(n, dtype=np.uint8)
+            indices[0::2] = body[:(n + 1) // 2] >> 4
+            indices[1::2] = body[:n // 2] & 15
+            indices = indices.reshape(h, w)
+            
+            bgra = pal[indices]
+            rgba = np.stack([bgra[:, :, 2], bgra[:, :, 1], bgra[:, :, 0], bgra[:, :, 3]], axis=-1).astype(np.uint8)
+            return w, h, rgba
+
+        # cf=14: Серая шкала (1 байт на пиксель - яркость)
+        if sign == 14:
+            if len(pix) < n:
+                pix = pix.ljust(n, b'\0')
+            g = np.frombuffer(pix[:n], dtype=np.uint8).reshape(h, w)
+            rgba = np.stack([g, g, g, np.full((h, w), 255, dtype=np.uint8)], axis=-1).astype(np.uint8)
+            return w, h, rgba
+
+        # cf=5: TRUE_COLOR_ALPHA (BGRA8888 или 24-бит N66)
+        if sign == 5:
+            if len(pix) >= n * 4:
+                arr = np.frombuffer(pix[:n * 4], dtype=np.uint8).reshape(h, w, 4)
+                rgba = np.stack([arr[:, :, 2], arr[:, :, 1], arr[:, :, 0], arr[:, :, 3]], axis=-1).astype(np.uint8)
+                return w, h, rgba
+            elif len(pix) >= n * 3:  # N66 (RGB565 + альфа)
+                img = Image.new("RGBA", (w, h))
+                out = []
+                for i in range(n):
+                    lo = pix[3 * i]
+                    hi = pix[3 * i + 1]
+                    a = pix[3 * i + 2]
+                    r, g, b = _rgb565_to_rgb(lo, hi)
+                    out.append((r, g, b, a))
+                img.putdata(out)
+                return w, h, np.array(img, dtype=np.uint8)
 
         # cf=4: TRUE_COLOR (RGB565, 2 байта/пиксель)
-        if cf == 4:
-            expected = 4 + w * h * 2
-            if len(data) < expected:
-                return None
-            px = data[4:4 + w * h * 2]
-            arr = np.frombuffer(px, dtype=np.uint8).reshape(h, w, 2)
-            rgb565 = arr[:, :, 0].astype(np.uint16) | (arr[:, :, 1].astype(np.uint16) << 8)
-            r = ((rgb565 >> 11) & 0x1F) << 3
-            g = ((rgb565 >> 5) & 0x3F) << 2
-            b = (rgb565 & 0x1F) << 3
-            r = r | (r >> 5); g = g | (g >> 6); b = b | (b >> 5)
-            a = np.full((h, w), 255, dtype=np.uint8)
-            rgba = np.stack([r, g, b, a], axis=-1).astype(np.uint8)
-            return w, h, rgba
-
-        # cf=10: INDEXED_8BIT (палитра 256*4 BGRA + w*h индексов)
-        if cf == 10:
-            palette_size = 256 * 4
-            expected = 4 + palette_size + w * h
-            if len(data) < expected:
-                return None
-            palette = data[4:4 + palette_size]
-            indices = data[4 + palette_size:4 + palette_size + w * h]
-            pal = np.frombuffer(palette, dtype=np.uint8).reshape(256, 4)
-            idx = np.frombuffer(indices, dtype=np.uint8).reshape(h, w)
-            bgra = pal[idx]
-            b = bgra[:, :, 0]; g = bgra[:, :, 1]
-            r = bgra[:, :, 2]; a = bgra[:, :, 3]
-            rgba = np.stack([r, g, b, a], axis=-1).astype(np.uint8)
-            return w, h, rgba
+        if sign == 4:
+            if len(pix) >= n * 3 + 8 and struct.unpack_from('<I', pix, 0)[0] == n * 3:
+                pix = pix[8:]
+                img = Image.new("RGBA", (w, h))
+                out = []
+                for i in range(n):
+                    lo = pix[3 * i]
+                    hi = pix[3 * i + 1]
+                    a = pix[3 * i + 2]
+                    r, g, b = _rgb565_to_rgb(lo, hi)
+                    out.append((r, g, b, a))
+                img.putdata(out)
+                return w, h, np.array(img, dtype=np.uint8)
+            else:
+                if len(pix) < n * 2:
+                    return None
+                arr = np.frombuffer(pix[:n * 2], dtype=np.uint8).reshape(h, w, 2)
+                rgb565 = arr[:, :, 0].astype(np.uint16) | (arr[:, :, 1].astype(np.uint16) << 8)
+                r = ((rgb565 >> 11) & 0x1F) << 3
+                g = ((rgb565 >> 5) & 0x3F) << 2
+                b = (rgb565 & 0x1F) << 3
+                r = r | (r >> 5); g = g | (g >> 6); b = b | (b >> 5)
+                a = np.full((h, w), 255, dtype=np.uint8)
+                rgba = np.stack([r, g, b, a], axis=-1).astype(np.uint8)
+                return w, h, rgba
 
         return None
     except Exception:
@@ -307,6 +388,7 @@ class ImageWrapper:
         def noop(*a, **k): return self
         return noop
 
+
 class Scheduler:
     MAX_FIRES = 100000
     def __init__(self): self.now = 0; self.timers = []
@@ -414,8 +496,7 @@ class LuaEmulator:
         g.string = lua.eval("require('string')")
         g.os     = lua.eval("require('os')")
         g.table  = lua.eval("require('table')")
-
-        g.io = lua.eval("require('io')")
+        g.io     = lua.eval("require('io')")
 
         script_dir_lua = self.image_path
         lua.execute(f"""
@@ -429,6 +510,12 @@ class LuaEmulator:
                     local alt = _script_dir .. base
                     f = _real_open(alt, mode)
                     if f then return f end
+                    -- Автоподбор расширений .rle / .bin
+                    for _, ext in ipairs({{".rle", ".bin"}}) do
+                        local alt_ext = alt:gsub("%.%w+$", ext)
+                        f = _real_open(alt_ext, mode)
+                        if f then return f end
+                    end
                 end
                 return nil
             end

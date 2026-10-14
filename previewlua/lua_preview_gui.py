@@ -321,7 +321,7 @@ class App:
         try:
             snap.append(os.path.getmtime(lua))
             for fn in sorted(os.listdir(d)):
-                if fn.endswith((".bin", ".db")):
+                if fn.endswith((".bin", ".rle", ".db")):
                     snap.append((fn, os.path.getmtime(os.path.join(d, fn))))
         except OSError:
             pass
