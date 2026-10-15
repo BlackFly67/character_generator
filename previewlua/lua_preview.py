@@ -12,6 +12,8 @@ ANIM_FRAMES = 60
 
 
 def rle_decode(enc: bytes, length: int) -> bytes:
+    # RLE v2.0 (rle.dec_v20): байт c, n = c & 0x7F;
+    # c & 0x80 -> n литеральных байт, иначе n повторов следующего байта.
     out = bytearray(length)
     ip = op = 0
     while ip < len(enc) and op < length:
@@ -31,127 +33,135 @@ def rle_decode(enc: bytes, length: int) -> bytes:
             n = min(n, length - op)
             out[op:op + n] = bytes((v,)) * n
             op += n
-    return bytes(out)
+    # FIX: возвращаем только реально декодированное, а не нули до length,
+    # чтобы обрезанный файл можно было отличить от целого по длине
+    return bytes(out[:op])
 
 
-def _rgb565_to_rgb(lo: int, hi: int):
-    r = hi & 0xF8
-    g = ((hi & 7) << 5) | ((lo & 0xE0) >> 3)
-    b = (lo & 0x1F) << 3
-    return r | (r >> 5), g | (g >> 6), b | (b >> 5)
+def _rgb565_arr(lo, hi):
+    # FIX: векторная версия (раньше 24-бит ветка шла питоновским циклом по пикселям)
+    v = lo.astype(np.uint16) | (hi.astype(np.uint16) << 8)
+    r = ((v >> 11) & 0x1F) << 3
+    g = ((v >> 5) & 0x3F) << 2
+    b = (v & 0x1F) << 3
+    r = r | (r >> 5); g = g | (g >> 6); b = b | (b >> 5)
+    return r.astype(np.uint8), g.astype(np.uint8), b.astype(np.uint8)
 
 
-def read_lvgl_v8_bin(path):
+def _find_image_file(path):
+    # FIX: подмена .rle <-> .bin также на стороне Python (в Lua io.open это уже есть)
+    if os.path.isfile(path):
+        return path
+    base, ext = os.path.splitext(path)
+    for alt in (".rle", ".bin"):
+        if alt != ext.lower() and os.path.isfile(base + alt):
+            return base + alt
+    return path
+
+
+def _read_lvgl_v8_bin_uncached(path):
     try:
         with open(path, "rb") as f:
             data = f.read()
         if len(data) < 4:
             return None
-        
-        sign = data[0]
-        dim = int.from_bytes(data[1:4], 'little')
-        w = (dim >> 2) & 0x7FF
-        h = dim >> 13
+        val = struct.unpack("<I", data[:4])[0]
+        cf = val & 0x1F
+        w = (val >> 10) & 0x7FF
+        h = (val >> 21) & 0x7FF
         if w == 0 or h == 0:
             return None
-
-        # Проверка на RLE-сжатие (сигнатура E0 21 A5 5A после заголовка)
-        packed = len(data) >= 8 and data[4:8] == b'\xE0\x21\xA5\x5A'
-        
-        if packed:
-            info = struct.unpack_from('<I', data, 8)[0]
-            raw_len, bpp = info >> 4, info & 15
-            if bpp != 1:
-                return None
-            pix = rle_decode(data[12:], raw_len)
-        else:
-            pix = data[4:]
-
         n = w * h
 
-        # cf=10, 16: INDEXED_8BIT (палитра 256*4 BGRA + w*h индексов)
-        if sign in (10, 16):
+        pix = data[4:]
+        # .rle: после 4-байтового заголовка идёт E0 21 A5 5A, u32 (raw_len << 4 | bpp),
+        # затем RLE v2.0 (image_codec.compile_js_image; только sign 9/10/14, bpp == 1)
+        if len(pix) >= 8 and pix[:4] == b'\xE0\x21\xA5\x5A':
+            info = struct.unpack_from("<I", pix, 4)[0]
+            raw_len, bpp = info >> 4, info & 15
+            # FIX: защита от битого заголовка (раньше raw_len мог выделить сотни МБ)
+            if bpp != 1 or raw_len == 0 or raw_len > 1024 + n * 4:
+                return None
+            pix = rle_decode(pix[8:], raw_len)
+            if len(pix) < raw_len:
+                return None
+
+        # cf=10: INDEXED_8BIT (палитра 256*4 BGRA + w*h индексов)
+        if cf == 10:
             if len(pix) < 1024 + n:
-                pix = pix.ljust(1024 + n, b'\0')
+                return None
             pal = np.frombuffer(pix[:1024], dtype=np.uint8).reshape(256, 4)
-            indices = np.frombuffer(pix[1024:1024 + n], dtype=np.uint8).reshape(h, w)
-            bgra = pal[indices]
-            rgba = np.stack([bgra[:, :, 2], bgra[:, :, 1], bgra[:, :, 0], bgra[:, :, 3]], axis=-1).astype(np.uint8)
-            return w, h, rgba
+            idx = np.frombuffer(pix[1024:1024 + n], dtype=np.uint8).reshape(h, w)
+            bgra = pal[idx]
+            rgba = np.stack([bgra[:, :, 2], bgra[:, :, 1], bgra[:, :, 0], bgra[:, :, 3]], axis=-1)
+            return w, h, rgba.astype(np.uint8)
 
-        # cf=9: INDEXED_4BIT (палитра 16*4 BGRA + упаковка по 2 индекса в байт)
-        if sign == 9:
-            expected_size = 64 + (n + 1) // 2
-            if len(pix) < expected_size:
-                pix = pix.ljust(expected_size, b'\0')
+        # cf=9: INDEXED_4BIT (палитра 16*4 BGRA + по 2 индекса в байте, старший полубайт первым)
+        if cf == 9:
+            size = (n + 1) // 2
+            if len(pix) < 64 + size:
+                return None
             pal = np.frombuffer(pix[:64], dtype=np.uint8).reshape(16, 4)
-            body = np.frombuffer(pix[64:64 + (n + 1) // 2], dtype=np.uint8)
-            
-            indices = np.empty(n, dtype=np.uint8)
-            indices[0::2] = body[:(n + 1) // 2] >> 4
-            indices[1::2] = body[:n // 2] & 15
-            indices = indices.reshape(h, w)
-            
-            bgra = pal[indices]
-            rgba = np.stack([bgra[:, :, 2], bgra[:, :, 1], bgra[:, :, 0], bgra[:, :, 3]], axis=-1).astype(np.uint8)
-            return w, h, rgba
+            body = np.frombuffer(pix[64:64 + size], dtype=np.uint8)
+            idx = np.empty(n, dtype=np.uint8)
+            idx[0::2] = body[:(n + 1) // 2] >> 4
+            idx[1::2] = body[:n // 2] & 15
+            bgra = pal[idx.reshape(h, w)]
+            rgba = np.stack([bgra[:, :, 2], bgra[:, :, 1], bgra[:, :, 0], bgra[:, :, 3]], axis=-1)
+            return w, h, rgba.astype(np.uint8)
 
-        # cf=14: Серая шкала (1 байт на пиксель - яркость)
-        if sign == 14:
+        # cf=14: серая шкала (1 байт на пиксель)
+        if cf == 14:
             if len(pix) < n:
-                pix = pix.ljust(n, b'\0')
+                return None
             g = np.frombuffer(pix[:n], dtype=np.uint8).reshape(h, w)
-            rgba = np.stack([g, g, g, np.full((h, w), 255, dtype=np.uint8)], axis=-1).astype(np.uint8)
-            return w, h, rgba
+            a = np.full((h, w), 255, dtype=np.uint8)
+            return w, h, np.stack([g, g, g, a], axis=-1)
 
-        # cf=5: TRUE_COLOR_ALPHA (BGRA8888 или 24-бит N66)
-        if sign == 5:
+        # cf=5: TRUE_COLOR_ALPHA (BGRA8888, 4 байта/пиксель) или 24-бит N66 (RGB565 + альфа)
+        if cf == 5:
             if len(pix) >= n * 4:
                 arr = np.frombuffer(pix[:n * 4], dtype=np.uint8).reshape(h, w, 4)
-                rgba = np.stack([arr[:, :, 2], arr[:, :, 1], arr[:, :, 0], arr[:, :, 3]], axis=-1).astype(np.uint8)
-                return w, h, rgba
-            elif len(pix) >= n * 3:  # N66 (RGB565 + альфа)
-                img = Image.new("RGBA", (w, h))
-                out = []
-                for i in range(n):
-                    lo = pix[3 * i]
-                    hi = pix[3 * i + 1]
-                    a = pix[3 * i + 2]
-                    r, g, b = _rgb565_to_rgb(lo, hi)
-                    out.append((r, g, b, a))
-                img.putdata(out)
-                return w, h, np.array(img, dtype=np.uint8)
+                rgba = np.stack([arr[:, :, 2], arr[:, :, 1], arr[:, :, 0], arr[:, :, 3]], axis=-1)
+                return w, h, rgba.astype(np.uint8)
+            if len(pix) >= n * 3:
+                arr = np.frombuffer(pix[:n * 3], dtype=np.uint8).reshape(h, w, 3)
+                r, g, b = _rgb565_arr(arr[:, :, 0], arr[:, :, 1])
+                return w, h, np.stack([r, g, b, arr[:, :, 2]], axis=-1)
+            return None
 
         # cf=4: TRUE_COLOR (RGB565, 2 байта/пиксель)
-        if sign == 4:
-            if len(pix) >= n * 3 + 8 and struct.unpack_from('<I', pix, 0)[0] == n * 3:
-                pix = pix[8:]
-                img = Image.new("RGBA", (w, h))
-                out = []
-                for i in range(n):
-                    lo = pix[3 * i]
-                    hi = pix[3 * i + 1]
-                    a = pix[3 * i + 2]
-                    r, g, b = _rgb565_to_rgb(lo, hi)
-                    out.append((r, g, b, a))
-                img.putdata(out)
-                return w, h, np.array(img, dtype=np.uint8)
-            else:
-                if len(pix) < n * 2:
-                    return None
-                arr = np.frombuffer(pix[:n * 2], dtype=np.uint8).reshape(h, w, 2)
-                rgb565 = arr[:, :, 0].astype(np.uint16) | (arr[:, :, 1].astype(np.uint16) << 8)
-                r = ((rgb565 >> 11) & 0x1F) << 3
-                g = ((rgb565 >> 5) & 0x3F) << 2
-                b = (rgb565 & 0x1F) << 3
-                r = r | (r >> 5); g = g | (g >> 6); b = b | (b >> 5)
-                a = np.full((h, w), 255, dtype=np.uint8)
-                rgba = np.stack([r, g, b, a], axis=-1).astype(np.uint8)
-                return w, h, rgba
+        if cf == 4:
+            if len(pix) < n * 2:
+                return None
+            arr = np.frombuffer(pix[:n * 2], dtype=np.uint8).reshape(h, w, 2)
+            r, g, b = _rgb565_arr(arr[:, :, 0], arr[:, :, 1])
+            a = np.full((h, w), 255, dtype=np.uint8)
+            return w, h, np.stack([r, g, b, a], axis=-1)
 
         return None
     except Exception:
         return None
+
+
+_IMG_CACHE = {}
+
+
+def read_lvgl_v8_bin(path):
+    # Читает и .bin, и .rle (формат определяется по содержимому, не по расширению).
+    # FIX: кеш по (путь, mtime): Canvas._redraw вызывается на каждый add/remove
+    # и раньше перечитывал и декодировал все картинки заново.
+    real = _find_image_file(path)
+    try:
+        mtime = os.path.getmtime(real)
+    except OSError:
+        return None
+    hit = _IMG_CACHE.get(real)
+    if hit is not None and hit[0] == mtime:
+        return hit[1]
+    res = _read_lvgl_v8_bin_uncached(real)
+    _IMG_CACHE[real] = (mtime, res)
+    return res
 
 
 def parse_color(c):
@@ -388,7 +398,6 @@ class ImageWrapper:
         def noop(*a, **k): return self
         return noop
 
-
 class Scheduler:
     MAX_FIRES = 100000
     def __init__(self): self.now = 0; self.timers = []
@@ -496,7 +505,8 @@ class LuaEmulator:
         g.string = lua.eval("require('string')")
         g.os     = lua.eval("require('os')")
         g.table  = lua.eval("require('table')")
-        g.io     = lua.eval("require('io')")
+
+        g.io = lua.eval("require('io')")
 
         script_dir_lua = self.image_path
         lua.execute(f"""
@@ -510,11 +520,14 @@ class LuaEmulator:
                     local alt = _script_dir .. base
                     f = _real_open(alt, mode)
                     if f then return f end
-                    -- Автоподбор расширений .rle / .bin
+                    -- FIX: автоподбор расширения .rle <-> .bin (формат читается по содержимому).
+                    -- Скобки вокруг gsub: он возвращает 2 значения (строку и счётчик).
                     for _, ext in ipairs({{".rle", ".bin"}}) do
-                        local alt_ext = alt:gsub("%.%w+$", ext)
-                        f = _real_open(alt_ext, mode)
-                        if f then return f end
+                        local alt_ext = (alt:gsub("%.%w+$", ext))
+                        if alt_ext ~= alt then
+                            f = _real_open(alt_ext, mode)
+                            if f then return f end
+                        end
                     end
                 end
                 return nil
