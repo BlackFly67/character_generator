@@ -5,12 +5,12 @@ import math
 import numpy as np
 from PIL import Image, ImageDraw
 from lupa import LuaRuntime
-
+ 
 SCRIPT_DIR = os.getcwd()
 BG_COLOR   = (0, 0, 0, 255)
 ANIM_FRAMES = 60
-
-
+ 
+ 
 def rle_decode(enc: bytes, length: int) -> bytes:
     # RLE v2.0 (rle.dec_v20): байт c, n = c & 0x7F;
     # c & 0x80 -> n литеральных байт, иначе n повторов следующего байта.
@@ -36,8 +36,8 @@ def rle_decode(enc: bytes, length: int) -> bytes:
     # FIX: возвращаем только реально декодированное, а не нули до length,
     # чтобы обрезанный файл можно было отличить от целого по длине
     return bytes(out[:op])
-
-
+ 
+ 
 def _rgb565_arr(lo, hi):
     # FIX: векторная версия (раньше 24-бит ветка шла питоновским циклом по пикселям)
     v = lo.astype(np.uint16) | (hi.astype(np.uint16) << 8)
@@ -46,8 +46,8 @@ def _rgb565_arr(lo, hi):
     b = (v & 0x1F) << 3
     r = r | (r >> 5); g = g | (g >> 6); b = b | (b >> 5)
     return r.astype(np.uint8), g.astype(np.uint8), b.astype(np.uint8)
-
-
+ 
+ 
 def _find_image_file(path):
     # FIX: подмена .rle <-> .bin также на стороне Python (в Lua io.open это уже есть)
     if os.path.isfile(path):
@@ -57,8 +57,8 @@ def _find_image_file(path):
         if alt != ext.lower() and os.path.isfile(base + alt):
             return base + alt
     return path
-
-
+ 
+ 
 def _read_lvgl_v8_bin_uncached(path):
     try:
         with open(path, "rb") as f:
@@ -72,7 +72,7 @@ def _read_lvgl_v8_bin_uncached(path):
         if w == 0 or h == 0:
             return None
         n = w * h
-
+ 
         pix = data[4:]
         # .rle: после 4-байтового заголовка идёт E0 21 A5 5A, u32 (raw_len << 4 | bpp),
         # затем RLE v2.0 (image_codec.compile_js_image; только sign 9/10/14, bpp == 1)
@@ -85,7 +85,7 @@ def _read_lvgl_v8_bin_uncached(path):
             pix = rle_decode(pix[8:], raw_len)
             if len(pix) < raw_len:
                 return None
-
+ 
         # cf=10: INDEXED_8BIT (палитра 256*4 BGRA + w*h индексов)
         if cf == 10:
             if len(pix) < 1024 + n:
@@ -95,7 +95,7 @@ def _read_lvgl_v8_bin_uncached(path):
             bgra = pal[idx]
             rgba = np.stack([bgra[:, :, 2], bgra[:, :, 1], bgra[:, :, 0], bgra[:, :, 3]], axis=-1)
             return w, h, rgba.astype(np.uint8)
-
+ 
         # cf=9: INDEXED_4BIT (палитра 16*4 BGRA + по 2 индекса в байте, старший полубайт первым)
         if cf == 9:
             size = (n + 1) // 2
@@ -109,7 +109,7 @@ def _read_lvgl_v8_bin_uncached(path):
             bgra = pal[idx.reshape(h, w)]
             rgba = np.stack([bgra[:, :, 2], bgra[:, :, 1], bgra[:, :, 0], bgra[:, :, 3]], axis=-1)
             return w, h, rgba.astype(np.uint8)
-
+ 
         # cf=14: серая шкала (1 байт на пиксель)
         if cf == 14:
             if len(pix) < n:
@@ -117,7 +117,7 @@ def _read_lvgl_v8_bin_uncached(path):
             g = np.frombuffer(pix[:n], dtype=np.uint8).reshape(h, w)
             a = np.full((h, w), 255, dtype=np.uint8)
             return w, h, np.stack([g, g, g, a], axis=-1)
-
+ 
         # cf=5: TRUE_COLOR_ALPHA (BGRA8888, 4 байта/пиксель) или 24-бит N66 (RGB565 + альфа)
         if cf == 5:
             if len(pix) >= n * 4:
@@ -129,7 +129,7 @@ def _read_lvgl_v8_bin_uncached(path):
                 r, g, b = _rgb565_arr(arr[:, :, 0], arr[:, :, 1])
                 return w, h, np.stack([r, g, b, arr[:, :, 2]], axis=-1)
             return None
-
+ 
         # cf=4: TRUE_COLOR (RGB565, 2 байта/пиксель)
         if cf == 4:
             if len(pix) < n * 2:
@@ -138,15 +138,15 @@ def _read_lvgl_v8_bin_uncached(path):
             r, g, b = _rgb565_arr(arr[:, :, 0], arr[:, :, 1])
             a = np.full((h, w), 255, dtype=np.uint8)
             return w, h, np.stack([r, g, b, a], axis=-1)
-
+ 
         return None
     except Exception:
         return None
-
-
+ 
+ 
 _IMG_CACHE = {}
-
-
+ 
+ 
 def read_lvgl_v8_bin(path):
     # Читает и .bin, и .rle (формат определяется по содержимому, не по расширению).
     # FIX: кеш по (путь, mtime): Canvas._redraw вызывается на каждый add/remove
@@ -162,8 +162,8 @@ def read_lvgl_v8_bin(path):
     res = _read_lvgl_v8_bin_uncached(real)
     _IMG_CACHE[real] = (mtime, res)
     return res
-
-
+ 
+ 
 def parse_color(c):
     if isinstance(c, int):
         r = (c >> 16) & 0xFF
@@ -179,8 +179,8 @@ def parse_color(c):
             a = int(h[0:2], 16); r = int(h[2:4], 16); g = int(h[4:6], 16); b = int(h[6:8], 16)
             return (r, g, b, a)
     return (255, 255, 255, 255)
-
-
+ 
+ 
 class Canvas:
     def __init__(self, w, h):
         self.w = w
@@ -188,16 +188,16 @@ class Canvas:
         self.bg = BG_COLOR
         self.commands = []
         self.img = Image.new("RGBA", (w, h), self.bg)
-
+ 
     def add(self, owner_id, kind, data):
         self.commands = [c for c in self.commands if c[0] != owner_id]
         self.commands.append((owner_id, kind, data))
         self._redraw()
-
+ 
     def remove(self, owner_id):
         self.commands = [c for c in self.commands if c[0] != owner_id]
         self._redraw()
-
+ 
     def _redraw(self):
         self.img = Image.new("RGBA", (self.w, self.h), self.bg)
         for _, kind, data in self.commands:
@@ -229,8 +229,8 @@ class Canvas:
                 else:
                     d.rectangle((0, 0, w - 1, h - 1), fill=color)
                 self.img.alpha_composite(layer, (x, y))
-
-
+ 
+ 
 class ObjectWrapper:
     _next_id = 0
     def __init__(self, parent, canvas, cfg=None):
@@ -245,7 +245,7 @@ class ObjectWrapper:
             for k in cfg:
                 self.cfg[k] = cfg[k]
         self._draw()
-
+ 
     def _color_with_opa(self):
         col = self.cfg.get("bg_color")
         if col is None:
@@ -259,7 +259,7 @@ class ObjectWrapper:
         if opa > 255: opa = 255
         a = a * opa // 255
         return (r, g, b, a)
-
+ 
     def _draw(self):
         col = self._color_with_opa()
         if col is None or col[3] == 0:
@@ -270,7 +270,7 @@ class ObjectWrapper:
                 col, int(self.cfg.get("radius", 0)),
                 bool(self.cfg.get("hidden", False)))
         self.canvas.add(self.id, "rect", data)
-
+ 
     def set(self, tbl):
         if tbl:
             for k in tbl: self.cfg[k] = tbl[k]
@@ -298,8 +298,8 @@ class ObjectWrapper:
         if attr is not None: return attr
         def noop(*a, **k): return self
         return noop
-
-
+ 
+ 
 class ImageWrapper:
     _next_id = 0
     def __init__(self, parent, canvas, script_dir, image_path, cfg):
@@ -320,7 +320,7 @@ class ImageWrapper:
             self.parent_w = parent.cfg.get("w")
             self.parent_h = parent.cfg.get("h")
         self._draw()
-
+ 
     def _resolve_pos(self):
         x = self.cfg.get("x"); y = self.cfg.get("y")
         align = self.cfg.get("align")
@@ -348,7 +348,7 @@ class ImageWrapper:
             elif align == 7: x, y = (pw - w) // 2, ph - h
             elif align == 8: x, y = pw - w, ph - h
         return int(x or 0), int(y or 0)
-
+ 
     def _draw(self):
         if self.cfg.get("hidden", False):
             self.canvas.remove(self.id)
@@ -363,7 +363,7 @@ class ImageWrapper:
             file_name = src[len(self.image_path):]
         full = os.path.join(self.script_dir, self.image_path, file_name)
         self.canvas.add(self.id, "bin", (full, x, y, w, h))
-
+ 
     def set(self, tbl):
         if tbl:
             for k in tbl: self.cfg[k] = tbl[k]
@@ -371,19 +371,19 @@ class ImageWrapper:
         return self
     def set_src(self, src): self.cfg["src"] = src; self._draw(); return self
     def invalidate(self): self._draw(); return self
-
+ 
     def add_flag(self, flag):
         if flag == 3:  # HIDDEN
             self.cfg["hidden"] = True
             self._draw()
         return self
-
+ 
     def clear_flag(self, flag):
         if flag == 3:
             self.cfg["hidden"] = False
             self._draw()
         return self
-
+ 
     def delete(self): self.canvas.remove(self.id)
     def onevent(self, event=None, callback=None):
         if event is not None and callback is not None:
@@ -397,7 +397,7 @@ class ImageWrapper:
         if attr is not None: return attr
         def noop(*a, **k): return self
         return noop
-
+ 
 class Scheduler:
     MAX_FIRES = 100000
     def __init__(self): self.now = 0; self.timers = []
@@ -413,8 +413,8 @@ class Scheduler:
         self.now = target
         self.timers = [t for t in self.timers if not t.deleted]
         return fired
-
-
+ 
+ 
 class TimerWrapper:
     def __init__(self, cfg, scheduler):
         self.cfg = {}
@@ -449,8 +449,8 @@ class TimerWrapper:
         if attr is not None: return attr
         def noop(*a, **k): return self
         return noop
-
-
+ 
+ 
 class DatamanStub:
     def __init__(self): self.subscriptions = []
     def subscribe(self, *args):
@@ -463,8 +463,8 @@ class DatamanStub:
                 for i in range(times):
                     try: cb(None)
                     except Exception as e: print(f"    error: {e}")
-
-
+ 
+ 
 class LVGLFacade:
     def __init__(self, canvas, script_dir, image_path, scheduler=None):
         self.canvas = canvas
@@ -472,7 +472,7 @@ class LVGLFacade:
         self.image_path = image_path
         self.scheduler = scheduler or Scheduler()
         self.widgets = []
-
+ 
     def Image(self, parent, cfg):
         w = ImageWrapper(parent, self.canvas, self.script_dir, self.image_path, cfg)
         self.widgets.append(w); return w
@@ -486,8 +486,8 @@ class LVGLFacade:
     def __getattr__(self, name):
         def noop(*a, **k): return None
         return noop
-
-
+ 
+ 
 class LuaEmulator:
     def __init__(self, canvas, script_dir):
         self.canvas = canvas
@@ -497,7 +497,7 @@ class LuaEmulator:
         self.scheduler = Scheduler()
         self.lvgl_facade = LVGLFacade(canvas, script_dir, self.image_path, self.scheduler)
         self.dataman = DatamanStub()
-
+ 
     def run(self, lua_path):
         lua = self.lua
         g = lua.globals()
@@ -505,9 +505,9 @@ class LuaEmulator:
         g.string = lua.eval("require('string')")
         g.os     = lua.eval("require('os')")
         g.table  = lua.eval("require('table')")
-
+ 
         g.io = lua.eval("require('io')")
-
+ 
         script_dir_lua = self.image_path
         lua.execute(f"""
             local _script_dir = [==[{script_dir_lua}]==]
@@ -533,9 +533,9 @@ class LuaEmulator:
                 return nil
             end
         """)
-
+ 
         g.dataman = lua.table_from({"subscribe": self.dataman.subscribe})
-
+ 
         lvgl_table = lua.table()
         lvgl_table["Image"]   = self.lvgl_facade.Image
         lvgl_table["Object"]  = self.lvgl_facade.Object
@@ -558,7 +558,7 @@ class LuaEmulator:
         g.lvgl = lvgl_table
         g.SCRIPT_PATH = self.image_path
         g.print = print
-
+ 
         def require(name):
             if name == "lvgl": return lvgl_table
             if name == "math": return g.math
@@ -568,23 +568,23 @@ class LuaEmulator:
             if name == "dataman": return g.dataman
             return None
         g.require = require
-
+ 
         with open(lua_path, "r", encoding="utf-8") as f:
             code = f.read()
-
+ 
         lines = code.split("\n")
         while lines and lines[0].lstrip().startswith("#"):
             lines.pop(0)
         code = "\n".join(lines)
-
+ 
         lua.execute(code)
         try:
             lua.eval("ScreenStateChangedCB('OFF', 'ON', 'emu')")
         except Exception as e:
             print(f"  [WARN] ScreenStateChangedCB: {e}")
-
+ 
         self.dataman.fire("timeCentiSecond", times=ANIM_FRAMES)
-
+ 
     def click_all(self, times=1):
         CLICKED = 1
         total = 0
@@ -603,7 +603,7 @@ class LuaEmulator:
                         break
         print(f"  [click] вызвано CLICKED-колбэков: {total}")
         return total
-
+ 
     def click_at(self, x, y):
         CLICKED = 1
         candidates = []
@@ -642,16 +642,16 @@ class LuaEmulator:
                     print(f"  [click] ошибка: {e}")
         print(f"  [click] в точке ({x}, {y}) вызвано: {total}")
         return total
-
-
+ 
+ 
 def parse_duration(text):
     t = str(text).strip().lower()
     for suffix, mul in (("ms", 1), ("s", 1000), ("m", 60000), ("h", 3600000)):
         if t.endswith(suffix) and t[:-len(suffix)].replace(".", "", 1).isdigit():
             return int(float(t[:-len(suffix)]) * mul)
     return int(float(t))
-
-
+ 
+ 
 def main():
     import argparse
     global SCRIPT_DIR, BG_COLOR
@@ -666,42 +666,42 @@ def main():
     ap.add_argument("--click", type=int, default=0)
     ap.add_argument("--out", default="preview.png")
     args = ap.parse_args()
-
+ 
     lua_full = os.path.abspath(args.lua)
     SCRIPT_DIR = os.path.abspath(args.dir) if args.dir else os.path.dirname(lua_full)
     h = args.bg.lstrip("#")
     BG_COLOR = tuple(int(h[i:i + 2], 16) for i in (0, 2, 4)) + (255,)
-
+ 
     canvas = Canvas(args.width, args.height)
     canvas.bg = (0, 0, 0, 0)
     canvas._redraw()
     emu = LuaEmulator(canvas, SCRIPT_DIR)
     emu.run(lua_full)
-
+ 
     if args.advance:
         ms = parse_duration(args.advance)
         fired = emu.scheduler.advance(ms)
         print(f"Время прокручено на {ms} мс, таймеров: {fired}")
-
+ 
     if args.click > 0:
         emu.click_all(times=args.click)
-
+ 
     transparent = canvas.img.copy()
     preview = Image.new("RGBA", transparent.size, BG_COLOR)
     preview.alpha_composite(transparent)
-
+ 
     if args.scale != 1:
         size = (transparent.width * args.scale, transparent.height * args.scale)
         transparent = transparent.resize(size, Image.NEAREST)
         preview = preview.resize(size, Image.NEAREST)
-
+ 
     base, ext = os.path.splitext(args.out)
     out_transparent = f"{base}_transparent{ext or '.png'}"
     preview.save(args.out)
     transparent.save(out_transparent)
     print(f"Предпросмотр: {args.out}")
     print(f"Прозрачный:   {out_transparent}")
-
-
+ 
+ 
 if __name__ == "__main__":
     main()

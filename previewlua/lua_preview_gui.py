@@ -10,16 +10,16 @@ import sys
 import traceback
 import tkinter as tk
 from tkinter import colorchooser, filedialog, ttk
-
+ 
 from PIL import Image, ImageTk
-
+ 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import lua_preview as lp  # noqa: E402
-
+ 
 GUI_DIR = os.path.dirname(os.path.abspath(__file__))
 LOG_PATH = os.path.join(GUI_DIR, "log.txt")
-
-
+ 
+ 
 def write_log(text):
     try:
         with open(LOG_PATH, "a", encoding="utf-8") as f:
@@ -28,16 +28,16 @@ def write_log(text):
                 f.write("\n")
     except Exception:
         pass
-
-
+ 
+ 
 def log_separator(title):
     ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     write_log("")
     write_log("=" * 70)
     write_log(f"[{ts}] {title}")
     write_log("=" * 70)
-
-
+ 
+ 
 def checkerboard(size, cell=10):
     w, h = size
     img = Image.new("RGBA", (w, h), (60, 60, 60, 255))
@@ -47,8 +47,8 @@ def checkerboard(size, cell=10):
             if ((x // cell) + (y // cell)) % 2:
                 px[x, y] = (90, 90, 90, 255)
     return img
-
-
+ 
+ 
 class App:
     def __init__(self, root):
         self.root = root
@@ -57,7 +57,7 @@ class App:
         self.tk_img = None
         self.watch_state = None
         self.emu = None
-
+ 
         self.v_lua = tk.StringVar()
         self.v_dir = tk.StringVar()
         self.v_w = tk.IntVar(value=390)
@@ -66,24 +66,24 @@ class App:
         self.v_bg = tk.StringVar(value="black")
         self.custom_color = "#202020"
         self.v_auto = tk.BooleanVar(value=True)
-
+ 
         self._build()
         root.bind("<F5>", lambda e: self.render())
         root.after(1000, self._poll)
-
+ 
     def _build(self):
         top = ttk.Frame(self.root, padding=6)
         top.pack(fill="x")
-
+ 
         ttk.Label(top, text="Lua:").grid(row=0, column=0, sticky="e")
         ttk.Entry(top, textvariable=self.v_lua, width=55).grid(row=0, column=1, sticky="we")
         ttk.Button(top, text="Обзор…", command=self.pick_lua).grid(row=0, column=2, padx=3)
-
+ 
         ttk.Label(top, text="Папка .bin / db:").grid(row=1, column=0, sticky="e")
         ttk.Entry(top, textvariable=self.v_dir, width=55).grid(row=1, column=1, sticky="we")
         ttk.Button(top, text="Обзор…", command=self.pick_dir).grid(row=1, column=2, padx=3)
         top.columnconfigure(1, weight=1)
-
+ 
         opt = ttk.Frame(self.root, padding=(6, 0))
         opt.pack(fill="x")
         ttk.Label(opt, text="Экран:").pack(side="left")
@@ -98,7 +98,7 @@ class App:
             ttk.Radiobutton(opt, text=text, value=val, variable=self.v_bg,
                             command=self.on_bg).pack(side="left")
         ttk.Checkbutton(opt, text="авто", variable=self.v_auto).pack(side="left", padx=8)
-
+ 
         btns = ttk.Frame(self.root, padding=6)
         btns.pack(fill="x")
         ttk.Button(btns, text="Render (F5)", command=self.render).pack(side="left")
@@ -109,10 +109,10 @@ class App:
                    command=lambda: self.save(True)).pack(side="left")
         ttk.Button(btns, text="Открыть log.txt",
                    command=self.open_log).pack(side="left", padx=4)
-
+ 
         body = ttk.PanedWindow(self.root, orient="vertical")
         body.pack(fill="both", expand=True)
-
+ 
         view = ttk.Frame(body)
         self.canvas = tk.Canvas(view, bg="#333333", highlightthickness=0)
         sx = ttk.Scrollbar(view, orient="horizontal", command=self.canvas.xview)
@@ -122,7 +122,7 @@ class App:
         sy.pack(side="right", fill="y")
         self.canvas.pack(fill="both", expand=True)
         body.add(view, weight=4)
-
+ 
         logf = ttk.Frame(body)
         self.log = tk.Text(logf, height=8, wrap="word", font=("Consolas", 9))
         ls = ttk.Scrollbar(logf, command=self.log.yview)
@@ -131,16 +131,16 @@ class App:
         self.log.pack(fill="both", expand=True)
         self.log.tag_config("err", foreground="#c00000")
         body.add(logf, weight=1)
-
+ 
         self.status = ttk.Label(self.root, text=f"Лог: {LOG_PATH}", anchor="w")
         self.status.pack(fill="x")
-
+ 
     def log_write(self, text, tag=None, to_file=True):
         self.log.insert("end", text, tag)
         self.log.see("end")
         if to_file:
             write_log(text)
-
+ 
     def open_log(self):
         try:
             if sys.platform.startswith("win"):
@@ -151,7 +151,7 @@ class App:
                 os.system(f'xdg-open "{LOG_PATH}"')
         except Exception as e:
             self.log_write(f"Не удалось открыть log.txt: {e}\n", "err")
-
+ 
     def pick_lua(self):
         p = filedialog.askopenfilename(filetypes=[("Lua", "*.lua"), ("Все файлы", "*.*")])
         if p:
@@ -159,20 +159,20 @@ class App:
             if not self.v_dir.get():
                 self.v_dir.set(os.path.dirname(p))
             self.render()
-
+ 
     def pick_dir(self):
         p = filedialog.askdirectory()
         if p:
             self.v_dir.set(p)
             self.render()
-
+ 
     def on_bg(self):
         if self.v_bg.get() == "custom":
             c = colorchooser.askcolor(color=self.custom_color)[1]
             if c:
                 self.custom_color = c
         self.refresh_view()
-
+ 
     def render(self):
         lua_path = self.v_lua.get().strip()
         if not lua_path or not os.path.isfile(lua_path):
@@ -180,15 +180,15 @@ class App:
             self.log_write("Lua-файл не найден\n", "err")
             return
         script_dir = self.v_dir.get().strip() or os.path.dirname(lua_path)
-
+ 
         self.log.delete("1.0", "end")
-
+ 
         log_separator(f"RENDER {os.path.basename(lua_path)}")
         write_log(f"lua:  {lua_path}")
         write_log(f"dir:  {script_dir}")
         write_log(f"size: {self.v_w.get()}x{self.v_h.get()}, scale={self.v_scale.get()}, "
                   f"bg={self.v_bg.get()}")
-
+ 
         buf = io.StringIO()
         try:
             canvas = lp.Canvas(int(self.v_w.get()), int(self.v_h.get()))
@@ -198,7 +198,7 @@ class App:
             with contextlib.redirect_stdout(buf):
                 emu.run(lua_path)
             self.emu = emu
-
+ 
             self.transparent = canvas.img.copy()
             self.status.config(
                 text=f"OK: {os.path.basename(lua_path)}  "
@@ -206,7 +206,7 @@ class App:
                      f"(лог: log.txt)"
             )
             write_log(f"OK: объектов {len(canvas.commands)}")
-
+ 
         except Exception:
             tb = traceback.format_exc()
             out = buf.getvalue()
@@ -217,17 +217,17 @@ class App:
             write_log(tb)
             self.status.config(text="Ошибка выполнения — см. лог и log.txt")
             return
-
+ 
         out = buf.getvalue()
         if out:
             self.log_write(out)
             write_log(out)
         else:
             self.log_write("(нет вывода)\n")
-
+ 
         self.watch_state = self._snapshot()
         self.refresh_view()
-
+ 
     def click(self):
         if self.emu is None:
             self.status.config(text="Сначала Render")
@@ -249,7 +249,7 @@ class App:
                 if ww and wh and ww > 0 and wh > 0:
                     target = (wx + ww // 2, wy + wh // 2)
                     break
-
+ 
         buf = io.StringIO()
         try:
             with contextlib.redirect_stdout(buf):
@@ -270,7 +270,7 @@ class App:
             self.log_write(tb, "err", to_file=False)
             write_log(tb)
             self.status.config(text="Ошибка клика — см. лог")
-
+ 
     def _composited(self):
         if self.transparent is None:
             return None
@@ -283,7 +283,7 @@ class App:
             base = Image.new("RGBA", self.transparent.size, c)
         base.alpha_composite(self.transparent)
         return base
-
+ 
     def refresh_view(self):
         img = self._composited()
         if img is None:
@@ -295,7 +295,7 @@ class App:
         self.canvas.delete("all")
         self.canvas.create_image(0, 0, image=self.tk_img, anchor="nw")
         self.canvas.configure(scrollregion=(0, 0, img.width, img.height))
-
+ 
     def save(self, transparent):
         if self.transparent is None:
             return
@@ -313,7 +313,7 @@ class App:
         img.save(p)
         self.status.config(text=f"Сохранено: {p}")
         write_log(f"Сохранено: {p}")
-
+ 
     def _snapshot(self):
         lua = self.v_lua.get().strip()
         d = self.v_dir.get().strip() or (os.path.dirname(lua) if lua else "")
@@ -327,22 +327,22 @@ class App:
         except OSError:
             pass
         return snap
-
+ 
     def _poll(self):
         if self.v_auto.get() and self.watch_state is not None:
             if self._snapshot() != self.watch_state:
                 self.render()
         self.root.after(1000, self._poll)
-
-
+ 
+ 
 def main():
     root = tk.Tk()
     app = App(root)
-
+ 
     log_separator("GUI START")
     write_log(f"Python: {sys.version}")
     write_log(f"log.txt: {LOG_PATH}")
-
+ 
     if len(sys.argv) > 1:
         lua = os.path.abspath(sys.argv[1])
         d = os.path.abspath(sys.argv[2]) if len(sys.argv) > 2 else os.path.dirname(lua)
@@ -350,7 +350,7 @@ def main():
         app.v_dir.set(d)
         root.after(100, app.render)
     root.mainloop()
-
-
+ 
+ 
 if __name__ == "__main__":
     main()
